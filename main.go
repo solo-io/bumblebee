@@ -94,6 +94,8 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
+			// TODO: Figure out how to correlate this type with the map isetlf if possible
+			// TODO: Support *btf.Union
 			var t *btf.Struct
 			if err := typeSpec.FindType("event_t", &t); err != nil {
 				return err
@@ -134,11 +136,13 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 					return err
 				}
 
+				// TODO: Handle statistic, or structured logging
 				fmt.Printf("%+v\n", result)
 
 			}
 		default:
-			return errors.New("Only ringbuf, and perf event array supported")
+			// TODO: Support more map types
+			return errors.New("only ringbuf, and perf event array supported")
 		}
 	}
 

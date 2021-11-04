@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	configMediaType = "application/ebpf.oci.image.config.v1+json "
+	configMediaType = "application/ebpf.oci.image.config.v1+json"
 	EBPFMediaType   = "ebpf.solo.io.progfile/v1"
 	BTFMediaType    = "ebpf.solo.io.btftypes/v1"
 
