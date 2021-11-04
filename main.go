@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -46,8 +47,12 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 		return err
 	}
 
+	abs, err := filepath.Abs(opts.EbpfFile)
+	if err != nil {
+		return err
+	}
 	// Generate the spec from out eBPF elf file
-	spec, err := ebpf.LoadCollectionSpec(opts.EbpfFile)
+	spec, err := ebpf.LoadCollectionSpec(abs)
 	if err != nil {
 		return err
 	}
