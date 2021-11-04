@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/solo-io/ebpf-ext/pkg/loader"
 )
 
 func main() {
@@ -62,7 +63,7 @@ func loadBpfProgram(ctx context.Context, file string) error {
 	}
 	defer fn.Close()
 
-	typeSpec, err := btf.LoadRawSpec(fn, binary.LittleEndian)
+	typeSpec, err := btf.LoadRawSpec(fn, loader.Endianess)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,9 @@ func loadBpfProgram(ctx context.Context, file string) error {
 
 		event := Event{}
 
-		translateRawBuffer(ctx, t, record.RawSample)
+		d := &decoder{raw: record.RawSample}
+
+		d.translateRawBuffer(ctx, t)
 		fmt.Printf("raw sample: %s\n", record.RawSample)
 		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
 			log.Printf("parsing ringbuf event: %s", err)
@@ -136,13 +139,18 @@ func loadBpfProgram(ctx context.Context, file string) error {
 	}
 }
 
-func translateRawBuffer(
-	ctx context.Context, typ *btf.Struct, raw []byte,
+type decoder struct {
+	offset uint32
+	raw    []byte
+}
+
+func (d *decoder) translateRawBuffer(
+	ctx context.Context, typ *btf.Struct,
 ) error {
 	// Parse the ringbuf event entry into an Event structure.
 	// buf := bytes.NewBuffer(raw)
 	for _, member := range typ.Members {
-		_, err := processSingleType(member.Type)
+		_, err := d.processSingleType(member.Type)
 		if err != nil {
 			return err
 		}
@@ -150,34 +158,87 @@ func translateRawBuffer(
 	return nil
 }
 
-func processSingleType(typ btf.Type) (interface{}, error) {
+func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 	switch typedMember := typ.(type) {
 	case *btf.Int:
 		switch typedMember.Encoding {
 		case btf.Signed:
-			fmt.Println(typedMember.Bits)
-			fmt.Println(typedMember.Size)
-			return int64(0), nil
-		case btf.Bool:
-			fmt.Println(typedMember.Bits)
-			fmt.Println(typedMember.Size)
-			return false, nil
-		case btf.Char:
-			fmt.Println(typedMember.Bits)
-			fmt.Println(typedMember.Size)
-			return "", nil
-		default:
 			// Default encoding seems to be unsigned
 			fmt.Println(typedMember.Bits)
 			fmt.Println(typedMember.Size)
-			return uint64(0), nil
+			buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+			d.offset += typedMember.Size
+			switch typedMember.Bits {
+			case 64:
+				var val int64
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 32:
+				var val int32
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 16:
+				var val int16
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 8:
+				var val int8
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			}
+			return nil, errors.New("this should never happen")
+		case btf.Bool:
+			// TODO
+			return false, nil
+		case btf.Char:
+			// TODO
+			return "", nil
+		default:
+			// Default encoding seems to be unsigned
+			buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+			d.offset += typedMember.Size
+			switch typedMember.Bits {
+			case 64:
+				var val uint64
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 32:
+				var val uint32
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 16:
+				var val uint16
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			case 8:
+				var val uint8
+				if err := binary.Read(buf, loader.Endianess, &val); err != nil {
+					return nil, err
+				}
+				return val, nil
+			}
+			return nil, errors.New("this should never happen")
 		}
 	case *btf.Typedef:
 		underlying, err := getUnderlyingType(typedMember)
 		if err != nil {
 			return nil, err
 		}
-		return processSingleType(underlying)
+		return d.processSingleType(underlying)
 	case *btf.Float:
 		return float64(0), nil
 	default:
