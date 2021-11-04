@@ -2,14 +2,97 @@ package packaging
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 
 	"oras.land/oras-go/pkg/content"
 	"oras.land/oras-go/pkg/oras"
 )
 
-const EBPFMediaType = "ebof.solo.io/v1"
+const (
+	configMediaType = "application/ebpf.oci.image.config.v1+json "
+	EBPFMediaType   = "ebpf.solo.io.progfile/v1"
+	BTFMediaType    = "ebpf.solo.io.btftypes/v1"
+
+	ebpfFileName = "program.o"
+	btfFileName  = "types.btf"
+)
+
+type EbpfPackage struct {
+	// File content for eBPF compiled ELF file
+	ProgramFileBytes []byte
+	// File content for BTF types
+	BtfTypeBytes []byte
+
+	Annotations map[string]string
+}
+
+type EbpfRegistry interface {
+	Push(ctx context.Context)
+	Pull(ctx context.Context)
+}
+
+type ebpfResgistry struct {
+	registryRef string
+	registry    *content.Registry
+}
+
+func (e *ebpfResgistry) Push(ctx context.Context, pkg *EbpfPackage) error {
+
+	memoryStore := content.NewMemory()
+
+	progDesc, err := memoryStore.Add(ebpfFileName, EBPFMediaType, pkg.ProgramFileBytes)
+	if err != nil {
+		return err
+	}
+
+	btfDesc, err := memoryStore.Add(btfFileName, BTFMediaType, pkg.BtfTypeBytes)
+	if err != nil {
+		return err
+	}
+
+	// TODO: update with config when/if we need it
+	manifest, manifestDesc, config, configDesc, err := content.GenerateManifestAndConfig(
+		pkg.Annotations,
+		nil,
+		progDesc, btfDesc,
+	)
+	if err != nil {
+		return err
+	}
+	memoryStore.Set(configDesc, config)
+
+	err = memoryStore.StoreManifest(e.registryRef, manifestDesc, manifest)
+	if err != nil {
+		return err
+	}
+
+	_, err = oras.Copy(ctx, memoryStore, e.registryRef, e.registry, "")
+	return err
+}
+
+func (e *ebpfResgistry) Pull(ctx context.Context) (*EbpfPackage, error) {
+	memoryStore := content.NewMemory()
+	desc, err := oras.Copy(ctx, e.registry, e.registryRef, memoryStore, "")
+	if err != nil {
+		return nil, err
+	}
+
+	_, btfBytes, ok := memoryStore.GetByName(btfFileName)
+	if !ok {
+		return nil, errors.New("could not find btf bytes in manifest")
+	}
+	_, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
+	if !ok {
+		return nil, errors.New("could not find ebpf bytes in manifest")
+	}
+
+	return &EbpfPackage{
+		ProgramFileBytes: ebpfBytes,
+		BtfTypeBytes:     btfBytes,
+		Annotations:      desc.Annotations,
+	}, nil
+}
 
 func getLocalRegistryHostname() string {
 	hostname := "localhost"
@@ -17,50 +100,4 @@ func getLocalRegistryHostname() string {
 		hostname = v
 	}
 	return hostname
-}
-
-// Dead simple example code copied from: https://github.com/oras-project/oras-go/blob/v0.5.0/examples/simple/simple_push_pull.go
-func doThing() error {
-	ref := fmt.Sprintf("%s:5000/oras:test", getLocalRegistryHostname())
-	fileName := "hello.txt"
-	fileContent := []byte("Hello World!\n")
-
-	ctx := context.Background()
-
-	// Push file(s) w custom mediatype to registry
-	memoryStore := content.NewMemory()
-	desc, err := memoryStore.Add(fileName, EBPFMediaType, fileContent)
-	if err != nil {
-		return err
-	}
-
-	manifest, manifestDesc, config, configDesc, err := content.GenerateManifestAndConfig(nil, nil, desc)
-	if err != nil {
-		return err
-	}
-	memoryStore.Set(configDesc, config)
-	err = memoryStore.StoreManifest(ref, manifestDesc, manifest)
-	if err != nil {
-		return err
-	}
-	registry, err := content.NewRegistry(content.RegistryOptions{PlainHTTP: true})
-	fmt.Printf("Pushing %s to %s...\n", fileName, ref)
-	desc, err = oras.Copy(ctx, memoryStore, ref, registry, "")
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pushed to %s with digest %s\n", ref, desc.Digest)
-
-	// Pull file(s) from registry and save to disk
-	fmt.Printf("Pulling from %s and saving to %s...\n", ref, fileName)
-	fileStore := content.NewFile("")
-	defer fileStore.Close()
-	allowedMediaTypes := []string{EBPFMediaType}
-	desc, err = oras.Copy(ctx, registry, ref, fileStore, "", oras.WithAllowedMediaTypes(allowedMediaTypes))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Pulled from %s with digest %s\n", ref, desc.Digest)
-	fmt.Printf("Try running 'cat %s'\n", fileName)
-	return nil
 }
