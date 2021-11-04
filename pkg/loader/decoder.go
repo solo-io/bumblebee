@@ -10,15 +10,15 @@ import (
 )
 
 type BinaryDecoder interface {
-	TranslateRawBuffer(
-		ctx context.Context, typ *btf.Struct,
+	// DecodeBinaryStruct takes in a btf struct spec, and translates
+	// raw binary data into a map[string]interface{} of that format.
+	DecodeBinaryStruct(
+		ctx context.Context, typ *btf.Struct, raw []byte,
 	) (map[string]interface{}, error)
 }
 
-func NewDecoder(raw []byte) BinaryDecoder {
-	return &decoder{
-		raw: raw,
-	}
+func NewDecoder() BinaryDecoder {
+	return &decoder{}
 }
 
 type decoder struct {
@@ -28,9 +28,12 @@ type decoder struct {
 	raw []byte
 }
 
-func (d *decoder) TranslateRawBuffer(
-	ctx context.Context, typ *btf.Struct,
+func (d *decoder) DecodeBinaryStruct(
+	ctx context.Context, typ *btf.Struct, raw []byte,
 ) (map[string]interface{}, error) {
+	// Reset values when called
+	d.raw = raw
+	d.offset = 0
 	// Parse the ringbuf event entry into an Event structure.
 	// buf := bytes.NewBuffer(raw)
 	result := make(map[string]interface{})
@@ -49,36 +52,7 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 	case *btf.Int:
 		switch typedMember.Encoding {
 		case btf.Signed:
-			// Default encoding seems to be unsigned
-			buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
-			d.offset += typedMember.Size
-			switch typedMember.Bits {
-			case 64:
-				var val int64
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 32:
-				var val int32
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 16:
-				var val int16
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 8:
-				var val int8
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			}
-			return nil, errors.New("this should never happen")
+			return d.handleInt(typedMember)
 		case btf.Bool:
 			// TODO
 			return false, nil
@@ -87,35 +61,7 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 			return "", nil
 		default:
 			// Default encoding seems to be unsigned
-			buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
-			d.offset += typedMember.Size
-			switch typedMember.Bits {
-			case 64:
-				var val uint64
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 32:
-				var val uint32
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 16:
-				var val uint16
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			case 8:
-				var val uint8
-				if err := binary.Read(buf, Endianess, &val); err != nil {
-					return nil, err
-				}
-				return val, nil
-			}
-			return nil, errors.New("this should never happen")
+			return d.handleUint(typedMember)
 		}
 	case *btf.Typedef:
 		underlying, err := getUnderlyingType(typedMember)
@@ -124,27 +70,101 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 		}
 		return d.processSingleType(underlying)
 	case *btf.Float:
-		// Default encoding seems to be unsigned
-		buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
-		d.offset += typedMember.Size
-		switch typedMember.Size {
-		case 8:
-			var val float64
-			if err := binary.Read(buf, Endianess, &val); err != nil {
-				return nil, err
-			}
-			return val, nil
-		case 4:
-			var val float32
-			if err := binary.Read(buf, Endianess, &val); err != nil {
-				return nil, err
-			}
-			return val, nil
-		}
-		return nil, errors.New("this should never happen")
+		return d.handleFloat(typedMember)
 	default:
 		return nil, errors.New("only primitive types allowed")
 	}
+}
+
+func (d *decoder) handleFloat(
+	typedMember *btf.Float,
+) (interface{}, error) {
+	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+	d.offset += typedMember.Size
+	switch typedMember.Size {
+	case 8:
+		var val float64
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 4:
+		var val float32
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	}
+	return nil, errors.New("this should never happen")
+}
+
+func (d *decoder) handleUint(
+	typedMember *btf.Int,
+) (interface{}, error) {
+	// Default encoding seems to be unsigned
+	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+	d.offset += typedMember.Size
+	switch typedMember.Bits {
+	case 64:
+		var val uint64
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 32:
+		var val uint32
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 16:
+		var val uint16
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 8:
+		var val uint8
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	}
+	return nil, errors.New("this should never happen")
+}
+
+func (d *decoder) handleInt(
+	typedMember *btf.Int,
+) (interface{}, error) {
+	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+	d.offset += typedMember.Size
+	switch typedMember.Bits {
+	case 64:
+		var val int64
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 32:
+		var val int32
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 16:
+		var val int16
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	case 8:
+		var val int8
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		return val, nil
+	}
+	return nil, errors.New("this should never happen")
 }
 
 func getUnderlyingType(tf *btf.Typedef) (btf.Type, error) {

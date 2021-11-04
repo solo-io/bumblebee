@@ -117,8 +117,8 @@ func loadBpfProgram(ctx context.Context, file string) error {
 			log.Printf("reading from reader: %s", err)
 			continue
 		}
-		d := loader.NewDecoder(record.RawSample)
-		result, err := d.TranslateRawBuffer(ctx, t)
+		d := loader.NewDecoder()
+		result, err := d.DecodeBinaryStruct(ctx, t, record.RawSample)
 		if err != nil {
 			return err
 		}
