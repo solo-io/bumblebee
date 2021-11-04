@@ -12,8 +12,8 @@ import (
 type BinaryDecoder interface {
 	// DecodeBinaryStruct takes in a btf struct spec, and translates
 	// raw binary data into a map[string]interface{} of that format.
-	DecodeBinaryStruct(
-		ctx context.Context, typ *btf.Struct, raw []byte,
+	DecodeBtfBinary(
+		ctx context.Context, typ btf.Type, raw []byte,
 	) (map[string]interface{}, error)
 }
 
@@ -28,23 +28,47 @@ type decoder struct {
 	raw []byte
 }
 
-func (d *decoder) DecodeBinaryStruct(
-	ctx context.Context, typ *btf.Struct, raw []byte,
+func (d *decoder) DecodeBtfBinary(
+	ctx context.Context, typ btf.Type, raw []byte,
 ) (map[string]interface{}, error) {
 	// Reset values when called
 	d.raw = raw
 	d.offset = 0
-	// Parse the ringbuf event entry into an Event structure.
-	// buf := bytes.NewBuffer(raw)
-	result := make(map[string]interface{})
-	for _, member := range typ.Members {
-		val, err := d.processSingleType(member.Type)
+
+	switch typedBtf := typ.(type) {
+	case *btf.Struct:
+		// Parse the ringbuf event entry into an Event structure.
+		// buf := bytes.NewBuffer(raw)
+		result := make(map[string]interface{})
+		for _, member := range typedBtf.Members {
+			val, err := d.processSingleType(member.Type)
+			if err != nil {
+				return nil, err
+			}
+			result[member.Name] = val
+		}
+		return result, nil
+	case *btf.Typedef:
+		val, err := d.processSingleType(typedBtf)
 		if err != nil {
 			return nil, err
 		}
-		result[member.Name] = val
+		return map[string]interface{}{"": val}, nil
+	case *btf.Float:
+		val, err := d.processSingleType(typedBtf)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"": val}, nil
+	case *btf.Int:
+		val, err := d.processSingleType(typedBtf)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"": val}, nil
+	default:
+		return nil, errors.New("unsupported type")
 	}
-	return result, nil
 }
 
 func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {

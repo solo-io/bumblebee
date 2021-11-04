@@ -108,6 +108,10 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 			eg.Go(func() error {
 				return startHashMap(ctx, bpfMap, coll.Maps[name], name)
 			})
+		case ebpf.Array:
+			eg.Go(func() error {
+				return startHashMap(ctx, bpfMap, coll.Maps[name], name)
+			})
 		default:
 			// TODO: Support more map types
 			return errors.New("only ringbuf, and perf event array supported")
@@ -157,7 +161,7 @@ func startRingBuf(
 			continue
 		}
 		d := loader.NewDecoder()
-		result, err := d.DecodeBinaryStruct(ctx, t, record.RawSample)
+		result, err := d.DecodeBtfBinary(ctx, t, record.RawSample)
 		if err != nil {
 			return err
 		}
@@ -185,7 +189,31 @@ func startHashMap(
 		select {
 		case <-ticker.C:
 			// var all_cpu_value []uint64
-			// liveMap.Iterate()
+			mapIter := liveMap.Iterate()
+			for {
+				var (
+					key, value []byte
+				)
+				// log.Println("Checking Iterator..")
+				if !mapIter.Next(&key, &value) {
+					break
+				}
+				if err := mapIter.Err(); err != nil {
+					return err
+				}
+				d := loader.NewDecoder()
+				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Key, key)
+				if err != nil {
+					return err
+				}
+				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
+				if err != nil {
+					return err
+				}
+
+				fmt.Printf("%s\n", decodedKey)
+				fmt.Printf("%s\n", decodedValue)
+			}
 			// if err := objs.KprobeMap.Lookup(mapKey, &all_cpu_value); err != nil {
 			// 	log.Fatalf("reading map: %v", err)
 			// 	return err
