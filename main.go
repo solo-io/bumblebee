@@ -28,8 +28,7 @@ func main() {
 		cancel()
 	}()
 	opts := &loadOptions{
-		EbpfFile: "bpf_bpfel.o",
-		BTFfile:  "out.btf",
+		EbpfFile: "bpf/bpf_bpfel.o",
 	}
 	if err := loadBpfPrograms(ctx, opts); err != nil {
 		panic(fmt.Errorf("could not load bpf program %v", err))
@@ -39,7 +38,6 @@ func main() {
 
 type loadOptions struct {
 	EbpfFile string
-	BTFfile  string
 }
 
 func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
@@ -54,17 +52,15 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 		return err
 	}
 
-	// Open the BTF definition file
-	fn, err := os.Open(opts.BTFfile)
-	if err != nil {
-		return err
-	}
-	defer fn.Close()
+	btfMapMap := make(map[string]*btf.Map)
 
-	// Load the btf spec from out BTF definition file
-	typeSpec, err := btf.LoadRawSpec(fn, loader.Endianess)
-	if err != nil {
-		return err
+	// TODO: Delete Hack if possible
+	for name, mapSpec := range spec.Maps {
+		if mapSpec.Type == ebpf.RingBuf || mapSpec.Type == ebpf.PerfEventArray {
+			btfMapMap[name] = mapSpec.BTF
+			mapSpec.BTF = nil
+			mapSpec.ValueSize = 0
+		}
 	}
 
 	// Load our eBPF spec into the kernel
@@ -94,12 +90,9 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
-			// TODO: Figure out how to correlate this type with the map isetlf if possible
+
 			// TODO: Support *btf.Union
-			var t *btf.Struct
-			if err := typeSpec.FindType("event_t", &t); err != nil {
-				return err
-			}
+			t := btfMapMap[name].Value.(*btf.Struct)
 
 			// Open a ringbuf reader from userspace RINGBUF map described in the
 			// eBPF C program.

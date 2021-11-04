@@ -21,8 +21,6 @@ const (
 type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
-	// File content for BTF types
-	BtfTypeBytes []byte
 
 	Annotations map[string]string
 }
@@ -46,16 +44,11 @@ func (e *ebpfResgistry) Push(ctx context.Context, pkg *EbpfPackage) error {
 		return err
 	}
 
-	btfDesc, err := memoryStore.Add(btfFileName, BTFMediaType, pkg.BtfTypeBytes)
-	if err != nil {
-		return err
-	}
-
 	// TODO: update with config when/if we need it
 	manifest, manifestDesc, config, configDesc, err := content.GenerateManifestAndConfig(
 		pkg.Annotations,
 		nil,
-		progDesc, btfDesc,
+		progDesc,
 	)
 	if err != nil {
 		return err
@@ -78,10 +71,6 @@ func (e *ebpfResgistry) Pull(ctx context.Context) (*EbpfPackage, error) {
 		return nil, err
 	}
 
-	_, btfBytes, ok := memoryStore.GetByName(btfFileName)
-	if !ok {
-		return nil, errors.New("could not find btf bytes in manifest")
-	}
 	_, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
 	if !ok {
 		return nil, errors.New("could not find ebpf bytes in manifest")
@@ -89,7 +78,6 @@ func (e *ebpfResgistry) Pull(ctx context.Context) (*EbpfPackage, error) {
 
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
-		BtfTypeBytes:     btfBytes,
 		Annotations:      desc.Annotations,
 	}, nil
 }
