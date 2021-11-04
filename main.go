@@ -84,7 +84,16 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 				return err
 			}
 			defer kp.Close()
+		default:
+			return errors.New("only kprobe programs supported")
+		}
+	}
 
+	for name, bpfMap := range spec.Maps {
+		switch bpfMap.Type {
+		case ebpf.PerfEventArray:
+			fallthrough
+		case ebpf.RingBuf:
 			var t *btf.Struct
 			if err := typeSpec.FindType("event_t", &t); err != nil {
 				return err
@@ -92,7 +101,7 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 
 			// Open a ringbuf reader from userspace RINGBUF map described in the
 			// eBPF C program.
-			rd, err := ringbuf.NewReader(coll.Maps["events"])
+			rd, err := ringbuf.NewReader(coll.Maps[name])
 			if err != nil {
 				log.Fatalf("opening ringbuf reader: %s", err)
 			}
@@ -129,7 +138,7 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 
 			}
 		default:
-			return errors.New("only kprobe programs supported")
+			return errors.New("Only ringbuf, and perf event array supported")
 		}
 	}
 
