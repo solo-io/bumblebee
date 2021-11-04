@@ -4,6 +4,9 @@ go 1.17
 
 require github.com/cilium/ebpf v0.7.0
 
-require golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34 // indirect
+require (
+	golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34 // indirect
+	oras.land/oras-go v0.5.0 // indirect
+)
 
 replace github.com/cilium/ebpf => github.com/solo-io/ebpf v0.7.1-0.20211104114948-e8fdf7d423c5
