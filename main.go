@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
@@ -16,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/solo-io/ebpf-ext/pkg/loader"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -90,59 +92,111 @@ func loadBpfPrograms(ctx context.Context, opts *loadOptions) error {
 		}
 	}
 
+	eg, ctx := errgroup.WithContext(ctx)
+
 	for name, bpfMap := range spec.Maps {
+		name := name
+		bpfMap := bpfMap
 		switch bpfMap.Type {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
-
-			// TODO: Support *btf.Union
-			t := btfMapMap[name].Value.(*btf.Struct)
-
-			// Open a ringbuf reader from userspace RINGBUF map described in the
-			// eBPF C program.
-			rd, err := ringbuf.NewReader(coll.Maps[name])
-			if err != nil {
-				log.Fatalf("opening ringbuf reader: %s", err)
-			}
-			defer rd.Close()
-			// Close the reader when the process receives a signal, which will exit
-			// the read loop.
-			go func() {
-				<-ctx.Done()
-
-				if err := rd.Close(); err != nil {
-					log.Fatalf("closing ringbuf reader: %s", err)
-				}
-			}()
-
-			log.Println("Waiting for events..")
-
-			for {
-				record, err := rd.Read()
-				if err != nil {
-					if errors.Is(err, ringbuf.ErrClosed) {
-						log.Println("Received signal, exiting..")
-						return nil
-					}
-					log.Printf("reading from reader: %s", err)
-					continue
-				}
-				d := loader.NewDecoder()
-				result, err := d.DecodeBinaryStruct(ctx, t, record.RawSample)
-				if err != nil {
-					return err
-				}
-
-				// TODO: Handle statistic, or structured logging
-				fmt.Printf("%+v\n", result)
-
-			}
+			eg.Go(func() error {
+				return startRingBuf(ctx, btfMapMap, coll, name)
+			})
+		case ebpf.Hash:
+			eg.Go(func() error {
+				return startHashMap(ctx, bpfMap, coll.Maps[name], name)
+			})
 		default:
 			// TODO: Support more map types
 			return errors.New("only ringbuf, and perf event array supported")
 		}
 	}
 
-	return nil
+	return eg.Wait()
+}
+
+func startRingBuf(
+	ctx context.Context,
+	btfMapMap map[string]*btf.Map,
+	coll *ebpf.Collection,
+	name string,
+) error {
+
+	// TODO: Support *btf.Union
+	t := btfMapMap[name].Value.(*btf.Struct)
+
+	// Open a ringbuf reader from userspace RINGBUF map described in the
+	// eBPF C program.
+	rd, err := ringbuf.NewReader(coll.Maps[name])
+	if err != nil {
+		log.Fatalf("opening ringbuf reader: %s", err)
+	}
+	defer rd.Close()
+	// Close the reader when the process receives a signal, which will exit
+	// the read loop.
+	go func() {
+		<-ctx.Done()
+
+		if err := rd.Close(); err != nil {
+			log.Fatalf("closing ringbuf reader: %s", err)
+		}
+	}()
+
+	log.Println("Waiting for events..")
+
+	for {
+		record, err := rd.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				log.Println("Received signal, exiting..")
+				return nil
+			}
+			log.Printf("reading from reader: %s", err)
+			continue
+		}
+		d := loader.NewDecoder()
+		result, err := d.DecodeBinaryStruct(ctx, t, record.RawSample)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Handle statistic, or structured logging
+		fmt.Printf("%+v\n", result)
+
+	}
+}
+
+func startHashMap(
+	ctx context.Context,
+	mapSpec *ebpf.MapSpec,
+	liveMap *ebpf.Map,
+	name string,
+) error {
+
+	// Read loop reporting the total amount of times the kernel
+	// function was entered, once per second.
+	ticker := time.NewTicker(1 * time.Second)
+
+	log.Println("Waiting for events..")
+
+	for {
+		select {
+		case <-ticker.C:
+			// var all_cpu_value []uint64
+			// liveMap.Iterate()
+			// if err := objs.KprobeMap.Lookup(mapKey, &all_cpu_value); err != nil {
+			// 	log.Fatalf("reading map: %v", err)
+			// 	return err
+			// }
+			// for cpuid, cpuvalue := range all_cpu_value {
+			// 	log.Printf("%s called %d times on CPU%v\n", fn, cpuvalue, cpuid)
+			// 	return err
+			// }
+			// log.Printf("\n")
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
