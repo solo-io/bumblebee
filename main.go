@@ -191,6 +191,7 @@ func startHashMap(
 			// var all_cpu_value []uint64
 			mapIter := liveMap.Iterate()
 			for {
+				// Use generic key,value so we can decode ourselves
 				var (
 					key, value []byte
 				)
@@ -214,15 +215,6 @@ func startHashMap(
 				fmt.Printf("%s\n", decodedKey)
 				fmt.Printf("%s\n", decodedValue)
 			}
-			// if err := objs.KprobeMap.Lookup(mapKey, &all_cpu_value); err != nil {
-			// 	log.Fatalf("reading map: %v", err)
-			// 	return err
-			// }
-			// for cpuid, cpuvalue := range all_cpu_value {
-			// 	log.Printf("%s called %d times on CPU%v\n", fn, cpuvalue, cpuid)
-			// 	return err
-			// }
-			// log.Printf("\n")
 		case <-ctx.Done():
 			return nil
 		}
