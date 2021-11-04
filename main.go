@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -119,22 +117,13 @@ func loadBpfProgram(ctx context.Context, file string) error {
 			log.Printf("reading from reader: %s", err)
 			continue
 		}
-
-		// // Parse the ringbuf event entry into an Event structure.
-		// buf := bytes.NewBuffer(record.RawSample)
-		// buf.Read()
-
-		event := Event{}
 		d := loader.NewDecoder(record.RawSample)
-		if err := d.TranslateRawBuffer(ctx, t); err != nil {
+		result, err := d.TranslateRawBuffer(ctx, t)
+		if err != nil {
 			return err
 		}
-		fmt.Printf("raw sample: %s\n", record.RawSample)
-		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
-			log.Printf("parsing ringbuf event: %s", err)
-			continue
-		}
 
-		log.Printf("%+v", event)
+		fmt.Printf("%+v\n", result)
+
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"github.com/cilium/ebpf/btf"
 )
@@ -13,7 +12,7 @@ import (
 type BinaryDecoder interface {
 	TranslateRawBuffer(
 		ctx context.Context, typ *btf.Struct,
-	) error
+	) (map[string]interface{}, error)
 }
 
 func NewDecoder(raw []byte) BinaryDecoder {
@@ -31,16 +30,18 @@ type decoder struct {
 
 func (d *decoder) TranslateRawBuffer(
 	ctx context.Context, typ *btf.Struct,
-) error {
+) (map[string]interface{}, error) {
 	// Parse the ringbuf event entry into an Event structure.
 	// buf := bytes.NewBuffer(raw)
+	result := make(map[string]interface{})
 	for _, member := range typ.Members {
-		_, err := d.processSingleType(member.Type)
+		val, err := d.processSingleType(member.Type)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		result[member.Name] = val
 	}
-	return nil
+	return result, nil
 }
 
 func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
@@ -49,8 +50,6 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 		switch typedMember.Encoding {
 		case btf.Signed:
 			// Default encoding seems to be unsigned
-			fmt.Println(typedMember.Bits)
-			fmt.Println(typedMember.Size)
 			buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
 			d.offset += typedMember.Size
 			switch typedMember.Bits {
@@ -125,7 +124,24 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 		}
 		return d.processSingleType(underlying)
 	case *btf.Float:
-		return float64(0), nil
+		// Default encoding seems to be unsigned
+		buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
+		d.offset += typedMember.Size
+		switch typedMember.Size {
+		case 8:
+			var val float64
+			if err := binary.Read(buf, Endianess, &val); err != nil {
+				return nil, err
+			}
+			return val, nil
+		case 4:
+			var val float32
+			if err := binary.Read(buf, Endianess, &val); err != nil {
+				return nil, err
+			}
+			return val, nil
+		}
+		return nil, errors.New("this should never happen")
 	default:
 		return nil, errors.New("only primitive types allowed")
 	}
