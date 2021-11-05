@@ -10,10 +10,7 @@
 			"request": "launch",
 			"mode": "auto",
 			"program": "${workspaceFolder}/main.go",
-			"env": {
-				"DEBUG_AS_ROOT": "true",
-			}, 
-			"args": []
+			"args": ["kprobetcp.o"]
 		}
   ]
 }
