@@ -87,6 +87,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
+		// TODO: skip read-only data for now, probably useful to explore logging/emitting this data as well eventually
+		if name == ".rodata" {
+			continue
+		}
 		switch bpfMap.Type {
 		case ebpf.PerfEventArray:
 			fallthrough
