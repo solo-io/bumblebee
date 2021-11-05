@@ -4,7 +4,7 @@
 #include "bpf_tracing.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
-å
+
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);

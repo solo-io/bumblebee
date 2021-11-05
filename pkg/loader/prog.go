@@ -12,6 +12,9 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/global"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -24,6 +27,7 @@ type Loader interface {
 }
 
 func NewLoader(decoderFactory DecoderFactory) Loader {
+	initMeter()
 	return &loader{
 		decoderFactory: decoderFactory,
 	}
@@ -166,6 +170,10 @@ func (l *loader) startHashMap(
 	name string,
 ) error {
 
+	meter := global.Meter(ebpfMeter)
+	tcpCounter := metric.Must(meter).NewInt64Counter("tcp_retransmit")
+	commonLabels := []attribute.KeyValue{attribute.String("A", "1"), attribute.String("B", "2"), attribute.String("C", "3")}
+
 	d := l.decoderFactory()
 
 	// Read loop reporting the total amount of times the kernel
@@ -202,6 +210,17 @@ func (l *loader) startHashMap(
 
 				fmt.Printf("%s\n", decodedKey)
 				fmt.Printf("%s\n", decodedValue)
+
+				if len(decodedValue) > 1 {
+					log.Fatal("only 1 value allowed")
+				}
+
+				intVal, ok := decodedValue[""].(uint64)
+				if !ok {
+					log.Fatal("only uint64 allowed")
+				}
+
+				meter.RecordBatch(ctx, commonLabels, tcpCounter.Measurement(int64(intVal)))
 			}
 		case <-ctx.Done():
 			return nil

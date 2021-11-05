@@ -22,7 +22,7 @@ func main() {
 		cancel()
 	}()
 	opts := &loader.LoadOptions{
-		EbpfFile: "bpf/array.o",
+		EbpfFile: "bpf/hash.o",
 	}
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
