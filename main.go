@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/solo-io/ebpf-ext/pkg/loader"
 )
 
@@ -23,6 +24,11 @@ func main() {
 	opts := &loader.LoadOptions{
 		EbpfFile: "bpf/array.o",
 	}
+	// Allow the current process to lock memory for eBPF resources.
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Fatalf("could not raise memory limit: %v", err)
+	}
+
 	progLoader := loader.NewLoader(loader.NewDecoderFactory())
 	if err := progLoader.Load(ctx, opts); err != nil {
 		log.Fatalf("could not load bpf program %v", err)
