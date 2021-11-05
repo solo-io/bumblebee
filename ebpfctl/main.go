@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/solo-io/ebpf-ext/pkg/cli"
+	"github.com/solo-io/gloobpf/pkg/cli"
 )
 
 func main() {

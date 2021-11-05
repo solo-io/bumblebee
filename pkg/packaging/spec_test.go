@@ -7,7 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/solo-io/ebpf-ext/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/packaging"
 	"oras.land/oras-go/pkg/content"
 )
 

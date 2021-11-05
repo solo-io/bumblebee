@@ -1,4 +1,4 @@
-module github.com/solo-io/ebpf-ext
+module github.com/solo-io/gloobpf
 
 go 1.17
 

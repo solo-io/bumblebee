@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/solo-io/ebpf-ext/pkg/loader"
+	"github.com/solo-io/gloobpf/pkg/loader"
 )
 
 func main() {
