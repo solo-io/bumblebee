@@ -25,8 +25,18 @@ type EbpfPackage struct {
 }
 
 type EbpfRegistry interface {
-	Push(ctx context.Context)
-	Pull(ctx context.Context)
+	Push(ctx context.Context, pkg *EbpfPackage) error
+	Pull(ctx context.Context) (*EbpfPackage, error)
+}
+
+func NewEbpfRegistry(
+	registryRef string,
+	registry *content.Registry,
+) EbpfRegistry {
+	return &ebpfResgistry{
+		registryRef: registryRef,
+		registry:    registry,
+	}
 }
 
 type ebpfResgistry struct {
@@ -65,19 +75,19 @@ func (e *ebpfResgistry) Push(ctx context.Context, pkg *EbpfPackage) error {
 
 func (e *ebpfResgistry) Pull(ctx context.Context) (*EbpfPackage, error) {
 	memoryStore := content.NewMemory()
-	desc, err := oras.Copy(ctx, e.registry, e.registryRef, memoryStore, "")
+	_, err := oras.Copy(ctx, e.registry, e.registryRef, memoryStore, "")
 	if err != nil {
 		return nil, err
 	}
 
-	_, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
+	ebpfDesc, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
 	if !ok {
 		return nil, errors.New("could not find ebpf bytes in manifest")
 	}
 
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
-		Annotations:      desc.Annotations,
+		Annotations:      ebpfDesc.Annotations,
 	}, nil
 }
 
