@@ -3,5 +3,8 @@ package build
 import "github.com/spf13/cobra"
 
 func BuildCommand() *cobra.Command {
-	return nil
+	return &cobra.Command{
+		Use: "build",
+		Aliases: []string{"b"},
+	}
 }
