@@ -18,7 +18,13 @@ type BinaryDecoder interface {
 	) (map[string]interface{}, error)
 }
 
-func NewDecoder() BinaryDecoder {
+type DecoderFactory func() BinaryDecoder
+
+func NewDecoderFactory() DecoderFactory {
+	return newDecoder
+}
+
+func newDecoder() BinaryDecoder {
 	return &decoder{}
 }
 
