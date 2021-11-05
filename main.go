@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -21,8 +22,10 @@ func main() {
 		<-stopper
 		cancel()
 	}()
+	bpfElfPath := os.Args[1]
+	fmt.Printf("loading bpf ELF: '%v'\n", bpfElfPath)
 	opts := &loader.LoadOptions{
-		EbpfFile: "bpf/hash.o",
+		EbpfFile: bpfElfPath,
 	}
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
