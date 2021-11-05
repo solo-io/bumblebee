@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -35,10 +34,6 @@ type loader struct {
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
-	// Allow the current process to lock memory for eBPF resources.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return err
-	}
 
 	abs, err := filepath.Abs(opts.EbpfFile)
 	if err != nil {
