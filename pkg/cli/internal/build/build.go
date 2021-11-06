@@ -21,6 +21,12 @@ func BuildCommand(opts *BuildOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "build",
 		Aliases: []string{"b"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// arg1 = file to compile
+			// arg2 = image/file to save to
+			return nil
+		},
 	}
 
 	// Init flags

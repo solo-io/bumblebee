@@ -2,8 +2,11 @@ package packaging
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/pkg/content"
 	"oras.land/oras-go/pkg/oras"
 )
@@ -13,11 +16,18 @@ const (
 	eBPFMediaType   = "binary/ebpf.solo.io.v1"
 
 	ebpfFileName = "program.o"
+	configName   = "config.json"
 )
 
 type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
+
+	EbpfConfig
+}
+
+type EbpfConfig struct {
+	Info string `json:"info"`
 }
 
 type EbpfRegistry interface {
@@ -46,17 +56,22 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		return err
 	}
 
-	// TODO: update with config when/if we need it
-	manifest, manifestDesc, config, configDesc, err := content.GenerateManifestAndConfig(
-		nil,
-		nil,
-		progDesc,
-	)
+	configByt, err := json.Marshal(pkg.EbpfConfig)
 	if err != nil {
 		return err
 	}
 
-	memoryStore.Set(configDesc, config)
+	configDesc, err := buildConfigDescriptor(configByt, nil)
+	if err != nil {
+		return err
+	}
+
+	memoryStore.Set(configDesc, configByt)
+
+	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, nil, progDesc)
+	if err != nil {
+		return err
+	}
 
 	err = memoryStore.StoreManifest(ref, manifestDesc, manifest)
 	if err != nil {
@@ -79,7 +94,34 @@ func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, err
 		return nil, errors.New("could not find ebpf bytes in manifest")
 	}
 
+	_, configBytes, ok := memoryStore.GetByName(configName)
+	if !ok {
+		return nil, errors.New("could not find ebpf bytes in manifest")
+	}
+
+	var cfg EbpfConfig
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return nil, err
+	}
+
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
+		EbpfConfig:       cfg,
 	}, nil
+}
+
+// GenerateConfig generates a blank config with optional annotations.
+func buildConfigDescriptor(byt []byte, annotations map[string]string) (ocispec.Descriptor, error) {
+	dig := digest.FromBytes(byt)
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[ocispec.AnnotationTitle] = configName
+	config := ocispec.Descriptor{
+		MediaType:   configMediaType,
+		Digest:      dig,
+		Size:        int64(len(byt)),
+		Annotations: annotations,
+	}
+	return config, nil
 }

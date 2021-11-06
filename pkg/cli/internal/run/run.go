@@ -16,8 +16,7 @@ import (
 	"oras.land/oras-go/pkg/content"
 )
 
-type RunOptions struct {
-}
+type RunOptions struct{}
 
 func RunCommand(opts *RunOptions) *cobra.Command {
 	return &cobra.Command{
