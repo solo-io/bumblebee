@@ -24,8 +24,14 @@ func main() {
 	}()
 	bpfElfPath := os.Args[1]
 	fmt.Printf("loading bpf ELF: '%v'\n", bpfElfPath)
+
+	fn, err := os.Open(bpfElfPath)
+	if err != nil {
+		log.Fatalf("could not open file: %v", err)
+	}
+
 	opts := &loader.LoadOptions{
-		EbpfFile: bpfElfPath,
+		EbpfProg: fn,
 	}
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {

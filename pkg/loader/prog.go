@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -19,7 +19,7 @@ import (
 )
 
 type LoadOptions struct {
-	EbpfFile string
+	EbpfProg io.ReaderAt
 }
 
 type Loader interface {
@@ -39,12 +39,8 @@ type loader struct {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
-	abs, err := filepath.Abs(opts.EbpfFile)
-	if err != nil {
-		return err
-	}
 	// Generate the spec from out eBPF elf file
-	spec, err := ebpf.LoadCollectionSpec(abs)
+	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
 		return err
 	}
