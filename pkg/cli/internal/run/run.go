@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/solo-io/gloobpf/pkg/loader"
+	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
+	"oras.land/oras-go/pkg/content"
 )
 
 type RunOptions struct {
@@ -38,7 +41,20 @@ func getProgram(cmd *cobra.Command, args []string) (io.ReaderAt, error) {
 	var progReader io.ReaderAt
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		// Attempt to pull/use OCI
+		reg, err := content.NewRegistry(content.RegistryOptions{
+			Insecure:  true,
+			PlainHTTP: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		packager := packaging.NewEbpfRegistry(reg)
+
+		prog, err := packager.Pull(cmd.Context(), progLocation)
+		if err != nil {
+			return nil, err
+		}
+		return bytes.NewReader(prog.ProgramFileBytes), nil
 	} else {
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)

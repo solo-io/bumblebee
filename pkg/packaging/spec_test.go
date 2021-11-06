@@ -29,10 +29,10 @@ var _ = Describe("hello", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry("localhost:5000/oras:test3", reg)
+		registry := packaging.NewEbpfRegistry(reg)
 
 		ctx := context.Background()
-		err = registry.Push(ctx, pkg)
+		err = registry.Push(ctx, "localhost:5000/oras:test3", pkg)
 		Expect(err).NotTo(HaveOccurred())
 
 	})
@@ -54,10 +54,10 @@ var _ = Describe("hello", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry("localhost:5000/oras:test3", reg)
+		registry := packaging.NewEbpfRegistry(reg)
 
 		ctx := context.Background()
-		newPkg, err := registry.Pull(ctx)
+		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test3")
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(newPkg).To(Equal(pkg))

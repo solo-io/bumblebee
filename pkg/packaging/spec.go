@@ -21,26 +21,23 @@ type EbpfPackage struct {
 }
 
 type EbpfRegistry interface {
-	Push(ctx context.Context, pkg *EbpfPackage) error
-	Pull(ctx context.Context) (*EbpfPackage, error)
+	Push(ctx context.Context, ref string, pkg *EbpfPackage) error
+	Pull(ctx context.Context, ref string) (*EbpfPackage, error)
 }
 
 func NewEbpfRegistry(
-	registryRef string,
 	registry *content.Registry,
 ) EbpfRegistry {
 	return &ebpfResgistry{
-		registryRef: registryRef,
-		registry:    registry,
+		registry: registry,
 	}
 }
 
 type ebpfResgistry struct {
-	registryRef string
-	registry    *content.Registry
+	registry *content.Registry
 }
 
-func (e *ebpfResgistry) Push(ctx context.Context, pkg *EbpfPackage) error {
+func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) error {
 
 	memoryStore := content.NewMemory()
 
@@ -61,18 +58,18 @@ func (e *ebpfResgistry) Push(ctx context.Context, pkg *EbpfPackage) error {
 
 	memoryStore.Set(configDesc, config)
 
-	err = memoryStore.StoreManifest(e.registryRef, manifestDesc, manifest)
+	err = memoryStore.StoreManifest(ref, manifestDesc, manifest)
 	if err != nil {
 		return err
 	}
 
-	_, err = oras.Copy(ctx, memoryStore, e.registryRef, e.registry, "")
+	_, err = oras.Copy(ctx, memoryStore, ref, e.registry, "")
 	return err
 }
 
-func (e *ebpfResgistry) Pull(ctx context.Context) (*EbpfPackage, error) {
+func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, error) {
 	memoryStore := content.NewMemory()
-	_, err := oras.Copy(ctx, e.registry, e.registryRef, memoryStore, "")
+	_, err := oras.Copy(ctx, e.registry, ref, memoryStore, "")
 	if err != nil {
 		return nil, err
 	}
