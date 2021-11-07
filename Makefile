@@ -22,7 +22,7 @@ SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 #----------------------------------------------------------------------------------
 
 docker-build:
-	docker build . -f builder/Dockerfile -t gcr.io/gloobpf/bpfbuilder:$(VERSION) 
+	docker build ./builder -f builder/Dockerfile -t gcr.io/gloobpf/bpfbuilder:$(VERSION) 
 
 docker-push:
 	docker push gcr.io/gloobpf/bpfbuilder:$(VERSION) 

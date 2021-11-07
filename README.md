@@ -8,9 +8,19 @@ make docker-build
 ```
 
 ### Build eBPF
+
+#### In Docker
 ```
-sudo docker run -v "$PWD":/usr/src/bpf bpfbuilder <bpf program file> <ELF output file>
+go run -exec sudo ./ebpfctl/main.go build  <bpf program file> <ELF output file>
 ```
+
+#### Locally
+```
+sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > bpf/vmlinux.h
+
+go run -exec sudo ./ebpfctl/main.go build -l <bpf program file> <ELF output file>
+```
+
 
 ### Run eBPF
 ```

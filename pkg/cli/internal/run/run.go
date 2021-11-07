@@ -22,16 +22,18 @@ func RunCommand(opts *RunOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:     "run",
 		Aliases: []string{"r"},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			progReader, err := getProgram(cmd, args)
-			if err != nil {
-				return err
-			}
-
-			return run(cmd.Context(), progReader)
-		},
-		Args: cobra.ExactArgs(1), // Filename or image
+		Args:    cobra.ExactArgs(1), // Filename or image
+		RunE:    run,
 	}
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	progReader, err := getProgram(cmd, args)
+	if err != nil {
+		return err
+	}
+
+	return runProg(cmd.Context(), progReader)
 }
 
 func getProgram(cmd *cobra.Command, args []string) (io.ReaderAt, error) {
@@ -65,7 +67,7 @@ func getProgram(cmd *cobra.Command, args []string) (io.ReaderAt, error) {
 	return progReader, nil
 }
 
-func run(ctx context.Context, progReader io.ReaderAt) error {
+func runProg(ctx context.Context, progReader io.ReaderAt) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 
