@@ -53,7 +53,8 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 
 	inputFile := args[0]
 	outputFile := opts.OutputFile
-	var outputFileReader io.Reader
+
+	var outputFd *os.File
 	if outputFile == "" {
 		// if empty set to temp
 		fn, err := os.CreateTemp("", "bpf")
@@ -62,15 +63,15 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		}
 		// Remove if temp
 		defer os.Remove(fn.Name())
-		outputFileReader = fn
+		outputFd = fn
+		outputFile = fn.Name()
 	} else {
 		fn, err := os.Open(outputFile)
 		if err != nil {
 			return err
 		}
-		defer fn.Close()
+		outputFd = fn
 		outputFile = fn.Name()
-		outputFileReader = fn
 	}
 
 	if opts.Local {
@@ -83,7 +84,14 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		}
 	}
 
-	elfBytes, err := ioutil.ReadAll(outputFileReader)
+	// TODO: Figure out this hack, file.Seek() didn't seem to work
+	outputFd.Close()
+	reopened, err := os.Open(outputFile)
+	if err != nil {
+		return err
+	}
+
+	elfBytes, err := ioutil.ReadAll(reopened)
 	if err != nil {
 		return err
 	}
@@ -93,6 +101,9 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		Insecure:  true,
 		PlainHTTP: true,
 	})
+	if err != nil {
+		return err
+	}
 	ebpfReg := packaging.NewEbpfRegistry(reg)
 
 	pkg := &packaging.EbpfPackage{
