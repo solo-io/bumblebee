@@ -20,9 +20,9 @@ type BuildOptions struct {
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
-	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "")
-	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "")
-	flags.BoolVarP(&opts.Local, "local", "l", false, "")
+	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "Build image to use when compiling BPF program")
+	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
+	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
 }
 
 func BuildCommand(opts *BuildOptions) *cobra.Command {
