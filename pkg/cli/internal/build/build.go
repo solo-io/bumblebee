@@ -4,25 +4,31 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 
 	"github.com/solo-io/gloobpf/builder"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
+	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"oras.land/oras-go/pkg/content"
 )
 
 type BuildOptions struct {
 	BuildImage string
 	Builder    string
+	OutputFile string
 	Local      bool
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
 	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "Build image to use when compiling BPF program")
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
+	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will be written to tempdir and deleted")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
+
 }
 
 func BuildCommand(opts *BuildOptions) *cobra.Command {
@@ -46,12 +52,68 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 	ctx := cmd.Context()
 
 	inputFile := args[0]
-	outputFile := args[1]
-
-	if opts.Local {
-		return buildLocal(ctx, inputFile, outputFile)
+	outputFile := opts.OutputFile
+	var outputFileReader io.Reader
+	if outputFile == "" {
+		// if empty set to temp
+		fn, err := os.CreateTemp("", "bpf")
+		if err != nil {
+			return err
+		}
+		// Remove if temp
+		defer os.Remove(fn.Name())
+		outputFileReader = fn
+	} else {
+		fn, err := os.Open(outputFile)
+		if err != nil {
+			return err
+		}
+		defer fn.Close()
+		outputFile = fn.Name()
+		outputFileReader = fn
 	}
 
+	if opts.Local {
+		if err := buildLocal(ctx, inputFile, outputFile); err != nil {
+			return err
+		}
+	} else {
+		if err := buildDocker(ctx, opts, inputFile, outputFile); err != nil {
+			return err
+		}
+	}
+
+	elfBytes, err := ioutil.ReadAll(outputFileReader)
+	if err != nil {
+		return err
+	}
+
+	registryRef := args[1]
+	reg, err := content.NewRegistry(content.RegistryOptions{
+		Insecure:  true,
+		PlainHTTP: true,
+	})
+	ebpfReg := packaging.NewEbpfRegistry(reg)
+
+	pkg := &packaging.EbpfPackage{
+		ProgramFileBytes: elfBytes,
+		EbpfConfig: packaging.EbpfConfig{
+			Info: "here's some info", // TODO: unhardcode
+		},
+	}
+
+	if err := ebpfReg.Push(ctx, registryRef, pkg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildDocker(
+	ctx context.Context,
+	opts *BuildOptions,
+	inputFile, outputFile string,
+) error {
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -71,7 +133,6 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		fmt.Printf("%s\n", byt)
 		return err
 	}
-	fmt.Printf("%s\n", byt)
 	return nil
 }
 
