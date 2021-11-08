@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,7 +22,7 @@ import (
 )
 
 type LoadOptions struct {
-	EbpfFile string
+	EbpfProg io.ReaderAt
 }
 
 type Loader interface {
@@ -47,12 +47,8 @@ type dimensions_t struct {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
-	abs, err := filepath.Abs(opts.EbpfFile)
-	if err != nil {
-		return err
-	}
 	// Generate the spec from out eBPF elf file
-	spec, err := ebpf.LoadCollectionSpec(abs)
+	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
 		return err
 	}

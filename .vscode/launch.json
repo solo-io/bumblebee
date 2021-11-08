@@ -10,7 +10,10 @@
 			"request": "launch",
 			"mode": "auto",
 			"program": "${workspaceFolder}/main.go",
-			"args": ["kprobetcp.o"]
+			"args": ["${workspaceFolder}/bpf/openmonitor.elf"],
+			"env": {
+				"CGO_ENABLED":0,
+			}, 
 		}
   ]
 }

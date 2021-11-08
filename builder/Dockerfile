@@ -7,7 +7,7 @@ RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 RUN add-apt-repository "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-13 main"
 RUN apt-get update
 
-RUN apt-get install -y clang-13 lldb-13 lld-13 clangd-13 make man-db
+RUN apt-get install -y clang-13 lldb-13 lld-13 clangd-13 man-db
 RUN apt-get install -y bpftool libbpf-dev
 
 # non package installed default include directory
