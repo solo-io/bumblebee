@@ -2,6 +2,7 @@
 #include "bpf/bpf_helpers.h"
 #include "bpf/bpf_core_read.h"
 #include "bpf/bpf_tracing.h"
+#include "solo_types.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -10,7 +11,7 @@ struct event_t {
 	u32 type;
 	u64 addr;
 	u64 skb_addr;
-	u64 ts;
+	timestamp ts;
 } __attribute__((packed));
 
 struct {

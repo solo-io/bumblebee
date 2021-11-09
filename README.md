@@ -12,6 +12,8 @@ make docker-build
 #### In Docker
 ```
 go run -exec sudo ./ebpfctl/main.go build  <bpf program file> <ELF output file>
+
+go run -exec sudo ./ebpfctl/main.go build bpf/ringbuf.c localhost:5000/oras:ringbuf-demo
 ```
 
 #### Locally
