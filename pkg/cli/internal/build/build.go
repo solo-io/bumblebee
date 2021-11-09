@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/solo-io/gloobpf/builder"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
@@ -56,17 +58,20 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 
 	var outputFd *os.File
 	if outputFile == "" {
-		// if empty set to temp
-		fn, err := os.CreateTemp("", "bpf")
+		ext := filepath.Ext(inputFile)
+
+		filePath := strings.TrimSuffix(inputFile, ext)
+		filePath += ".o"
+
+		fn, err := os.Create(filePath)
 		if err != nil {
 			return err
 		}
 		// Remove if temp
-		defer os.Remove(fn.Name())
 		outputFd = fn
 		outputFile = fn.Name()
 	} else {
-		fn, err := os.Open(outputFile)
+		fn, err := os.Create(outputFile)
 		if err != nil {
 			return err
 		}
