@@ -221,12 +221,18 @@ func (l *loader) startHashMap(
 				if err != nil {
 					return err
 				}
-				saddr := decodedKey["saddr"].(uint32)
-				daddr := decodedKey["daddr"].(uint32)
-				fmt.Printf("saddr: '%v', daddr: '%v'\n", saddr, daddr)
-				sIP := int2ip(saddr)
-				dIP := int2ip(daddr)
-				fmt.Printf("sIP: '%v', dIP: '%v'\n", sIP, dIP)
+
+				// TODO: remove ugly hack and make generic
+				if saddr, ok := decodedKey["saddr"]; ok {
+					saddr32 := saddr.(uint32)
+					sIP := int2ip(saddr32)
+					fmt.Printf("saddr: '%v', sIP: '%v'\n", saddr32, sIP)
+				}
+				if daddr, ok := decodedKey["daddr"]; ok {
+					daddr32 := daddr.(uint32)
+					dIP := int2ip(daddr32)
+					fmt.Printf("daddr: '%v', dIP: '%v'\n", daddr32, dIP)
+				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
