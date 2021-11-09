@@ -17,12 +17,9 @@ import (
 	"oras.land/oras-go/pkg/content"
 )
 
-type RunOptions struct {
-	RawELF bool
-}
+type RunOptions struct{}
 
 func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {
-	flags.BoolVar(&opts.RawELF, "raw", false, "Run an eBPF program contained in a raw, standalone ELF binary file")
 }
 
 func RunCommand(opts *RunOptions) *cobra.Command {
@@ -39,27 +36,17 @@ func RunCommand(opts *RunOptions) *cobra.Command {
 }
 
 func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
-	var progReader io.ReaderAt
-	var err error
-	if opts.RawELF {
-		// just open file directly
-		progReader, err = os.Open(args[0])
-		if err != nil {
-			return err
-		}
-	} else {
-		progReader, err = getProgram(cmd, args)
-		if err != nil {
-			return err
-		}
+	// gauranteed to be length 1
+	progLocation := args[0]
+	progReader, err := getProgram(cmd, progLocation)
+	if err != nil {
+		return err
 	}
 
 	return runProg(cmd.Context(), progReader)
 }
 
-func getProgram(cmd *cobra.Command, args []string) (io.ReaderAt, error) {
-	// guaranteed to be length 1
-	progLocation := args[0]
+func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
 	var progReader io.ReaderAt
 	_, err := os.Stat(progLocation)
 	if err != nil {

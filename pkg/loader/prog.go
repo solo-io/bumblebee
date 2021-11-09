@@ -40,11 +40,6 @@ type loader struct {
 	decoderFactory DecoderFactory
 }
 
-type dimensions_t struct {
-	saddr uint32
-	daddr uint32
-}
-
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	// Generate the spec from out eBPF elf file
