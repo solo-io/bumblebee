@@ -2,10 +2,13 @@ package loader
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -35,6 +38,11 @@ func NewLoader(decoderFactory DecoderFactory) Loader {
 
 type loader struct {
 	decoderFactory DecoderFactory
+}
+
+type dimensions_t struct {
+	saddr uint32
+	daddr uint32
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
@@ -67,12 +75,22 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, prog := range spec.Programs {
 		switch prog.Type {
 		case ebpf.Kprobe:
-			// Name of coll.Program should match
-			kp, err := link.Kprobe(prog.AttachTo, coll.Programs[name])
-			if err != nil {
-				return err
+			if strings.HasSuffix(name, "ret") {
+				// Name of coll.Program should match
+				kp, err := link.Kretprobe(prog.AttachTo, coll.Programs[name])
+				if err != nil {
+					return err
+				}
+				defer kp.Close()
+
+			} else {
+				// Name of coll.Program should match
+				kp, err := link.Kprobe(prog.AttachTo, coll.Programs[name])
+				if err != nil {
+					return err
+				}
+				defer kp.Close()
 			}
-			defer kp.Close()
 		default:
 			return errors.New("only kprobe programs supported")
 		}
@@ -84,7 +102,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		name := name
 		bpfMap := bpfMap
 		// TODO: skip read-only data for now, probably useful to explore logging/emitting this data as well eventually
-		if name == ".rodata" {
+		if name == ".rodata" || name == "sockets" {
 			continue
 		}
 		switch bpfMap.Type {
@@ -180,7 +198,7 @@ func (l *loader) startHashMap(
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 
-	log.Println("Waiting for events..")
+	log.Println("Waiting for hash events..")
 
 	for {
 		select {
@@ -203,13 +221,27 @@ func (l *loader) startHashMap(
 				if err != nil {
 					return err
 				}
+
+				// TODO: remove ugly hack and make generic
+				if saddr, ok := decodedKey["saddr"]; ok {
+					saddr32 := saddr.(uint32)
+					sIP := int2ip(saddr32)
+					fmt.Printf("saddr: '%v', sIP: '%v'\n", saddr32, sIP)
+				}
+				if daddr, ok := decodedKey["daddr"]; ok {
+					daddr32 := daddr.(uint32)
+					dIP := int2ip(daddr32)
+					fmt.Printf("daddr: '%v', dIP: '%v'\n", daddr32, dIP)
+				}
+
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("%s\n", decodedKey)
-				fmt.Printf("%s\n", decodedValue)
+				fmt.Printf("key: '%s'\n", decodedKey)
+
+				fmt.Printf("value: '%s'\n", decodedValue)
 
 				if len(decodedValue) > 1 {
 					log.Fatal("only 1 value allowed")
@@ -226,4 +258,11 @@ func (l *loader) startHashMap(
 			return nil
 		}
 	}
+}
+
+func int2ip(nn uint32) net.IP {
+	ip := make(net.IP, 4)
+	binary.LittleEndian.PutUint32(ip, nn)
+	// binary.BigEndian.PutUint32(ip, nn)
+	return ip
 }

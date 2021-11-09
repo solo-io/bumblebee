@@ -153,6 +153,8 @@ func buildDocker(
 	opts *BuildOptions,
 	inputFile, outputFile string,
 ) error {
+	// TODO: handle cwd to be glooBPF/epfctl?
+	// TODO: debug log this
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -179,6 +181,7 @@ func buildLocal(ctx context.Context, inputFile, outputFile string) error {
 	buildScript := builder.GetBuildScript()
 
 	// Pass the script into sh via stdin, then arguments
+	// TODO: need to handle CWD gracefully
 	shCmd := exec.CommandContext(ctx, "sh", "-s", "--", inputFile, outputFile)
 	stdin, err := shCmd.StdinPipe()
 	if err != nil {
