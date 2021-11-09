@@ -3,6 +3,7 @@ package loader
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/pterm/pterm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/global"
@@ -42,9 +44,11 @@ type loader struct {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
+	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
+		loaderProgress.Fail()
 		return err
 	}
 
@@ -62,10 +66,13 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
+		loaderProgress.Fail()
 		return err
 	}
 	defer coll.Close()
+	loaderProgress.Success()
 
+	linkerProgress, _ := pterm.DefaultSpinner.Start("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {
@@ -75,19 +82,25 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
+					linkerProgress.Fail()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
+					linkerProgress.Fail()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
 			}
 			defer kp.Close()
 		default:
+			linkerProgress.Fail()
 			return errors.New("only kprobe programs supported")
 		}
 	}
+	linkerProgress.Success()
+
+	pterm.Info.Println("Starting map watches")
 
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -138,7 +151,7 @@ func (l *loader) startRingBuf(
 	// eBPF C program.
 	rd, err := ringbuf.NewReader(coll.Maps[name])
 	if err != nil {
-		log.Fatalf("opening ringbuf reader: %s", err)
+		return fmt.Errorf("opening ringbuf reader: %v", err)
 	}
 	defer rd.Close()
 	// Close the reader when the process receives a signal, which will exit
@@ -147,20 +160,17 @@ func (l *loader) startRingBuf(
 		<-ctx.Done()
 
 		if err := rd.Close(); err != nil {
-			log.Fatalf("closing ringbuf reader: %s", err)
+			pterm.Warning.Printf("closing ringbuf reader: %s", err)
 		}
 	}()
-
-	log.Println("Waiting for events..")
 
 	for {
 		record, err := rd.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
-				log.Println("Received signal, exiting..")
 				return nil
 			}
-			log.Printf("reading from reader: %s", err)
+			pterm.Warning.Printf("reading from reader: %s", err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, t, record.RawSample)
@@ -169,7 +179,11 @@ func (l *loader) startRingBuf(
 		}
 
 		// TODO: Handle statistic, or structured logging
-		fmt.Printf("%+v\n", result)
+		byt, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s: %s\n", name, byt)
 
 	}
 }
@@ -190,8 +204,6 @@ func (l *loader) startHashMap(
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
-
-	log.Println("Waiting for hash events..")
 
 	for {
 		select {

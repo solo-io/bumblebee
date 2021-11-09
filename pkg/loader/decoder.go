@@ -5,8 +5,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"time"
 
 	"github.com/cilium/ebpf/btf"
+)
+
+const (
+	ipv4AddrTypeName = "ipv4_addr"
+	ipv6AddrTypeName = "ipv6_addr"
+	durationTypeName = "duration"
 )
 
 type BinaryDecoder interface {
@@ -95,11 +102,25 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 			return d.handleUint(typedMember)
 		}
 	case *btf.Typedef:
+		// Handle special types
 		underlying, err := getUnderlyingType(typedMember)
 		if err != nil {
 			return nil, err
 		}
-		return d.processSingleType(underlying)
+		processed, err := d.processSingleType(underlying)
+		if err != nil {
+			return nil, err
+		}
+
+		switch typedMember.Name {
+		case durationTypeName:
+			return u64ToDuration(processed)
+		// case ipv4AddrTypeName:
+		// case ipv6AddrTypeName:
+		default:
+			return processed, nil
+		}
+
 	case *btf.Float:
 		return d.handleFloat(typedMember)
 	default:
@@ -205,4 +226,14 @@ func getUnderlyingType(tf *btf.Typedef) (btf.Type, error) {
 	default:
 		return typedMember, nil
 	}
+}
+
+// TODO: Process into string at a later time.
+func u64ToDuration(val interface{}) (string, error) {
+	u64Val, ok := val.(uint64)
+	if !ok {
+		return "", errors.New("this should never happen")
+	}
+	// TODO: Check if overflow somehow
+	return time.Duration(u64Val).String(), nil
 }

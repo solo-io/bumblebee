@@ -26,6 +26,7 @@ require (
 	github.com/atomicgo/cursor v0.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/containerd/containerd v1.5.7 // indirect
 	github.com/docker/cli v20.10.9+incompatible // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -41,6 +42,7 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/klauspost/compress v1.11.13 // indirect
+	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/moby/locker v1.0.1 // indirect

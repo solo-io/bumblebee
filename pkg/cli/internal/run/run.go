@@ -41,6 +41,7 @@ $ run localhost:5000/oras:ringbuf-demo
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(cmd, args, opts)
 		},
+		SilenceUsage: true,
 	}
 	addToFlags(cmd.PersistentFlags(), opts)
 	return cmd
@@ -83,7 +84,7 @@ func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
 		if err != nil {
 			return nil, err
 		}
-		return bytes.NewReader(prog.ProgramFileBytes), nil
+		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from file: %s", progLocation),
@@ -119,8 +120,6 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
 	}
-
-	pterm.Info.Printfln("Loading BPF program into kernel")
 
 	progLoader := loader.NewLoader(loader.NewDecoderFactory())
 	return progLoader.Load(ctx, progOptions)
