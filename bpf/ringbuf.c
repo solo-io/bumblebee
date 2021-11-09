@@ -17,7 +17,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
 	__type(value, struct event_t);
-} events SEC(".maps");
+} events SEC(".maps.print");
 
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
