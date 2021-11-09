@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/builder"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
 	"github.com/solo-io/gloobpf/pkg/packaging"
@@ -42,7 +43,10 @@ func BuildCommand(opts *BuildOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return build(cmd, args, opts)
 		},
+		SilenceUsage: true, // Usage on error is bad
 	}
+
+	cmd.OutOrStdout()
 
 	// Init flags
 	addToFlags(cmd.PersistentFlags(), opts)
@@ -79,15 +83,25 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		outputFile = fn.Name()
 	}
 
+	// Create and start a fork of the default spinner.
+	var buildSpinner *pterm.SpinnerPrinter
 	if opts.Local {
+		buildSpinner, _ = pterm.DefaultSpinner.Start("Compiling BPF program locally")
 		if err := buildLocal(ctx, inputFile, outputFile); err != nil {
+			buildSpinner.UpdateText("Failed to compile BPF program")
+			buildSpinner.Fail()
 			return err
 		}
 	} else {
+		buildSpinner, _ = pterm.DefaultSpinner.Start("Compiling BPF program locally")
 		if err := buildDocker(ctx, opts, inputFile, outputFile); err != nil {
+			buildSpinner.UpdateText("Failed to compile BPF program")
+			buildSpinner.Fail()
 			return err
 		}
 	}
+	buildSpinner.UpdateText(fmt.Sprintf("Successfully compiled \"%s\" and wrote it to \"%s\"", inputFile, outputFile))
+	buildSpinner.Success() // Resolve spinner with success message.
 
 	// TODO: Figure out this hack, file.Seek() didn't seem to work
 	outputFd.Close()
@@ -101,12 +115,16 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 		return err
 	}
 
+	registrySpinner, _ := pterm.DefaultSpinner.Start("Packaging BPF program")
+
 	registryRef := args[1]
 	reg, err := content.NewRegistry(content.RegistryOptions{
 		Insecure:  true,
 		PlainHTTP: true,
 	})
 	if err != nil {
+		registrySpinner.UpdateText("Failed to initialize registry")
+		registrySpinner.Fail()
 		return err
 	}
 	ebpfReg := packaging.NewEbpfRegistry(reg)
@@ -119,8 +137,13 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 	}
 
 	if err := ebpfReg.Push(ctx, registryRef, pkg); err != nil {
+		registrySpinner.UpdateText(fmt.Sprintf("Failed to save BPF OCI image: %s", registryRef))
+		registrySpinner.Fail()
 		return err
 	}
+
+	registrySpinner.UpdateText(fmt.Sprintf("Saved BPF OCI image to %s", registryRef))
+	registrySpinner.Success()
 
 	return nil
 }

@@ -47,6 +47,10 @@ type ebpfResgistry struct {
 	registry *content.Registry
 }
 
+func allowedMediaTypes() []string {
+	return []string{eBPFMediaType, configMediaType}
+}
+
 func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) error {
 
 	memoryStore := content.NewMemory()
@@ -78,13 +82,27 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		return err
 	}
 
-	_, err = oras.Copy(ctx, memoryStore, ref, e.registry, "")
+	_, err = oras.Copy(
+		ctx,
+		memoryStore,
+		ref,
+		e.registry,
+		"",
+		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+	)
 	return err
 }
 
 func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, error) {
 	memoryStore := content.NewMemory()
-	_, err := oras.Copy(ctx, e.registry, ref, memoryStore, "")
+	_, err := oras.Copy(
+		ctx,
+		e.registry,
+		ref,
+		memoryStore,
+		"",
+		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+	)
 	if err != nil {
 		return nil, err
 	}
