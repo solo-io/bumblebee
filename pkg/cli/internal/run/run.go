@@ -13,31 +13,52 @@ import (
 	"github.com/solo-io/gloobpf/pkg/loader"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
 )
 
-type RunOptions struct{}
+type RunOptions struct {
+	RawELF bool
+}
+
+func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {
+	flags.BoolVar(&opts.RawELF, "raw", false, "Run an eBPF program contained in a raw, standalone ELF binary file")
+}
 
 func RunCommand(opts *RunOptions) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "run",
 		Aliases: []string{"r"},
 		Args:    cobra.ExactArgs(1), // Filename or image
-		RunE:    run,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd, args, opts)
+		},
 	}
+	addToFlags(cmd.PersistentFlags(), opts)
+	return cmd
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	progReader, err := getProgram(cmd, args)
-	if err != nil {
-		return err
+func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
+	var progReader io.ReaderAt
+	var err error
+	if opts.RawELF {
+		// just open file directly
+		progReader, err = os.Open(args[0])
+		if err != nil {
+			return err
+		}
+	} else {
+		progReader, err = getProgram(cmd, args)
+		if err != nil {
+			return err
+		}
 	}
 
 	return runProg(cmd.Context(), progReader)
 }
 
 func getProgram(cmd *cobra.Command, args []string) (io.ReaderAt, error) {
-	// garaunteed to be length 1
+	// guaranteed to be length 1
 	progLocation := args[0]
 	var progReader io.ReaderAt
 	_, err := os.Stat(progLocation)
