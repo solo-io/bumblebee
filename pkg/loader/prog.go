@@ -94,8 +94,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
-		// TODO: skip read-only data for now, probably useful to explore logging/emitting this data as well eventually
-		if name == ".rodata" || name == "sockets" {
+		if !shouldProcessMap(bpfMap) {
 			continue
 		}
 		switch bpfMap.Type {
@@ -120,6 +119,16 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 
 	return eg.Wait()
+}
+
+// Checks the given MapSpec to see if this map should be watched by our loader
+// Will return true for maps that should be watched
+func shouldProcessMap(mapSpec *ebpf.MapSpec) bool {
+	secName := mapSpec.SectionName
+	if strings.HasSuffix(secName, "counter") || strings.HasSuffix(secName, "gauge") || strings.HasSuffix(secName, "print") {
+		return true
+	}
+	return false
 }
 
 func (l *loader) startRingBuf(

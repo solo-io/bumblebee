@@ -68,4 +68,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/cilium/ebpf => github.com/solo-io/ebpf v0.7.1-0.20211109152131-fec3bb249ae6
+replace github.com/cilium/ebpf => github.com/solo-io/ebpf v0.7.1-0.20211109175948-0418708068be

@@ -26,7 +26,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} sockets_ext SEC(".maps");
+} sockets_ext SEC(".maps.print");
 
 static __always_inline int
 enter_tcp_connect(struct pt_regs *ctx, struct sock *sk)
