@@ -70,22 +70,20 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, prog := range spec.Programs {
 		switch prog.Type {
 		case ebpf.Kprobe:
-			if strings.HasSuffix(name, "ret") {
-				// Name of coll.Program should match
-				kp, err := link.Kretprobe(prog.AttachTo, coll.Programs[name])
+			var kp link.Link
+			var err error
+			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
+				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					return err
+					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
-				defer kp.Close()
-
 			} else {
-				// Name of coll.Program should match
-				kp, err := link.Kprobe(prog.AttachTo, coll.Programs[name])
+				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					return err
+					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
-				defer kp.Close()
 			}
+			defer kp.Close()
 		default:
 			return errors.New("only kprobe programs supported")
 		}
