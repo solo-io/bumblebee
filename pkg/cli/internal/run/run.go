@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/pkg/loader"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
@@ -19,8 +20,7 @@ import (
 
 type RunOptions struct{}
 
-func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {
-}
+func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {}
 
 func RunCommand(opts *RunOptions) *cobra.Command {
 	cmd := &cobra.Command{
@@ -47,14 +47,23 @@ func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
 }
 
 func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
-	var progReader io.ReaderAt
+
+	var (
+		progReader     io.ReaderAt
+		programSpinner *pterm.SpinnerPrinter
+	)
 	_, err := os.Stat(progLocation)
 	if err != nil {
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from registry: %s", progLocation),
+		)
 		reg, err := content.NewRegistry(content.RegistryOptions{
 			Insecure:  true,
 			PlainHTTP: true,
 		})
 		if err != nil {
+			programSpinner.UpdateText("Failed to initialize registry")
+			programSpinner.Fail()
 			return nil, err
 		}
 		packager := packaging.NewEbpfRegistry(reg)
@@ -65,12 +74,18 @@ func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
 		}
 		return bytes.NewReader(prog.ProgramFileBytes), nil
 	} else {
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from file: %s", progLocation),
+		)
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
+			programSpinner.UpdateText("Failed to open BPF file")
+			programSpinner.Fail()
 			return nil, err
 		}
 	}
+	programSpinner.Success()
 
 	return progReader, nil
 }
@@ -93,6 +108,8 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
 	}
+
+	pterm.Info.Printfln("Loading BPF program into kernel")
 
 	progLoader := loader.NewLoader(loader.NewDecoderFactory())
 	return progLoader.Load(ctx, progOptions)

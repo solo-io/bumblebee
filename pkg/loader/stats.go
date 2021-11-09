@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -44,7 +43,7 @@ func initMeter() {
 		_ = http.ListenAndServe(":2222", nil)
 	}()
 
-	fmt.Println("Prometheus server running on :2222")
+	// fmt.Println("Prometheus server running on :2222")
 }
 
 type metricsProvider struct {
