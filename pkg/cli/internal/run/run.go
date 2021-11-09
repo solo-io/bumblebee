@@ -24,7 +24,18 @@ func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {}
 
 func RunCommand(opts *RunOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "run",
+		Use:   "run BPF_PROGRAM",
+		Short: "Run a BPF program file or OCI image.",
+		Long: `
+The ebpfctl run command takes a compiled BPF program as input, and runs it using
+our generic loader. The supported formats are: file, and OCI image
+
+To run with a file pass it as the first ARG:
+$ run bpf-program.o
+
+To run with a OCI image pass it as the first ARG:
+$ run localhost:5000/oras:ringbuf-demo
+`,
 		Aliases: []string{"r"},
 		Args:    cobra.ExactArgs(1), // Filename or image
 		RunE: func(cmd *cobra.Command, args []string) error {

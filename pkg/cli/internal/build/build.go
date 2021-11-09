@@ -29,7 +29,7 @@ type BuildOptions struct {
 func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
 	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "Build image to use when compiling BPF program")
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
-	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will be written to tempdir and deleted")
+	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
 
 }
@@ -37,7 +37,17 @@ func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
 func BuildCommand(opts *BuildOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use:     "build",
+		Use:   "build INPUT_FILE REGISTRY_REF",
+		Short: "Build a BPF program, and save it to an OCI image representation.",
+		Long: `
+The ebpfctl build command has 2 main parts
+1. Compiling the BPF C program using clang.
+2. Saving the compiled program in the OCI format.
+
+By default building is done in a docker container, however, this can be switched to local by adding the local flag:
+$ build INPUT_FILE REGISTRY_REF --local
+
+`,
 		Aliases: []string{"b"},
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
