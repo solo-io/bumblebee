@@ -16,3 +16,6 @@ vendor/
 _output
 
 vmlinux.h
+
+# Staging ground for bpf programs
+bpf/
