@@ -60,7 +60,10 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		return err
 	}
 
-	config, configDesc, err := content.GenerateConfig(nil)
+	configAnnotations := map[string]string{
+		ocispec.AnnotationTitle: configName,
+	}
+	config, configDesc, err := content.GenerateConfig(configAnnotations)
 	if err != nil {
 		return err
 	}
