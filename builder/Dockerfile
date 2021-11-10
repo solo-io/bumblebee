@@ -13,6 +13,9 @@ RUN apt-get install -y bpftool libbpf-dev
 # non package installed default include directory
 RUN bpftool btf dump file /sys/kernel/btf/vmlinux format c > /usr/local/include/vmlinux.h
 
+# Ensure that solo helper types are available from workdir
+ADD solo_types.h /usr/local/include/
+
 ADD build.sh /usr/local/bin
 
 RUN mkdir /usr/src/bpf/

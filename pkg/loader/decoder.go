@@ -5,8 +5,16 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"net"
+	"time"
 
 	"github.com/cilium/ebpf/btf"
+)
+
+const (
+	ipv4AddrTypeName = "ipv4_addr"
+	ipv6AddrTypeName = "ipv6_addr"
+	durationTypeName = "duration"
 )
 
 type BinaryDecoder interface {
@@ -95,11 +103,27 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 			return d.handleUint(typedMember)
 		}
 	case *btf.Typedef:
+		// Handle special types
 		underlying, err := getUnderlyingType(typedMember)
 		if err != nil {
 			return nil, err
 		}
-		return d.processSingleType(underlying)
+		processed, err := d.processSingleType(underlying)
+		if err != nil {
+			return nil, err
+		}
+
+		switch typedMember.Name {
+		case durationTypeName:
+			return u64ToDuration(processed)
+		case ipv4AddrTypeName:
+			return u32ToIp(processed)
+		case ipv6AddrTypeName:
+			return u32ToIp(processed)
+		default:
+			return processed, nil
+		}
+
 	case *btf.Float:
 		return d.handleFloat(typedMember)
 	default:
@@ -205,4 +229,24 @@ func getUnderlyingType(tf *btf.Typedef) (btf.Type, error) {
 	default:
 		return typedMember, nil
 	}
+}
+
+// TODO: Process into string at a later time.
+func u64ToDuration(val interface{}) (time.Duration, error) {
+	u64Val, ok := val.(uint64)
+	if !ok {
+		return 0, errors.New("this should never happen")
+	}
+	// TODO: Check if overflow somehow
+	return time.Duration(u64Val), nil
+}
+
+func u32ToIp(val interface{}) (net.IP, error) {
+	u32Val, ok := val.(uint32)
+	if !ok {
+		return net.IP{}, errors.New("this should never happen")
+	}
+	ip := make(net.IP, 4)
+	Endianess.PutUint32(ip, u32Val)
+	return ip, nil
 }

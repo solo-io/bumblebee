@@ -48,8 +48,7 @@ By default building is done in a docker container, however, this can be switched
 $ build INPUT_FILE REGISTRY_REF --local
 
 `,
-		Aliases: []string{"b"},
-		Args:    cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return build(cmd, args, opts)
 		},
@@ -141,9 +140,6 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 
 	pkg := &packaging.EbpfPackage{
 		ProgramFileBytes: elfBytes,
-		EbpfConfig: packaging.EbpfConfig{
-			Info: "here's some info", // TODO: unhardcode
-		},
 	}
 
 	if err := ebpfReg.Push(ctx, registryRef, pkg); err != nil {
