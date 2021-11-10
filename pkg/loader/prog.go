@@ -10,13 +10,13 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/mitchellh/hashstructure"
 	"github.com/pterm/pterm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -206,13 +206,14 @@ func (l *loader) startHashMap(
 ) error {
 
 	meter := global.Meter(ebpfMeter)
-	observerLock := new(sync.RWMutex)
 	d := l.decoderFactory()
 
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 
+	counter := metric.Must(meter).NewInt64Counter(name)
+	valueMap := map[uint64]uint64{}
 	for {
 		select {
 		case <-ticker.C:
@@ -236,49 +237,51 @@ func (l *loader) startHashMap(
 				}
 
 				labels := []attribute.KeyValue{}
+				keyMap := map[string]string{}
 				for k, v := range decodedKey {
+					var valAsStr string
 					if valUint32, isUint32 := v.(uint32); isUint32 {
-						// TODO: remove ugly hack and make generic
 						if k == "saddr" || k == "daddr" {
 							addr := int2ip(valUint32)
 							fmt.Printf("key: %v: val is ip addr: %v\n", k, addr)
-							thisKv := attribute.String(k, fmt.Sprint(addr))
+							valAsStr = fmt.Sprint(addr)
+							thisKv := attribute.String(k, valAsStr)
 							labels = append(labels, thisKv)
 						} else {
 							fmt.Printf("key: %v: val is uint32: %v\n", k, valUint32)
-							thisKv := attribute.String(k, fmt.Sprint(valUint32))
+							valAsStr = fmt.Sprint(valUint32)
+							thisKv := attribute.String(k, valAsStr)
 							labels = append(labels, thisKv)
 						}
 					}
+					keyMap[k] = valAsStr
 				}
+				keyHash, err := hashstructure.Hash(keyMap, nil)
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("key: '%s'\n", decodedKey)
-
-				fmt.Printf("value: '%s'\n", decodedValue)
-
 				if len(decodedValue) > 1 {
 					log.Fatal("only 1 value allowed")
 				}
-
 				intVal, ok := decodedValue[""].(uint64)
 				if !ok {
 					log.Fatal("only uint64 allowed")
 				}
 
-				observerValueToReport := new(int64)
-				cb := func(_ context.Context, result metric.Int64ObserverResult) {
-					(*observerLock).RLock()
-					value := *observerValueToReport
-					(*observerLock).RUnlock()
-					result.Observe(value, labels...)
+				oldVal := valueMap[keyHash]
+				if oldVal == intVal {
+					break
 				}
-				metric.Must(meter).NewInt64CounterObserver(name, cb)
-				*observerValueToReport = int64(intVal)
+
+				diff := intVal - oldVal
+				fmt.Printf("key: '%s'\n", decodedKey)
+				fmt.Printf("old: %v, new: %v, diff: %v\n", oldVal, intVal, diff)
+				valueMap[keyHash] = intVal
+
+				meter.RecordBatch(ctx, labels, counter.Measurement(int64(diff)))
 			}
 		case <-ctx.Done():
 			return nil
