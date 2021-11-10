@@ -45,7 +45,7 @@ func NewEbpfRegistry() EbpfRegistry {
 
 type ebpfResgistry struct{}
 
-func allowedMediaTypes() []string {
+func AllowedMediaTypes() []string {
 	return []string{eBPFMediaType, configMediaType}
 }
 
@@ -103,7 +103,7 @@ func (e *ebpfResgistry) Push(
 		ref,
 		registry,
 		"",
-		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
 	)
 	return err
 }
@@ -119,7 +119,7 @@ func (e *ebpfResgistry) Pull(
 		ref,
 		memoryStore,
 		"",
-		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
 	)
 	if err != nil {
 		return nil, err
