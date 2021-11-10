@@ -22,7 +22,7 @@ var _ = Describe("hello", func() {
 		pkg := &packaging.EbpfPackage{
 			ProgramFileBytes: byt,
 			Description:      "some info",
-			Author:           "me",
+			Authors:          "me",
 			EbpfConfig:       packaging.EbpfConfig{},
 		}
 
@@ -32,10 +32,10 @@ var _ = Describe("hello", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry(reg)
+		registry := packaging.NewEbpfRegistry()
 
 		ctx := context.Background()
-		err = registry.Push(ctx, "localhost:5000/oras:test3", pkg)
+		err = registry.Push(ctx, "localhost:5000/oras:test3", reg, pkg)
 		Expect(err).NotTo(HaveOccurred())
 
 	})
@@ -50,7 +50,7 @@ var _ = Describe("hello", func() {
 		pkg := &packaging.EbpfPackage{
 			ProgramFileBytes: byt,
 			Description:      "some info",
-			Author:           "me",
+			Authors:          "me",
 			EbpfConfig:       packaging.EbpfConfig{},
 		}
 
@@ -60,10 +60,10 @@ var _ = Describe("hello", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry(reg)
+		registry := packaging.NewEbpfRegistry()
 
 		ctx := context.Background()
-		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test3")
+		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test3", reg)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(newPkg).To(Equal(pkg))

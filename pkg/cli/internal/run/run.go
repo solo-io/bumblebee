@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/defaults"
 	"github.com/solo-io/gloobpf/pkg/loader"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
@@ -49,7 +50,7 @@ $ run localhost:5000/oras:ringbuf-demo
 func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
 	// gauranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd, progLocation)
+	progReader, err := getProgram(cmd.Context(), progLocation)
 	if err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
 	return runProg(cmd.Context(), progReader)
 }
 
-func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
+func getProgram(ctx context.Context, progLocation string) (io.ReaderAt, error) {
 
 	var (
 		progReader     io.ReaderAt
@@ -68,22 +69,13 @@ func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from registry: %s", progLocation),
 		)
-		reg, err := content.NewRegistry(content.RegistryOptions{
-			Insecure:  true,
-			PlainHTTP: true,
-		})
+		progBytes, err := fetchOciImage(ctx, progLocation)
 		if err != nil {
-			programSpinner.UpdateText("Failed to initialize registry")
+			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
 			return nil, err
 		}
-		packager := packaging.NewEbpfRegistry(reg)
-
-		prog, err := packager.Pull(cmd.Context(), progLocation)
-		if err != nil {
-			return nil, err
-		}
-		progReader = bytes.NewReader(prog.ProgramFileBytes)
+		progReader = bytes.NewReader(progBytes)
 	} else {
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from file: %s", progLocation),
@@ -99,6 +91,34 @@ func getProgram(cmd *cobra.Command, progLocation string) (io.ReaderAt, error) {
 	programSpinner.Success()
 
 	return progReader, nil
+}
+
+func fetchOciImage(ctx context.Context, ref string) ([]byte, error) {
+
+	packager := packaging.NewEbpfRegistry()
+
+	if ociReg, err := content.NewOCI(defaults.EbpfImageDir); err == nil {
+		prog, err := packager.Pull(ctx, ref, ociReg)
+		if err == nil {
+			return prog.ProgramFileBytes, nil
+		}
+	}
+
+	pterm.Info.Printfln("%s not found locally, pulling from registry", ref)
+
+	reg, err := content.NewRegistry(content.RegistryOptions{
+		Insecure:  true,
+		PlainHTTP: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	prog, err := packager.Pull(ctx, ref, reg)
+	if err != nil {
+		return nil, err
+	}
+	return prog.ProgramFileBytes, nil
 }
 
 func runProg(ctx context.Context, progReader io.ReaderAt) error {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/builder"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/defaults"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
@@ -126,23 +127,20 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 
 	registrySpinner, _ := pterm.DefaultSpinner.Start("Packaging BPF program")
 
-	registryRef := args[1]
-	reg, err := content.NewRegistry(content.RegistryOptions{
-		Insecure:  true,
-		PlainHTTP: true,
-	})
+	reg, err := content.NewOCI(defaults.EbpfImageDir)
 	if err != nil {
 		registrySpinner.UpdateText("Failed to initialize registry")
 		registrySpinner.Fail()
 		return err
 	}
-	ebpfReg := packaging.NewEbpfRegistry(reg)
+	registryRef := args[1]
+	ebpfReg := packaging.NewEbpfRegistry()
 
 	pkg := &packaging.EbpfPackage{
 		ProgramFileBytes: elfBytes,
 	}
 
-	if err := ebpfReg.Push(ctx, registryRef, pkg); err != nil {
+	if err := ebpfReg.Push(ctx, registryRef, reg, pkg); err != nil {
 		registrySpinner.UpdateText(fmt.Sprintf("Failed to save BPF OCI image: %s", registryRef))
 		registrySpinner.Fail()
 		return err
