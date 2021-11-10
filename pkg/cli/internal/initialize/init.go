@@ -17,39 +17,47 @@ func InitCommand() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a sample BPF program",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := selectLanguageInteractive()
-			if err != nil {
-				return err
-			}
-
-			_, err = selectMapTypeInteractive()
-			if err != nil {
-				return err
-			}
-
-			fn, err := os.Create("bpf/example.bpf.c")
-			if err != nil {
-				return err
-			}
-
-			ringBufByt, err := progs.ReadFile("progs/ringbuf.c")
-			if err != nil {
-				return err
-			}
-
-			_, err = fn.Write(ringBufByt)
-			if err != nil {
-				return err
-			}
-
-			pterm.Info.Printfln("Successfully wrote skeleton BPF program to %s:", "bpf/example.bpf.c")
-
-			return nil
+			return initialize()
 		},
 		SilenceUsage: true,
 	}
 
 	return cmd
+}
+
+func initialize() error {
+	_, err := selectLanguageInteractive()
+	if err != nil {
+		return err
+	}
+
+	_, err = selectMapTypeInteractive()
+	if err != nil {
+		return err
+	}
+
+	fileLocation, err := getFileLocation()
+	if err != nil {
+		return err
+	}
+
+	fn, err := os.Create(fileLocation)
+	if err != nil {
+		return err
+	}
+
+	ringBufByt, err := progs.ReadFile("progs/ringbuf.c")
+	if err != nil {
+		return err
+	}
+
+	_, err = fn.Write(ringBufByt)
+	if err != nil {
+		return err
+	}
+
+	pterm.Success.Println("Successfully wrote skeleton BPF program")
+	return nil
 }
 
 const (
@@ -68,6 +76,7 @@ var supportedMapTypes = []string{
 func selectLanguageInteractive() (string, error) {
 	return selectValueInteractive(
 		"What language do you wish to use for the filter",
+		"Selected Language:",
 		supportedLanguages,
 	)
 }
@@ -75,18 +84,43 @@ func selectLanguageInteractive() (string, error) {
 func selectMapTypeInteractive() (string, error) {
 	return selectValueInteractive(
 		"What type of map should we initialize",
+		"Selected Map Type:",
 		supportedMapTypes,
 	)
 }
 
-func selectValueInteractive(message string, options interface{}) (string, error) {
+func selectValueInteractive(question, success string, options interface{}) (string, error) {
+	// Add our info func to the promptui FuncMap
+	promptui.FuncMap["info"] = func(data string) string {
+		return pterm.Info.Sprintf("%s %s", success, data)
+	}
+
+	templates := &promptui.SelectTemplates{
+		Selected: "{{ . | info }}",
+	}
+
 	prompt := promptui.Select{
-		Label: message,
-		Items: options,
+		Label:     question,
+		Items:     options,
+		Templates: templates,
 	}
 	_, result, err := prompt.Run()
 	if err != nil {
 		return "", err
 	}
 	return result, nil
+}
+
+func getFileLocation() (string, error) {
+	templates := &promptui.PromptTemplates{
+		Prompt:  "{{ . }} ",
+		Success: "{{ . | info }} ",
+	}
+	prompt := promptui.Prompt{
+		Label: "BPF Program File Location",
+		// Validate: validate,
+		Templates: templates,
+	}
+	return prompt.Run()
+
 }
