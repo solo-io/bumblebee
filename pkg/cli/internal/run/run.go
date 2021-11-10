@@ -36,8 +36,7 @@ $ run bpf-program.o
 To run with a OCI image pass it as the first ARG:
 $ run localhost:5000/oras:ringbuf-demo
 `,
-		Aliases: []string{"r"},
-		Args:    cobra.ExactArgs(1), // Filename or image
+		Args: cobra.ExactArgs(1), // Filename or image
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(cmd, args, opts)
 		},

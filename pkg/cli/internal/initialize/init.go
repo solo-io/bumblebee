@@ -1,16 +1,14 @@
 package initialize // Can't name init because it's a hardcoded const in golang
 
 import (
-	"embed"
+	"bytes"
 	"os"
+	"text/template"
 
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
-
-//go:embed progs/*
-var progs embed.FS
 
 func InitCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -31,8 +29,16 @@ func initialize() error {
 		return err
 	}
 
-	_, err = selectMapTypeInteractive()
+	mapType, err := selectMapTypeInteractive()
 	if err != nil {
+		return err
+	}
+
+	mapTemplate := mapTypeToTemplateData[mapType]
+	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
+
+	fileBuf := &bytes.Buffer{}
+	if err := tmpl.Execute(fileBuf, mapTemplate); err != nil {
 		return err
 	}
 
@@ -46,31 +52,13 @@ func initialize() error {
 		return err
 	}
 
-	ringBufByt, err := progs.ReadFile("progs/ringbuf.c")
-	if err != nil {
-		return err
-	}
-
-	_, err = fn.Write(ringBufByt)
+	_, err = fn.Write(fileBuf.Bytes())
 	if err != nil {
 		return err
 	}
 
 	pterm.Success.Println("Successfully wrote skeleton BPF program")
 	return nil
-}
-
-const (
-	languageC = "C"
-)
-
-// map of language name to description
-var supportedLanguages = []string{
-	languageC,
-}
-
-var supportedMapTypes = []string{
-	"RingBuffer",
 }
 
 func selectLanguageInteractive() (string, error) {
