@@ -23,11 +23,11 @@ type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
 
-	EbpfConfig
-}
+	// (Optional) Human readable description
+	Description string
 
-type EbpfConfig struct {
-	Info string `json:"info"`
+	// (Optional) Package author
+	Author string
 }
 
 type EbpfRegistry interface {
@@ -60,19 +60,18 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		return err
 	}
 
-	configByt, err := json.Marshal(pkg.EbpfConfig)
+	config, configDesc, err := content.GenerateConfig(nil)
 	if err != nil {
 		return err
 	}
+	memoryStore.Set(configDesc, config)
 
-	configDesc, err := buildConfigDescriptor(configByt, nil)
-	if err != nil {
-		return err
+	manifestAnnotations := map[string]string{
+		ocispec.AnnotationDescription: pkg.Description,
+		ocispec.AnnotationAuthors:     pkg.Author,
 	}
 
-	memoryStore.Set(configDesc, configByt)
-
-	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, nil, progDesc)
+	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, manifestAnnotations, progDesc)
 	if err != nil {
 		return err
 	}
@@ -107,24 +106,28 @@ func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, err
 		return nil, err
 	}
 
+	_, manifestDesc, err := memoryStore.Resolve(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	_, manifestBytes, ok := memoryStore.Get(manifestDesc)
+	if !ok {
+		return nil, err
+	}
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, err
+	}
+
 	_, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
 	if !ok {
 		return nil, errors.New("could not find ebpf bytes in manifest")
 	}
 
-	_, configBytes, ok := memoryStore.GetByName(configName)
-	if !ok {
-		return nil, errors.New("could not find ebpf bytes in manifest")
-	}
-
-	var cfg EbpfConfig
-	if err := json.Unmarshal(configBytes, &cfg); err != nil {
-		return nil, err
-	}
-
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
-		EbpfConfig:       cfg,
+		Description:      manifest.Annotations[ocispec.AnnotationDescription],
+		Author:           manifest.Annotations[ocispec.AnnotationAuthors],
 	}, nil
 }
 
