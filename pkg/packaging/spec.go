@@ -13,7 +13,7 @@ import (
 
 const (
 	configMediaType = "application/ebpf.oci.image.config.v1+json"
-	eBPFMediaType   = "application/ebpf.oci.image.program.v1+binary"
+	eBPFMediaType   = "binary/ebpf.solo.io.v1"
 
 	ebpfFileName = "program.o"
 	configName   = "config.json"
@@ -23,11 +23,11 @@ type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
 
-	// (Optional) Human readable description
-	Description string
+	EbpfConfig
+}
 
-	// (Optional) Package author
-	Author string
+type EbpfConfig struct {
+	Info string `json:"info"`
 }
 
 type EbpfRegistry interface {
@@ -60,21 +60,19 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		return err
 	}
 
-	configAnnotations := map[string]string{
-		ocispec.AnnotationTitle: configName,
-	}
-	config, configDesc, err := content.GenerateConfig(configAnnotations)
+	configByt, err := json.Marshal(pkg.EbpfConfig)
 	if err != nil {
 		return err
 	}
-	memoryStore.Set(configDesc, config)
 
-	manifestAnnotations := map[string]string{
-		ocispec.AnnotationDescription: pkg.Description,
-		ocispec.AnnotationAuthors:     pkg.Author,
+	configDesc, err := buildConfigDescriptor(configByt, nil)
+	if err != nil {
+		return err
 	}
 
-	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, manifestAnnotations, progDesc)
+	memoryStore.Set(configDesc, configByt)
+
+	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, nil, progDesc)
 	if err != nil {
 		return err
 	}
@@ -109,28 +107,24 @@ func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, err
 		return nil, err
 	}
 
-	_, manifestDesc, err := memoryStore.Resolve(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-	_, manifestBytes, ok := memoryStore.Get(manifestDesc)
-	if !ok {
-		return nil, err
-	}
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		return nil, err
-	}
-
 	_, ebpfBytes, ok := memoryStore.GetByName(ebpfFileName)
 	if !ok {
 		return nil, errors.New("could not find ebpf bytes in manifest")
 	}
 
+	_, configBytes, ok := memoryStore.GetByName(configName)
+	if !ok {
+		return nil, errors.New("could not find ebpf bytes in manifest")
+	}
+
+	var cfg EbpfConfig
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return nil, err
+	}
+
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
-		Description:      manifest.Annotations[ocispec.AnnotationDescription],
-		Author:           manifest.Annotations[ocispec.AnnotationAuthors],
+		EbpfConfig:       cfg,
 	}, nil
 }
 
