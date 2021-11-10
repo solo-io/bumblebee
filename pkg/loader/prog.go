@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -191,9 +192,7 @@ func (l *loader) startHashMap(
 ) error {
 
 	meter := global.Meter(ebpfMeter)
-	tcpCounter := metric.Must(meter).NewInt64Counter("tcp_retransmit")
-	commonLabels := []attribute.KeyValue{attribute.String("A", "1"), attribute.String("B", "2"), attribute.String("C", "3")}
-
+	observerLock := new(sync.RWMutex)
 	d := l.decoderFactory()
 
 	// Read loop reporting the total amount of times the kernel
@@ -224,16 +223,21 @@ func (l *loader) startHashMap(
 					return err
 				}
 
-				// TODO: remove ugly hack and make generic
-				if saddr, ok := decodedKey["saddr"]; ok {
-					saddr32 := saddr.(uint32)
-					sIP := int2ip(saddr32)
-					fmt.Printf("saddr: '%v', sIP: '%v'\n", saddr32, sIP)
-				}
-				if daddr, ok := decodedKey["daddr"]; ok {
-					daddr32 := daddr.(uint32)
-					dIP := int2ip(daddr32)
-					fmt.Printf("daddr: '%v', dIP: '%v'\n", daddr32, dIP)
+				labels := []attribute.KeyValue{}
+				for k, v := range decodedKey {
+					if valUint32, isUint32 := v.(uint32); isUint32 {
+						// TODO: remove ugly hack and make generic
+						if k == "saddr" || k == "daddr" {
+							addr := int2ip(valUint32)
+							fmt.Printf("key: %v: val is ip addr: %v\n", k, addr)
+							thisKv := attribute.String(k, fmt.Sprint(addr))
+							labels = append(labels, thisKv)
+						} else {
+							fmt.Printf("key: %v: val is uint32: %v\n", k, valUint32)
+							thisKv := attribute.String(k, fmt.Sprint(valUint32))
+							labels = append(labels, thisKv)
+						}
+					}
 				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
@@ -254,7 +258,15 @@ func (l *loader) startHashMap(
 					log.Fatal("only uint64 allowed")
 				}
 
-				meter.RecordBatch(ctx, commonLabels, tcpCounter.Measurement(int64(intVal)))
+				observerValueToReport := new(int64)
+				cb := func(_ context.Context, result metric.Int64ObserverResult) {
+					(*observerLock).RLock()
+					value := *observerValueToReport
+					(*observerLock).RUnlock()
+					result.Observe(value, labels...)
+				}
+				metric.Must(meter).NewInt64CounterObserver(name, cb)
+				*observerValueToReport = int64(intVal)
 			}
 		case <-ctx.Done():
 			return nil
