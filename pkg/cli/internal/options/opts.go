@@ -3,6 +3,7 @@ package options
 import (
 	"github.com/solo-io/gloobpf/pkg/cli/internal/defaults"
 	"github.com/spf13/pflag"
+	"oras.land/oras-go/pkg/content"
 )
 
 func NewGeneralOptions(flags *pflag.FlagSet) *GeneralOptions {
@@ -36,6 +37,16 @@ func (opts *AuthOptions) addToFlags(flags *pflag.FlagSet) {
 	flags.StringArrayVarP(&opts.CredentialsFiles, "config", "c", nil, "path to auth config")
 	flags.StringVarP(&opts.Username, "username", "u", "", "registry username")
 	flags.StringVarP(&opts.Password, "password", "p", "", "registry password")
-	flags.BoolVarP(&opts.Insecure, "insecure", "", false, "allow connections to SSL registry without certs")
-	flags.BoolVarP(&opts.PlainHTTP, "plain-http", "", false, "use plain http and not https")
+	flags.BoolVar(&opts.Insecure, "insecure", false, "allow connections to SSL registry without certs")
+	flags.BoolVar(&opts.PlainHTTP, "plain-http", false, "use plain http and not https")
+}
+
+func (opts *AuthOptions) ToRegistryOptions() content.RegistryOptions {
+	return content.RegistryOptions{
+		Configs:   opts.CredentialsFiles,
+		Username:  opts.Username,
+		Password:  opts.Password,
+		Insecure:  opts.Insecure,
+		PlainHTTP: opts.PlainHTTP,
+	}
 }

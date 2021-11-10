@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
+	"oras.land/oras-go/pkg/oras"
 )
 
 type runOptions struct {
@@ -110,24 +111,35 @@ func fetchOciImage(
 
 	packager := packaging.NewEbpfRegistry()
 
-	if ociReg, err := content.NewOCI(opts.OCIStorageDir); err == nil {
-		prog, err := packager.Pull(ctx, ref, ociReg)
-		if err == nil {
-			return prog.ProgramFileBytes, nil
-		}
-	}
-
-	pterm.Info.Printfln("%s not found locally, pulling from registry", ref)
-
-	reg, err := content.NewRegistry(content.RegistryOptions{
-		Insecure:  true,
-		PlainHTTP: true,
-	})
+	localRegistry, err := content.NewOCI(opts.OCIStorageDir)
 	if err != nil {
 		return nil, err
 	}
 
-	prog, err := packager.Pull(ctx, ref, reg)
+	// If we find the image locally, return it
+	if prog, err := packager.Pull(ctx, ref, localRegistry); err == nil {
+		return prog.ProgramFileBytes, nil
+	}
+
+	remoteRegistry, err := content.NewRegistry(opts.AuthOptions.ToRegistryOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = oras.Copy(
+		ctx,
+		localRegistry,
+		ref,
+		remoteRegistry,
+		"",
+		oras.WithAllowedMediaTypes(packaging.AllowedMediaTypes()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// program should now be in the local cache after above copy
+	prog, err := packager.Pull(ctx, ref, localRegistry)
 	if err != nil {
 		return nil, err
 	}

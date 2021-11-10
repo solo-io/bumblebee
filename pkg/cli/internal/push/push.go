@@ -39,10 +39,7 @@ func push(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		return err
 	}
 
-	remoteRegistry, err := content.NewRegistry(content.RegistryOptions{
-		Insecure:  true,
-		PlainHTTP: true,
-	})
+	remoteRegistry, err := content.NewRegistry(opts.AuthOptions.ToRegistryOptions())
 	if err != nil {
 		return err
 	}
