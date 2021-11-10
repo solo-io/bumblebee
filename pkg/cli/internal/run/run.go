@@ -11,7 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/defaults"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
 	"github.com/solo-io/gloobpf/pkg/loader"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"github.com/spf13/cobra"
@@ -19,11 +19,16 @@ import (
 	"oras.land/oras-go/pkg/content"
 )
 
-type RunOptions struct{}
+type runOptions struct {
+	general *options.GeneralOptions
+}
 
-func addToFlags(flags *pflag.FlagSet, opts *RunOptions) {}
+func addToFlags(flags *pflag.FlagSet, opts *runOptions) {}
 
-func RunCommand(opts *RunOptions) *cobra.Command {
+func Command(opts *options.GeneralOptions) *cobra.Command {
+	runOptions := &runOptions{
+		general: opts,
+	}
 	cmd := &cobra.Command{
 		Use:   "run BPF_PROGRAM",
 		Short: "Run a BPF program file or OCI image.",
@@ -39,18 +44,18 @@ $ run localhost:5000/oras:ringbuf-demo
 `,
 		Args: cobra.ExactArgs(1), // Filename or image
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(cmd, args, opts)
+			return run(cmd, args, runOptions)
 		},
 		SilenceUsage: true,
 	}
-	addToFlags(cmd.PersistentFlags(), opts)
+	addToFlags(cmd.PersistentFlags(), runOptions)
 	return cmd
 }
 
-func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
+func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	// gauranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd.Context(), progLocation)
+	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
 	if err != nil {
 		return err
 	}
@@ -58,7 +63,11 @@ func run(cmd *cobra.Command, args []string, opts *RunOptions) error {
 	return runProg(cmd.Context(), progReader)
 }
 
-func getProgram(ctx context.Context, progLocation string) (io.ReaderAt, error) {
+func getProgram(
+	ctx context.Context,
+	opts *options.GeneralOptions,
+	progLocation string,
+) (io.ReaderAt, error) {
 
 	var (
 		progReader     io.ReaderAt
@@ -69,7 +78,7 @@ func getProgram(ctx context.Context, progLocation string) (io.ReaderAt, error) {
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from registry: %s", progLocation),
 		)
-		progBytes, err := fetchOciImage(ctx, progLocation)
+		progBytes, err := fetchOciImage(ctx, opts, progLocation)
 		if err != nil {
 			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
@@ -93,11 +102,15 @@ func getProgram(ctx context.Context, progLocation string) (io.ReaderAt, error) {
 	return progReader, nil
 }
 
-func fetchOciImage(ctx context.Context, ref string) ([]byte, error) {
+func fetchOciImage(
+	ctx context.Context,
+	opts *options.GeneralOptions,
+	ref string,
+) ([]byte, error) {
 
 	packager := packaging.NewEbpfRegistry()
 
-	if ociReg, err := content.NewOCI(defaults.EbpfImageDir); err == nil {
+	if ociReg, err := content.NewOCI(opts.OCIStorageDir); err == nil {
 		prog, err := packager.Pull(ctx, ref, ociReg)
 		if err == nil {
 			return prog.ProgramFileBytes, nil
