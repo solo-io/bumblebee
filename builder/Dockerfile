@@ -19,7 +19,6 @@ ADD solo_types.h /usr/local/include/
 ADD build.sh /usr/local/bin
 
 RUN mkdir /usr/src/bpf/
-
 WORKDIR /usr/src/bpf
 
 ENTRYPOINT ["build.sh"]

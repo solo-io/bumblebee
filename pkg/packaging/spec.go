@@ -13,7 +13,7 @@ import (
 
 const (
 	configMediaType = "application/ebpf.oci.image.config.v1+json"
-	eBPFMediaType   = "binary/ebpf.solo.io.v1"
+	eBPFMediaType   = "application/ebpf.oci.image.program.v1+binary"
 
 	ebpfFileName = "program.o"
 	configName   = "config.json"
