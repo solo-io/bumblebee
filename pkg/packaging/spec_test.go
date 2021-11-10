@@ -21,9 +21,9 @@ var _ = Describe("hello", func() {
 
 		pkg := &packaging.EbpfPackage{
 			ProgramFileBytes: byt,
-			EbpfConfig: packaging.EbpfConfig{
-				Info: "some info",
-			},
+			Description:      "some info",
+			Author:           "me",
+			EbpfConfig:       packaging.EbpfConfig{},
 		}
 
 		reg, err := content.NewRegistry(content.RegistryOptions{
@@ -49,9 +49,9 @@ var _ = Describe("hello", func() {
 
 		pkg := &packaging.EbpfPackage{
 			ProgramFileBytes: byt,
-			EbpfConfig: packaging.EbpfConfig{
-				Info: "some info",
-			},
+			Description:      "some info",
+			Author:           "me",
+			EbpfConfig:       packaging.EbpfConfig{},
 		}
 
 		reg, err := content.NewRegistry(content.RegistryOptions{

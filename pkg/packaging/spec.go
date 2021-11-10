@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -23,12 +24,14 @@ type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
 
+	Description string
+
+	Author string
+
 	EbpfConfig
 }
 
-type EbpfConfig struct {
-	Info string `json:"info"`
-}
+type EbpfConfig struct{}
 
 type EbpfRegistry interface {
 	Push(ctx context.Context, ref string, pkg *EbpfPackage) error
@@ -72,7 +75,15 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 
 	memoryStore.Set(configDesc, configByt)
 
-	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, nil, progDesc)
+	manifestAnnotations := make(map[string]string)
+	if pkg.Author != "" {
+		manifestAnnotations[ocispec.AnnotationAuthors] = pkg.Author
+	}
+	if pkg.Description != "" {
+		manifestAnnotations[ocispec.AnnotationDescription] = pkg.Description
+	}
+
+	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, manifestAnnotations, progDesc)
 	if err != nil {
 		return err
 	}
@@ -122,8 +133,25 @@ func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, err
 		return nil, err
 	}
 
+	_, manifestDesc, err := memoryStore.Resolve(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	_, manifestBytes, ok := memoryStore.Get(manifestDesc)
+	if !ok {
+		return nil, errors.New("could not find manifest")
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, fmt.Errorf("could not unmarshal manifest bytes: %v", err)
+	}
+
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
+		Description:      manifest.Annotations[ocispec.AnnotationDescription],
+		Author:           manifest.Annotations[ocispec.AnnotationAuthors],
 		EbpfConfig:       cfg,
 	}, nil
 }
