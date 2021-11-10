@@ -10,9 +10,6 @@ struct dimensions_t {
 	u32 daddr;
 } __attribute__((packed));
 
-// const volatile uid_t filter_uid = -1;
-// const volatile pid_t filter_pid = 0;
-
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
@@ -50,8 +47,9 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 
 	__u32 saddr;
 	__u32 daddr;
+	u64 val;
+	u64 *valp;
 	struct dimensions_t key = {};
-	u64 val = 1;
 
 	bpf_printk("exit: getting sk for tid: '%u', ret is: '%d'", tid, ret);
 	skpp = bpf_map_lookup_elem(&sockets, &tid);
@@ -64,16 +62,20 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 	bpf_printk("exit: found sk for tid: %u", tid);
 	BPF_CORE_READ_INTO(&saddr, sk, __sk_common.skc_rcv_saddr);
 	BPF_CORE_READ_INTO(&daddr, sk, __sk_common.skc_daddr);
-
-	bpf_printk("saddr: %u", saddr);
-	bpf_printk("daddr: %u", daddr);
-
 	key.saddr = saddr;
 	key.daddr = daddr;
-	// key.saddr = 1337;
-	// key.daddr = 31337;
+
+	valp = bpf_map_lookup_elem(&sockets_ext, &key);
+	if (!valp) {
+		bpf_printk("no entry for {saddr: %u, daddr: %u}", key.saddr, key.daddr);
+		val = 1;
+	}
+	else {
+		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, key.saddr, key.daddr);
+		val = *valp + 1;
+	}
 	bpf_map_update_elem(&sockets_ext, &key, &val, 0);
-	// bpf_map_delete_elem(&sockets, &tid);
+	bpf_map_delete_elem(&sockets, &tid);
 	return 0;
 }
 
