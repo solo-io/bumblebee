@@ -2,13 +2,11 @@ package loader
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"strings"
 	"time"
 
@@ -16,7 +14,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mitchellh/hashstructure"
+	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -239,24 +237,15 @@ func (l *loader) startHashMap(
 				labels := []attribute.KeyValue{}
 				keyMap := map[string]string{}
 				for k, v := range decodedKey {
-					var valAsStr string
-					if valUint32, isUint32 := v.(uint32); isUint32 {
-						if k == "saddr" || k == "daddr" {
-							addr := int2ip(valUint32)
-							fmt.Printf("key: %v: val is ip addr: %v\n", k, addr)
-							valAsStr = fmt.Sprint(addr)
-							thisKv := attribute.String(k, valAsStr)
-							labels = append(labels, thisKv)
-						} else {
-							fmt.Printf("key: %v: val is uint32: %v\n", k, valUint32)
-							valAsStr = fmt.Sprint(valUint32)
-							thisKv := attribute.String(k, valAsStr)
-							labels = append(labels, thisKv)
-						}
-					}
+					valAsStr := fmt.Sprint(v)
+					thisKv := attribute.String(k, valAsStr)
+					labels = append(labels, thisKv)
 					keyMap[k] = valAsStr
 				}
-				keyHash, err := hashstructure.Hash(keyMap, nil)
+				keyHash, err := hashstructure.Hash(keyMap, hashstructure.FormatV2, nil)
+				if err != nil {
+					return err
+				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
@@ -272,26 +261,17 @@ func (l *loader) startHashMap(
 				}
 
 				oldVal := valueMap[keyHash]
+				diff := intVal - oldVal
 				if oldVal == intVal {
-					break
+					continue
 				}
 
-				diff := intVal - oldVal
-				fmt.Printf("key: '%s'\n", decodedKey)
-				fmt.Printf("old: %v, new: %v, diff: %v\n", oldVal, intVal, diff)
+				fmt.Printf("key: '%v' => val: %v\n", keyMap, intVal)
 				valueMap[keyHash] = intVal
-
 				meter.RecordBatch(ctx, labels, counter.Measurement(int64(diff)))
 			}
 		case <-ctx.Done():
 			return nil
 		}
 	}
-}
-
-func int2ip(nn uint32) net.IP {
-	ip := make(net.IP, 4)
-	binary.LittleEndian.PutUint32(ip, nn)
-	// binary.BigEndian.PutUint32(ip, nn)
-	return ip
 }
