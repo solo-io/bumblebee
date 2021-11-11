@@ -73,22 +73,26 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 }
 
 type MetricsProvider interface {
-	NewCounter(name string) Counter
-	NewGauge(name string) Gauge
+	NewCounter(name string) Instrument
+	NewGauge(name string) Instrument
+}
+
+type Instrument interface {
+	Set(ctx context.Context, val int64, labels map[string]interface{})
 }
 
 type metricsProvider struct {
 	meter metric.Meter
 }
 
-func (m *metricsProvider) NewCounter(name string) Counter {
+func (m *metricsProvider) NewCounter(name string) Instrument {
 	return &counter{
 		counter:    metric.Must(m.meter).NewInt64Counter(name),
-		counterMap: make(map[uint64]uint64),
+		counterMap: make(map[uint64]int64),
 	}
 }
 
-func (m *metricsProvider) NewGauge(name string) Gauge {
+func (m *metricsProvider) NewGauge(name string) Instrument {
 	val := new(int64)
 	labels := new([]attribute.KeyValue)
 	observerLock := &sync.RWMutex{}
@@ -106,18 +110,14 @@ func (m *metricsProvider) NewGauge(name string) Gauge {
 	}
 }
 
-type Counter interface {
-	Set(ctx context.Context, val uint64, labels map[string]interface{})
-}
-
 type counter struct {
 	counter    metric.Int64Counter
-	counterMap map[uint64]uint64
+	counterMap map[uint64]int64
 }
 
 func (c *counter) Set(
 	ctx context.Context,
-	intVal uint64,
+	intVal int64,
 	decodedKey map[string]interface{},
 ) {
 
@@ -142,10 +142,6 @@ func (c *counter) Set(
 	}
 	c.counterMap[keyHash] = intVal
 	c.counter.Add(ctx, int64(diff), labels...)
-}
-
-type Gauge interface {
-	Set(ctx context.Context, val int64, labels map[string]interface{})
 }
 
 type gauge struct {

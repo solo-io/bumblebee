@@ -42,6 +42,18 @@ const (
 	printMapType   = "print"
 )
 
+func isPrintMap(spec *ebpf.MapSpec) bool {
+	return strings.Contains(spec.SectionName, printMapType)
+}
+
+func isGaugeMap(spec *ebpf.MapSpec) bool {
+	return strings.Contains(spec.SectionName, gaugeMapType)
+}
+
+func isCounterMap(spec *ebpf.MapSpec) bool {
+	return strings.Contains(spec.SectionName, counterMapType)
+}
+
 type loader struct {
 	decoderFactory  DecoderFactory
 	metricsProvider MetricsProvider
@@ -112,43 +124,35 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
-		if !shouldProcessMap(bpfMap) {
-			continue
-		}
 		switch bpfMap.Type {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
+			if !isPrintMap(bpfMap) {
+				continue
+			}
 			eg.Go(func() error {
 				return l.startRingBuf(ctx, btfMapMap, coll, name)
 			})
-		case ebpf.Hash:
-			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], name)
-			})
 		case ebpf.Array:
+			fallthrough
+		case ebpf.Hash:
+			var instrument Instrument
+			if isCounterMap(bpfMap) {
+				instrument = l.metricsProvider.NewCounter(bpfMap.Name)
+			} else if isGaugeMap(bpfMap) {
+				instrument = l.metricsProvider.NewGauge(bpfMap.Name)
+			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], name)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name)
 			})
 		default:
 			// TODO: Support more map types
-			return errors.New("only ringbuf, and perf event array supported")
+			return errors.New("unsupported map type")
 		}
 	}
 
 	return eg.Wait()
-}
-
-// Checks the given MapSpec to see if this map should be watched by our loader
-// Will return true for maps that should be watched
-func shouldProcessMap(mapSpec *ebpf.MapSpec) bool {
-	secName := mapSpec.SectionName
-	if strings.HasSuffix(secName, counterMapType) ||
-		strings.HasSuffix(secName, gaugeMapType) ||
-		strings.HasSuffix(secName, printMapType) {
-		return true
-	}
-	return false
 }
 
 func (l *loader) startRingBuf(
@@ -208,14 +212,13 @@ func (l *loader) startHashMap(
 	ctx context.Context,
 	mapSpec *ebpf.MapSpec,
 	liveMap *ebpf.Map,
+	instrument Instrument,
 	name string,
 ) error {
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
-	counter := l.metricsProvider.NewCounter(name)
-
 	for {
 		select {
 		case <-ticker.C:
@@ -253,7 +256,7 @@ func (l *loader) startHashMap(
 					log.Fatal("only uint64 allowed")
 				}
 
-				counter.Set(ctx, intVal, decodedKey)
+				instrument.Set(ctx, int64(intVal), decodedKey)
 			}
 		case <-ctx.Done():
 			return nil
