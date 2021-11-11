@@ -32,8 +32,6 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 }
 
 func push(ctx context.Context, opts *options.GeneralOptions, ref string) error {
-	pterm.Info.Printfln("Pushing eBPF image %s", ref)
-
 	localRegistry, err := content.NewOCI(opts.OCIStorageDir)
 	if err != nil {
 		return err
@@ -44,7 +42,7 @@ func push(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		return err
 	}
 
-	pushSpinner, _ := pterm.DefaultSpinner.Start("Pushing image %s to remote registry", ref)
+	pushSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Pushing image %s to remote registry", ref))
 	_, err = oras.Copy(
 		ctx,
 		localRegistry,

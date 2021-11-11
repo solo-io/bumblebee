@@ -32,7 +32,6 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 }
 
 func pull(ctx context.Context, opts *options.GeneralOptions, ref string) error {
-	pterm.Info.Printfln("Pulling eBPF image %s", ref)
 
 	localRegistry, err := content.NewOCI(opts.OCIStorageDir)
 	if err != nil {
@@ -44,12 +43,12 @@ func pull(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		return err
 	}
 
-	pullSpinner, _ := pterm.DefaultSpinner.Start("Pulling image %s from remote registry", ref)
+	pullSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Pulling image %s from remote registry", ref))
 	_, err = oras.Copy(
 		ctx,
-		localRegistry,
-		ref,
 		remoteRegistry,
+		ref,
+		localRegistry,
 		"",
 		oras.WithAllowedMediaTypes(packaging.AllowedMediaTypes()),
 	)

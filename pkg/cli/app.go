@@ -4,6 +4,7 @@ import (
 	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/build"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/initialize"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/list"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/pull"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/push"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/run"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
@@ -24,6 +25,7 @@ func EbpfCtl() *cobra.Command {
 		run.Command(opts),
 		initialize.Command(),
 		push.Command(opts),
+		pull.Command(opts),
 		list.Command(opts),
 	)
 	return cmd
