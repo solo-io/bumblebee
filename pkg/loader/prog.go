@@ -253,7 +253,7 @@ func (l *loader) startHashMap(
 					log.Fatal("only uint64 allowed")
 				}
 
-				counter.Increment(ctx, intVal, decodedKey)
+				counter.Set(ctx, intVal, decodedKey)
 			}
 		case <-ctx.Done():
 			return nil

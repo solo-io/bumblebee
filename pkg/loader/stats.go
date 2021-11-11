@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"go.opentelemetry.io/otel/attribute"
@@ -92,8 +93,26 @@ func (m *metricsProvider) NewCounter(name string) Counter {
 	}
 }
 
+func (m *metricsProvider) NewGauge(name string) Gauge {
+	val := new(int64)
+	labels := new([]attribute.KeyValue)
+	observerLock := &sync.RWMutex{}
+	_ = metric.Must(m.meter).NewInt64GaugeObserver(name, func(c context.Context, ior metric.Int64ObserverResult) {
+		(*observerLock).RLock()
+		value := *val
+		labels := *labels
+		(*observerLock).RUnlock()
+		ior.Observe(value, labels...)
+	})
+	return &gauge{
+		val:    val,
+		labels: labels,
+		lock:   observerLock,
+	}
+}
+
 type Counter interface {
-	Increment(ctx context.Context, val uint64, labels map[string]interface{})
+	Set(ctx context.Context, val uint64, labels map[string]interface{})
 }
 
 type counter struct {
@@ -101,11 +120,12 @@ type counter struct {
 	counterMap map[uint64]uint64
 }
 
-func (c *counter) Increment(
+func (c *counter) Set(
 	ctx context.Context,
 	intVal uint64,
 	decodedKey map[string]interface{},
 ) {
+
 	labels := []attribute.KeyValue{}
 	keyMap := map[string]string{}
 	for k, v := range decodedKey {
@@ -127,4 +147,35 @@ func (c *counter) Increment(
 	}
 	c.counterMap[keyHash] = intVal
 	c.counter.Add(ctx, int64(diff), labels...)
+}
+
+type Gauge interface {
+	Set(ctx context.Context, val int64, labels map[string]interface{})
+}
+
+type gauge struct {
+	val    *int64
+	labels *[]attribute.KeyValue
+	lock   *sync.RWMutex
+}
+
+func (g *gauge) Set(
+	ctx context.Context,
+	intVal int64,
+	decodedKey map[string]interface{},
+) {
+
+	labels := []attribute.KeyValue{}
+	keyMap := map[string]string{}
+	for k, v := range decodedKey {
+		valAsStr := fmt.Sprint(v)
+		thisKv := attribute.String(k, valAsStr)
+		labels = append(labels, thisKv)
+		keyMap[k] = valAsStr
+	}
+
+	(*g.lock).Lock()
+	defer (*g.lock).Unlock()
+	*g.labels = labels
+	*g.val = intVal
 }
