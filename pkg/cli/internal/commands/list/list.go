@@ -28,13 +28,18 @@ func list(ctx context.Context, opts *options.GeneralOptions) error {
 	localRefs := localRegistry.ListReferences()
 
 	tableData := pterm.TableData{
-		[]string{"Name", "OS", "Arch"},
+		[]string{"Name", "OS", "OS Version", "Arch"},
 	}
 	for name, ref := range localRefs {
 		if ref.Platform != nil {
-			tableData = append(tableData, []string{name, ref.Platform.OS, ref.Platform.Architecture})
+			tableData = append(tableData, []string{
+				name,
+				ref.Platform.OS,
+				ref.Platform.OSVersion,
+				ref.Platform.Architecture,
+			})
 		} else {
-			tableData = append(tableData, []string{name, "unknown", "unknown"})
+			tableData = append(tableData, []string{name, "unknown", "unknown", "unknown"})
 		}
 
 	}
