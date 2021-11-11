@@ -128,6 +128,14 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 		EbpfProg: progReader,
 	}
 
-	progLoader := loader.NewLoader(loader.NewDecoderFactory())
+	promProvider, err := loader.NewPrometheusMetricsProvider(ctx, &loader.PrometheusOpts{})
+	if err != nil {
+		return err
+	}
+
+	progLoader := loader.NewLoader(
+		loader.NewDecoderFactory(),
+		promProvider,
+	)
 	return progLoader.Load(ctx, progOptions)
 }

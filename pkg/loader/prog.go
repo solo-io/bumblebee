@@ -14,11 +14,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/global"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -30,15 +26,19 @@ type Loader interface {
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
-func NewLoader(decoderFactory DecoderFactory) Loader {
-	initMeter()
+func NewLoader(
+	decoderFactory DecoderFactory,
+	metricsProvider MetricsProvider,
+) Loader {
 	return &loader{
-		decoderFactory: decoderFactory,
+		decoderFactory:  decoderFactory,
+		metricsProvider: metricsProvider,
 	}
 }
 
 type loader struct {
-	decoderFactory DecoderFactory
+	decoderFactory  DecoderFactory
+	metricsProvider MetricsProvider
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
@@ -202,16 +202,12 @@ func (l *loader) startHashMap(
 	liveMap *ebpf.Map,
 	name string,
 ) error {
-
-	meter := global.Meter(ebpfMeter)
 	d := l.decoderFactory()
-
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
+	counter := l.metricsProvider.NewCounter(name)
 
-	counter := metric.Must(meter).NewInt64Counter(name)
-	valueMap := map[uint64]uint64{}
 	for {
 		select {
 		case <-ticker.C:
@@ -234,19 +230,6 @@ func (l *loader) startHashMap(
 					return err
 				}
 
-				labels := []attribute.KeyValue{}
-				keyMap := map[string]string{}
-				for k, v := range decodedKey {
-					valAsStr := fmt.Sprint(v)
-					thisKv := attribute.String(k, valAsStr)
-					labels = append(labels, thisKv)
-					keyMap[k] = valAsStr
-				}
-				keyHash, err := hashstructure.Hash(keyMap, hashstructure.FormatV2, nil)
-				if err != nil {
-					return err
-				}
-
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
 					return err
@@ -260,15 +243,7 @@ func (l *loader) startHashMap(
 					log.Fatal("only uint64 allowed")
 				}
 
-				oldVal := valueMap[keyHash]
-				diff := intVal - oldVal
-				if oldVal == intVal {
-					continue
-				}
-
-				fmt.Printf("key: '%v' => val: %v\n", keyMap, intVal)
-				valueMap[keyHash] = intVal
-				meter.RecordBatch(ctx, labels, counter.Measurement(int64(diff)))
+				counter.Increment(ctx, intVal, decodedKey)
 			}
 		case <-ctx.Done():
 			return nil

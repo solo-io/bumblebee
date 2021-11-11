@@ -1,9 +1,12 @@
 package loader
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 
+	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -18,11 +21,22 @@ const (
 	ebpfMeter = "ebpf.solo.io"
 )
 
-var (
-	lemonsKey = attribute.Key("ex.com/lemons")
-)
+type PrometheusOpts struct {
+	Port        uint32
+	MetricsPath string
+}
 
-func initMeter() {
+func (p *PrometheusOpts) initDefaults() {
+	if p.Port == 0 {
+		p.Port = 9091
+	}
+	if p.MetricsPath == "" {
+		p.MetricsPath = "/metrics"
+	}
+}
+
+func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (MetricsProvider, error) {
+	opts.initDefaults()
 	config := prometheus.Config{}
 	// TODO: Figure out these options
 	c := controller.New(
@@ -34,82 +48,74 @@ func initMeter() {
 	)
 	exporter, err := prometheus.New(config, c)
 	if err != nil {
-		log.Panicf("failed to initialize prometheus exporter %v", err)
+		return nil, fmt.Errorf("failed to initialize prometheus exporter %v", err)
 	}
 	global.SetMeterProvider(exporter.MeterProvider())
 
-	http.HandleFunc("/", exporter.ServeHTTP)
+	meter := exporter.MeterProvider().Meter(ebpfMeter)
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc(opts.MetricsPath, exporter.ServeHTTP)
 	go func() {
-		_ = http.ListenAndServe(":2222", nil)
+		_ = http.ListenAndServe(fmt.Sprintf(":%d", opts.Port), serveMux)
 	}()
 
-	// fmt.Println("Prometheus server running on :2222")
+	return &metricsProvider{meter: meter}, nil
+}
+
+type MetricsProvider interface {
+	NewCounter(name string) Counter
+}
+
+func newMetricsProvider(meter metric.Meter) *metricsProvider {
+	return &metricsProvider{
+		meter: meter,
+	}
 }
 
 type metricsProvider struct {
-	counter metric.Int64Counter
+	meter metric.Meter
 }
 
-// func main() {
+func (m *metricsProvider) NewCounter(name string) Counter {
+	return &counter{
+		counter:    metric.Must(m.meter).NewInt64Counter(name),
+		counterMap: make(map[uint64]uint64),
+	}
+}
 
-// 	meter := global.Meter(ebpfMeter)
+type Counter interface {
+	Increment(ctx context.Context, val uint64, labels map[string]interface{})
+}
 
-// 	tcpCounter := metric.Must(meter).NewInt64Counter("tcp_retransmit")
+type counter struct {
+	counter    metric.Int64Counter
+	counterMap map[uint64]uint64
+}
 
-// 	commonLabels := []attribute.KeyValue{lemonsKey.Int(10), attribute.String("A", "1"), attribute.String("B", "2"), attribute.String("C", "3")}
+func (c *counter) Increment(
+	ctx context.Context,
+	intVal uint64,
+	decodedKey map[string]interface{},
+) {
+	labels := []attribute.KeyValue{}
+	keyMap := map[string]string{}
+	for k, v := range decodedKey {
+		valAsStr := fmt.Sprint(v)
+		thisKv := attribute.String(k, valAsStr)
+		labels = append(labels, thisKv)
+		keyMap[k] = valAsStr
+	}
 
-// 	meter.RecordBatch(ctx, commonLabels)
+	keyHash, err := hashstructure.Hash(keyMap, hashstructure.FormatV2, nil)
+	if err != nil {
+		log.Fatal("This should never happen")
+	}
 
-// 	observerLock := new(sync.RWMutex)
-// 	observerValueToReport := new(float64)
-// 	observerLabelsToReport := new([]attribute.KeyValue)
-
-// 	histogram := metric.Must(meter).NewFloat64Histogram("ex.com.two")
-// 	counter := metric.Must(meter).NewFloat64Counter("ex.com.three")
-
-// 	commonLabels := []attribute.KeyValue{lemonsKey.Int(10), attribute.String("A", "1"), attribute.String("B", "2"), attribute.String("C", "3")}
-// 	notSoCommonLabels := []attribute.KeyValue{lemonsKey.Int(13)}
-
-// 	ctx := context.Background()
-
-// 	(*observerLock).Lock()
-// 	*observerValueToReport = 1.0
-// 	*observerLabelsToReport = commonLabels
-// 	(*observerLock).Unlock()
-// 	meter.RecordBatch(
-// 		ctx,
-// 		commonLabels,
-// 		histogram.Measurement(2.0),
-// 		counter.Measurement(12.0),
-// 	)
-
-// 	time.Sleep(5 * time.Second)
-
-// 	(*observerLock).Lock()
-// 	*observerValueToReport = 1.0
-// 	*observerLabelsToReport = notSoCommonLabels
-// 	(*observerLock).Unlock()
-// 	meter.RecordBatch(
-// 		ctx,
-// 		notSoCommonLabels,
-// 		histogram.Measurement(2.0),
-// 		counter.Measurement(22.0),
-// 	)
-
-// 	time.Sleep(5 * time.Second)
-
-// 	(*observerLock).Lock()
-// 	*observerValueToReport = 13.0
-// 	*observerLabelsToReport = commonLabels
-// 	(*observerLock).Unlock()
-// 	meter.RecordBatch(
-// 		ctx,
-// 		commonLabels,
-// 		histogram.Measurement(12.0),
-// 		counter.Measurement(13.0),
-// 	)
-
-// 	fmt.Println("Example finished updating, please visit :2222")
-
-// 	select {}
-// }
+	oldVal := c.counterMap[keyHash]
+	diff := intVal - oldVal
+	if oldVal == intVal {
+		return
+	}
+	c.counterMap[keyHash] = intVal
+	c.counter.Add(ctx, int64(diff), labels...)
+}
