@@ -74,6 +74,7 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 
 type MetricsProvider interface {
 	NewCounter(name string) Counter
+	NewGauge(name string) Gauge
 }
 
 func newMetricsProvider(meter metric.Meter) *metricsProvider {
