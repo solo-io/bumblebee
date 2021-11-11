@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/pterm/pterm"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
+	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/spf13/cobra"
 	"oras.land/oras-go/pkg/content"
 )

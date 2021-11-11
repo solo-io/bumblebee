@@ -1,7 +1,7 @@
 package options
 
 import (
-	"github.com/solo-io/gloobpf/pkg/spec"
+	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
 )

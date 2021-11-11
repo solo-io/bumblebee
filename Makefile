@@ -12,7 +12,7 @@ endif
 # This tag has the refs/tags prefix, which we need to remove here.
 export VERSION ?= $(shell echo $(TAGGED_VERSION) | sed -e "s/^refs\/tags\///" | cut -c 2-)
 
-LDFLAGS := "-X github.com/solo-io/gloobpf/pkg/internal/version.Version=$(VERSION)"
+LDFLAGS := "-X github.com/solo-io/ebpf/pkg/internal/version.Version=$(VERSION)"
 GCFLAGS := all="-N -l"
 
 SOURCES := $(shell find . -name "*.go" | grep -v test.go)

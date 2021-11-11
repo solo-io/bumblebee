@@ -1,16 +1,16 @@
 package cli
 
 import (
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/build"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/describe"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/initialize"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/list"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/pull"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/push"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/run"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/tag"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
-	"github.com/solo-io/gloobpf/pkg/internal/version"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/build"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/describe"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/initialize"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/list"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/pull"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/push"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/run"
+	"github.com/solo-io/ebpf/pkg/cli/internal/commands/tag"
+	"github.com/solo-io/ebpf/pkg/cli/internal/options"
+	"github.com/solo-io/ebpf/pkg/internal/version"
 	"github.com/spf13/cobra"
 )
 

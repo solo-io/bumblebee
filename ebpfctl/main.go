@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/solo-io/gloobpf/pkg/cli"
+	"github.com/solo-io/ebpf/pkg/cli"
 	"oras.land/oras-go/pkg/context"
 )
 

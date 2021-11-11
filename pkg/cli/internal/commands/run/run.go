@@ -11,9 +11,9 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
-	"github.com/solo-io/gloobpf/pkg/loader"
-	"github.com/solo-io/gloobpf/pkg/spec"
+	"github.com/solo-io/ebpf/pkg/cli/internal/options"
+	"github.com/solo-io/ebpf/pkg/loader"
+	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
