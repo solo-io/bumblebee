@@ -1,19 +1,21 @@
-package packaging
+package spec
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/pkg/content"
 	"oras.land/oras-go/pkg/oras"
+	"oras.land/oras-go/pkg/target"
 )
 
 const (
 	configMediaType = "application/ebpf.oci.image.config.v1+json"
-	eBPFMediaType   = "binary/ebpf.solo.io.v1"
+	eBPFMediaType   = "application/ebpf.oci.image.program.v1+binary"
 
 	ebpfFileName = "program.o"
 	configName   = "config.json"
@@ -22,36 +24,39 @@ const (
 type EbpfPackage struct {
 	// File content for eBPF compiled ELF file
 	ProgramFileBytes []byte
-
+	// Human readable description of the program
+	Description string
+	// Author(s) of the program
+	Authors string
+	// Platform this was built on
+	Platform *ocispec.Platform
+	// Nested config object
 	EbpfConfig
 }
 
-type EbpfConfig struct {
-	Info string `json:"info"`
+type EbpfConfig struct{}
+
+type EbpfOCICLient interface {
+	Push(ctx context.Context, ref string, registry target.Target, pkg *EbpfPackage) error
+	Pull(ctx context.Context, ref string, registry target.Target) (*EbpfPackage, error)
 }
 
-type EbpfRegistry interface {
-	Push(ctx context.Context, ref string, pkg *EbpfPackage) error
-	Pull(ctx context.Context, ref string) (*EbpfPackage, error)
+func NewEbpfOCICLient() EbpfOCICLient {
+	return &ebpfOCIClient{}
 }
 
-func NewEbpfRegistry(
-	registry *content.Registry,
-) EbpfRegistry {
-	return &ebpfResgistry{
-		registry: registry,
-	}
-}
+type ebpfOCIClient struct{}
 
-type ebpfResgistry struct {
-	registry *content.Registry
-}
-
-func allowedMediaTypes() []string {
+func AllowedMediaTypes() []string {
 	return []string{eBPFMediaType, configMediaType}
 }
 
-func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) error {
+func (e *ebpfOCIClient) Push(
+	ctx context.Context,
+	ref string,
+	registry target.Target,
+	pkg *EbpfPackage,
+) error {
 
 	memoryStore := content.NewMemory()
 
@@ -72,10 +77,24 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 
 	memoryStore.Set(configDesc, configByt)
 
-	manifest, manifestDesc, err := content.GenerateManifest(&configDesc, nil, progDesc)
+	manifestAnnotations := make(map[string]string)
+	if pkg.Authors != "" {
+		manifestAnnotations[ocispec.AnnotationAuthors] = pkg.Authors
+	}
+	if pkg.Description != "" {
+		manifestAnnotations[ocispec.AnnotationDescription] = pkg.Description
+	}
+
+	manifest, manifestDesc, err := content.GenerateManifest(
+		&configDesc,
+		manifestAnnotations,
+		progDesc,
+	)
 	if err != nil {
 		return err
 	}
+
+	manifestDesc.Platform = pkg.Platform
 
 	err = memoryStore.StoreManifest(ref, manifestDesc, manifest)
 	if err != nil {
@@ -86,22 +105,26 @@ func (e *ebpfResgistry) Push(ctx context.Context, ref string, pkg *EbpfPackage) 
 		ctx,
 		memoryStore,
 		ref,
-		e.registry,
+		registry,
 		"",
-		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
 	)
 	return err
 }
 
-func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, error) {
+func (e *ebpfOCIClient) Pull(
+	ctx context.Context,
+	ref string,
+	registry target.Target) (*EbpfPackage, error) {
 	memoryStore := content.NewMemory()
-	_, err := oras.Copy(
+
+	manifestDesc, err := oras.Copy(
 		ctx,
-		e.registry,
+		registry,
 		ref,
 		memoryStore,
 		"",
-		oras.WithAllowedMediaTypes(allowedMediaTypes()),
+		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
 	)
 	if err != nil {
 		return nil, err
@@ -122,14 +145,30 @@ func (e *ebpfResgistry) Pull(ctx context.Context, ref string) (*EbpfPackage, err
 		return nil, err
 	}
 
+	_, manifestBytes, ok := memoryStore.Get(manifestDesc)
+	if !ok {
+		return nil, errors.New("could not find manifest")
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, fmt.Errorf("could not unmarshal manifest bytes: %v", err)
+	}
+
 	return &EbpfPackage{
 		ProgramFileBytes: ebpfBytes,
+		Description:      manifest.Annotations[ocispec.AnnotationDescription],
+		Authors:          manifest.Annotations[ocispec.AnnotationAuthors],
 		EbpfConfig:       cfg,
+		Platform:         manifestDesc.Platform,
 	}, nil
 }
 
 // GenerateConfig generates a blank config with optional annotations.
-func buildConfigDescriptor(byt []byte, annotations map[string]string) (ocispec.Descriptor, error) {
+func buildConfigDescriptor(
+	byt []byte,
+	annotations map[string]string,
+) (ocispec.Descriptor, error) {
 	dig := digest.FromBytes(byt)
 	if annotations == nil {
 		annotations = map[string]string{}

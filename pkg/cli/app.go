@@ -1,24 +1,18 @@
 package cli
 
 import (
-	"github.com/solo-io/gloobpf/pkg/cli/internal/build"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/initialize"
-	"github.com/solo-io/gloobpf/pkg/cli/internal/run"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/build"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/describe"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/initialize"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/list"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/pull"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/push"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/run"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/commands/tag"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
 	"github.com/spf13/cobra"
 )
-
-type options struct {
-	build *build.BuildOptions
-	run   *run.RunOptions
-}
-
-func newOptions() *options {
-	return &options{
-		build: &build.BuildOptions{},
-		run:   &run.RunOptions{},
-	}
-}
 
 func EbpfCtl() *cobra.Command {
 	cmd := &cobra.Command{
@@ -26,11 +20,17 @@ func EbpfCtl() *cobra.Command {
 		Version: version.Version,
 	}
 
-	opts := newOptions()
+	opts := options.NewGeneralOptions(cmd.PersistentFlags())
+
 	cmd.AddCommand(
-		build.BuildCommand(opts.build),
-		run.RunCommand(opts.run),
-		initialize.InitCommand(),
+		build.Command(opts),
+		run.Command(opts),
+		initialize.Command(),
+		push.Command(opts),
+		pull.Command(opts),
+		list.Command(opts),
+		tag.Command(opts),
+		describe.Command(opts),
 	)
 	return cmd
 }

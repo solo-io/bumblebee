@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func InitCommand() *cobra.Command {
+func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a sample BPF program",

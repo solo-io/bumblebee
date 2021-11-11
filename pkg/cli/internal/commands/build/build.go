@@ -10,23 +10,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/builder"
+	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
-	"github.com/solo-io/gloobpf/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
 )
 
-type BuildOptions struct {
+type buildOptions struct {
 	BuildImage string
 	Builder    string
 	OutputFile string
 	Local      bool
+
+	general *options.GeneralOptions
 }
 
-func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
+func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
 	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "Build image to use when compiling BPF program")
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
@@ -34,8 +38,10 @@ func addToFlags(flags *pflag.FlagSet, opts *BuildOptions) {
 
 }
 
-func BuildCommand(opts *BuildOptions) *cobra.Command {
-
+func Command(opts *options.GeneralOptions) *cobra.Command {
+	buildOpts := &buildOptions{
+		general: opts,
+	}
 	cmd := &cobra.Command{
 		Use:   "build INPUT_FILE REGISTRY_REF",
 		Short: "Build a BPF program, and save it to an OCI image representation.",
@@ -50,7 +56,7 @@ $ build INPUT_FILE REGISTRY_REF --local
 `,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return build(cmd, args, opts)
+			return build(cmd.Context(), args, buildOpts)
 		},
 		SilenceUsage: true, // Usage on error is bad
 	}
@@ -58,13 +64,12 @@ $ build INPUT_FILE REGISTRY_REF --local
 	cmd.OutOrStdout()
 
 	// Init flags
-	addToFlags(cmd.PersistentFlags(), opts)
+	addToFlags(cmd.PersistentFlags(), buildOpts)
 
 	return cmd
 }
 
-func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
-	ctx := cmd.Context()
+func build(ctx context.Context, args []string, opts *buildOptions) error {
 
 	inputFile := args[0]
 	outputFile := opts.OutputFile
@@ -126,23 +131,21 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 
 	registrySpinner, _ := pterm.DefaultSpinner.Start("Packaging BPF program")
 
-	registryRef := args[1]
-	reg, err := content.NewRegistry(content.RegistryOptions{
-		Insecure:  true,
-		PlainHTTP: true,
-	})
+	reg, err := content.NewOCI(opts.general.OCIStorageDir)
 	if err != nil {
 		registrySpinner.UpdateText("Failed to initialize registry")
 		registrySpinner.Fail()
 		return err
 	}
-	ebpfReg := packaging.NewEbpfRegistry(reg)
+	registryRef := args[1]
+	ebpfReg := spec.NewEbpfOCICLient()
 
-	pkg := &packaging.EbpfPackage{
+	pkg := &spec.EbpfPackage{
 		ProgramFileBytes: elfBytes,
+		Platform:         getPlatformInfo(ctx),
 	}
 
-	if err := ebpfReg.Push(ctx, registryRef, pkg); err != nil {
+	if err := ebpfReg.Push(ctx, registryRef, reg, pkg); err != nil {
 		registrySpinner.UpdateText(fmt.Sprintf("Failed to save BPF OCI image: %s", registryRef))
 		registrySpinner.Fail()
 		return err
@@ -154,9 +157,28 @@ func build(cmd *cobra.Command, args []string, opts *BuildOptions) error {
 	return nil
 }
 
+func getPlatformInfo(ctx context.Context) *ocispec.Platform {
+	cmd := exec.CommandContext(ctx, "uname", "-srm")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		pterm.Warning.Printfln("Unable to derive platform info: %s", out)
+		return nil
+	}
+	splitOut := strings.Split(string(out), " ")
+	if len(splitOut) != 3 {
+		pterm.Warning.Printfln("Unable to derive platform info: %s", out)
+		return nil
+	}
+	return &ocispec.Platform{
+		OS:           splitOut[0],
+		OSVersion:    splitOut[1],
+		Architecture: splitOut[2],
+	}
+}
+
 func buildDocker(
 	ctx context.Context,
-	opts *BuildOptions,
+	opts *buildOptions,
 	inputFile, outputFile string,
 ) error {
 	// TODO: handle cwd to be glooBPF/epfctl?
