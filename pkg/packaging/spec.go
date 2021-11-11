@@ -28,6 +28,8 @@ type EbpfPackage struct {
 	Description string
 	// Author(s) of the program
 	Authors string
+	// Platform this was built on
+	Platform *ocispec.Platform
 	// Nested config object
 	EbpfConfig
 }
@@ -92,6 +94,8 @@ func (e *ebpfResgistry) Push(
 		return err
 	}
 
+	manifestDesc.Platform = pkg.Platform
+
 	err = memoryStore.StoreManifest(ref, manifestDesc, manifest)
 	if err != nil {
 		return err
@@ -113,7 +117,8 @@ func (e *ebpfResgistry) Pull(
 	ref string,
 	registry target.Target) (*EbpfPackage, error) {
 	memoryStore := content.NewMemory()
-	_, err := oras.Copy(
+
+	manifestDesc, err := oras.Copy(
 		ctx,
 		registry,
 		ref,
@@ -140,11 +145,6 @@ func (e *ebpfResgistry) Pull(
 		return nil, err
 	}
 
-	_, manifestDesc, err := memoryStore.Resolve(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
 	_, manifestBytes, ok := memoryStore.Get(manifestDesc)
 	if !ok {
 		return nil, errors.New("could not find manifest")
@@ -160,6 +160,7 @@ func (e *ebpfResgistry) Pull(
 		Description:      manifest.Annotations[ocispec.AnnotationDescription],
 		Authors:          manifest.Annotations[ocispec.AnnotationAuthors],
 		EbpfConfig:       cfg,
+		Platform:         manifestDesc.Platform,
 	}, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/builder"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
@@ -141,6 +142,7 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 
 	pkg := &packaging.EbpfPackage{
 		ProgramFileBytes: elfBytes,
+		Platform:         getPlatformInfo(ctx),
 	}
 
 	if err := ebpfReg.Push(ctx, registryRef, reg, pkg); err != nil {
@@ -153,6 +155,25 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 	registrySpinner.Success()
 
 	return nil
+}
+
+func getPlatformInfo(ctx context.Context) *ocispec.Platform {
+	cmd := exec.CommandContext(ctx, "uname", "-srm")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		pterm.Warning.Printfln("Unable to derive platform info: %s", out)
+		return nil
+	}
+	splitOut := strings.Split(string(out), " ")
+	if len(splitOut) != 3 {
+		pterm.Warning.Printfln("Unable to derive platform info: %s", out)
+		return nil
+	}
+	return &ocispec.Platform{
+		OS:           splitOut[0],
+		OSVersion:    splitOut[1],
+		Architecture: splitOut[2],
+	}
 }
 
 func buildDocker(

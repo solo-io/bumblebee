@@ -7,9 +7,24 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/solo-io/gloobpf/pkg/packaging"
 	"oras.land/oras-go/pkg/content"
 )
+
+var (
+	tmpDir string
+)
+
+var _ = BeforeSuite(func() {
+	tmpdir, err := os.MkdirTemp("", "")
+	Expect(err).NotTo(HaveOccurred())
+	tmpDir = tmpdir
+})
+
+var _ = AfterSuite(func() {
+	os.Remove(tmpDir)
+})
 
 var _ = Describe("hello", func() {
 	It("can push", func() {
@@ -24,18 +39,20 @@ var _ = Describe("hello", func() {
 			Description:      "some info",
 			Authors:          "me",
 			EbpfConfig:       packaging.EbpfConfig{},
+			Platform: &v1.Platform{
+				Architecture: "hello",
+				OS:           "linux",
+				Variant:      "test",
+			},
 		}
 
-		reg, err := content.NewRegistry(content.RegistryOptions{
-			Insecure:  true,
-			PlainHTTP: true,
-		})
+		reg, err := content.NewOCI(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 
 		registry := packaging.NewEbpfRegistry()
 
 		ctx := context.Background()
-		err = registry.Push(ctx, "localhost:5000/oras:test3", reg, pkg)
+		err = registry.Push(ctx, "localhost:5000/oras:test9", reg, pkg)
 		Expect(err).NotTo(HaveOccurred())
 
 	})
@@ -52,20 +69,22 @@ var _ = Describe("hello", func() {
 			Description:      "some info",
 			Authors:          "me",
 			EbpfConfig:       packaging.EbpfConfig{},
+			Platform: &v1.Platform{
+				Architecture: "hello",
+				OS:           "linux",
+				Variant:      "test",
+			},
 		}
 
-		reg, err := content.NewRegistry(content.RegistryOptions{
-			Insecure:  true,
-			PlainHTTP: true,
-		})
+		reg, err := content.NewOCI(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 
 		registry := packaging.NewEbpfRegistry()
 
 		ctx := context.Background()
-		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test3", reg)
+		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test9", reg)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(newPkg).To(Equal(pkg))
+		Expect(newPkg.Platform).To(Equal(pkg.Platform))
 	})
 })
