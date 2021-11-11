@@ -36,6 +36,12 @@ func NewLoader(
 	}
 }
 
+const (
+	counterMapType = "counter"
+	gaugeMapType   = "gauge"
+	printMapType   = "print"
+)
+
 type loader struct {
 	decoderFactory  DecoderFactory
 	metricsProvider MetricsProvider
@@ -137,7 +143,9 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 // Will return true for maps that should be watched
 func shouldProcessMap(mapSpec *ebpf.MapSpec) bool {
 	secName := mapSpec.SectionName
-	if strings.HasSuffix(secName, "counter") || strings.HasSuffix(secName, "gauge") || strings.HasSuffix(secName, "print") {
+	if strings.HasSuffix(secName, counterMapType) ||
+		strings.HasSuffix(secName, gaugeMapType) ||
+		strings.HasSuffix(secName, printMapType) {
 		return true
 	}
 	return false
@@ -234,6 +242,8 @@ func (l *loader) startHashMap(
 				if err != nil {
 					return err
 				}
+
+				// TODO: Check this information at load time
 
 				if len(decodedValue) > 1 {
 					log.Fatal("only 1 value allowed")

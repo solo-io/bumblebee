@@ -55,8 +55,17 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 	meter := exporter.MeterProvider().Meter(ebpfMeter)
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc(opts.MetricsPath, exporter.ServeHTTP)
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", opts.Port),
+		Handler: serveMux,
+	}
 	go func() {
-		_ = http.ListenAndServe(fmt.Sprintf(":%d", opts.Port), serveMux)
+		_ = server.ListenAndServe()
+	}()
+
+	go func() {
+		<-ctx.Done()
+		server.Close()
 	}()
 
 	return &metricsProvider{meter: meter}, nil
