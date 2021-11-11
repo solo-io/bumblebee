@@ -1,7 +1,7 @@
 package options
 
 import (
-	"github.com/solo-io/gloobpf/pkg/cli/internal/defaults"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
 )
@@ -22,7 +22,7 @@ type GeneralOptions struct {
 
 func (opts *GeneralOptions) addToFlags(flags *pflag.FlagSet) {
 	flags.BoolVarP(&opts.Verbose, "verbose", "v", false, "verbose output")
-	flags.StringVar(&opts.OCIStorageDir, "storage", defaults.EbpfImageDir, "Directory to store OCI images locally")
+	flags.StringVar(&opts.OCIStorageDir, "storage", spec.EbpfImageDir, "Directory to store OCI images locally")
 }
 
 type AuthOptions struct {

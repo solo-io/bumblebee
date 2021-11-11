@@ -1,4 +1,4 @@
-package packaging_test
+package spec_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/solo-io/gloobpf/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"oras.land/oras-go/pkg/content"
 )
 
@@ -34,11 +34,11 @@ var _ = Describe("hello", func() {
 		byt, err := io.ReadAll(fn)
 		Expect(err).NotTo(HaveOccurred())
 
-		pkg := &packaging.EbpfPackage{
+		pkg := &spec.EbpfPackage{
 			ProgramFileBytes: byt,
 			Description:      "some info",
 			Authors:          "me",
-			EbpfConfig:       packaging.EbpfConfig{},
+			EbpfConfig:       spec.EbpfConfig{},
 			Platform: &v1.Platform{
 				Architecture: "hello",
 				OS:           "linux",
@@ -49,7 +49,7 @@ var _ = Describe("hello", func() {
 		reg, err := content.NewOCI(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry()
+		registry := spec.NewEbpfOCICLient()
 
 		ctx := context.Background()
 		err = registry.Push(ctx, "localhost:5000/oras:test9", reg, pkg)
@@ -64,11 +64,11 @@ var _ = Describe("hello", func() {
 		byt, err := io.ReadAll(fn)
 		Expect(err).NotTo(HaveOccurred())
 
-		pkg := &packaging.EbpfPackage{
+		pkg := &spec.EbpfPackage{
 			ProgramFileBytes: byt,
 			Description:      "some info",
 			Authors:          "me",
-			EbpfConfig:       packaging.EbpfConfig{},
+			EbpfConfig:       spec.EbpfConfig{},
 			Platform: &v1.Platform{
 				Architecture: "hello",
 				OS:           "linux",
@@ -79,7 +79,7 @@ var _ = Describe("hello", func() {
 		reg, err := content.NewOCI(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 
-		registry := packaging.NewEbpfRegistry()
+		registry := spec.NewEbpfOCICLient()
 
 		ctx := context.Background()
 		newPkg, err := registry.Pull(ctx, "localhost:5000/oras:test9", reg)

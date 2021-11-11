@@ -6,7 +6,7 @@ import (
 
 	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
-	"github.com/solo-io/gloobpf/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"github.com/spf13/cobra"
 	"oras.land/oras-go/pkg/content"
 	"oras.land/oras-go/pkg/oras"
@@ -49,7 +49,7 @@ func push(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		ref,
 		remoteRegistry,
 		"",
-		oras.WithAllowedMediaTypes(packaging.AllowedMediaTypes()),
+		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
 	)
 	if err != nil {
 		pushSpinner.UpdateText(fmt.Sprintf("Failed to push image %s", ref))

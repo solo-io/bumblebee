@@ -13,11 +13,9 @@ import (
 	"github.com/pterm/pterm"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
 	"github.com/solo-io/gloobpf/pkg/loader"
-	"github.com/solo-io/gloobpf/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"oras.land/oras-go/pkg/content"
-	"oras.land/oras-go/pkg/oras"
 )
 
 type runOptions struct {
@@ -79,13 +77,21 @@ func getProgram(
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from registry: %s", progLocation),
 		)
-		progBytes, err := fetchOciImage(ctx, opts, progLocation)
+
+		client := spec.NewEbpfOCICLient()
+		prog, err := spec.TryFromLocal(
+			ctx,
+			progLocation,
+			opts.OCIStorageDir,
+			client,
+			opts.AuthOptions.ToRegistryOptions(),
+		)
 		if err != nil {
 			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
 			return nil, err
 		}
-		progReader = bytes.NewReader(progBytes)
+		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from file: %s", progLocation),
@@ -101,49 +107,6 @@ func getProgram(
 	programSpinner.Success()
 
 	return progReader, nil
-}
-
-func fetchOciImage(
-	ctx context.Context,
-	opts *options.GeneralOptions,
-	ref string,
-) ([]byte, error) {
-
-	packager := packaging.NewEbpfRegistry()
-
-	localRegistry, err := content.NewOCI(opts.OCIStorageDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we find the image locally, return it
-	if prog, err := packager.Pull(ctx, ref, localRegistry); err == nil {
-		return prog.ProgramFileBytes, nil
-	}
-
-	remoteRegistry, err := content.NewRegistry(opts.AuthOptions.ToRegistryOptions())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = oras.Copy(
-		ctx,
-		localRegistry,
-		ref,
-		remoteRegistry,
-		"",
-		oras.WithAllowedMediaTypes(packaging.AllowedMediaTypes()),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// program should now be in the local cache after above copy
-	prog, err := packager.Pull(ctx, ref, localRegistry)
-	if err != nil {
-		return nil, err
-	}
-	return prog.ProgramFileBytes, nil
 }
 
 func runProg(ctx context.Context, progReader io.ReaderAt) error {

@@ -1,4 +1,4 @@
-package packaging
+package spec
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 const (
 	configMediaType = "application/ebpf.oci.image.config.v1+json"
-	eBPFMediaType   = "binary/ebpf.solo.io.v1"
+	eBPFMediaType   = "application/ebpf.oci.image.program.v1+binary"
 
 	ebpfFileName = "program.o"
 	configName   = "config.json"
@@ -36,22 +36,22 @@ type EbpfPackage struct {
 
 type EbpfConfig struct{}
 
-type EbpfRegistry interface {
+type EbpfOCICLient interface {
 	Push(ctx context.Context, ref string, registry target.Target, pkg *EbpfPackage) error
 	Pull(ctx context.Context, ref string, registry target.Target) (*EbpfPackage, error)
 }
 
-func NewEbpfRegistry() EbpfRegistry {
-	return &ebpfResgistry{}
+func NewEbpfOCICLient() EbpfOCICLient {
+	return &ebpfOCIClient{}
 }
 
-type ebpfResgistry struct{}
+type ebpfOCIClient struct{}
 
 func AllowedMediaTypes() []string {
 	return []string{eBPFMediaType, configMediaType}
 }
 
-func (e *ebpfResgistry) Push(
+func (e *ebpfOCIClient) Push(
 	ctx context.Context,
 	ref string,
 	registry target.Target,
@@ -112,7 +112,7 @@ func (e *ebpfResgistry) Push(
 	return err
 }
 
-func (e *ebpfResgistry) Pull(
+func (e *ebpfOCIClient) Pull(
 	ctx context.Context,
 	ref string,
 	registry target.Target) (*EbpfPackage, error) {

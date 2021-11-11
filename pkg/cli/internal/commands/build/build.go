@@ -15,7 +15,7 @@ import (
 	"github.com/solo-io/gloobpf/builder"
 	"github.com/solo-io/gloobpf/pkg/cli/internal/options"
 	"github.com/solo-io/gloobpf/pkg/internal/version"
-	"github.com/solo-io/gloobpf/pkg/packaging"
+	"github.com/solo-io/gloobpf/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
@@ -138,9 +138,9 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 		return err
 	}
 	registryRef := args[1]
-	ebpfReg := packaging.NewEbpfRegistry()
+	ebpfReg := spec.NewEbpfOCICLient()
 
-	pkg := &packaging.EbpfPackage{
+	pkg := &spec.EbpfPackage{
 		ProgramFileBytes: elfBytes,
 		Platform:         getPlatformInfo(ctx),
 	}
