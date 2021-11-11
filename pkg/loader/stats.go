@@ -77,12 +77,6 @@ type MetricsProvider interface {
 	NewGauge(name string) Gauge
 }
 
-func newMetricsProvider(meter metric.Meter) *metricsProvider {
-	return &metricsProvider{
-		meter: meter,
-	}
-}
-
 type metricsProvider struct {
 	meter metric.Meter
 }
