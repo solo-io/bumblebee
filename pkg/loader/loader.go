@@ -243,6 +243,7 @@ func (l *loader) startHashMap(
 	name string,
 	verbose bool,
 ) error {
+
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.

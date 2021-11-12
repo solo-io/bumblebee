@@ -3,9 +3,11 @@ package stats
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 
+	"github.com/mitchellh/hashstructure/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -89,20 +91,10 @@ type metricsProvider struct {
 }
 
 func (m *metricsProvider) NewSetCounter(name string) SetInstrument {
-	val := new(int64)
-	labels := new([]attribute.KeyValue)
-	observerLock := &sync.RWMutex{}
-	_ = metric.Must(m.meter).NewInt64CounterObserver(name, func(c context.Context, ior metric.Int64ObserverResult) {
-		(*observerLock).RLock()
-		value := *val
-		labels := *labels
-		(*observerLock).RUnlock()
-		ior.Observe(value, labels...)
-	})
+	counter := metric.Must(m.meter).NewInt64Counter(name)
 	return &setCounter{
-		val:    val,
-		labels: labels,
-		lock:   observerLock,
+		counter:    counter,
+		counterMap: map[uint64]int64{},
 	}
 }
 
@@ -131,23 +123,29 @@ func (m *metricsProvider) NewGauge(name string) SetInstrument {
 }
 
 type setCounter struct {
-	val    *int64
-	labels *[]attribute.KeyValue
-	lock   *sync.RWMutex
+	counter    metric.Int64Counter
+	counterMap map[uint64]int64
 }
 
-func (s *setCounter) Set(
+func (c *setCounter) Set(
 	ctx context.Context,
 	intVal int64,
 	decodedKey map[string]string,
 ) {
 
 	labels := transformLabels(decodedKey)
+	keyHash, err := hashstructure.Hash(decodedKey, hashstructure.FormatV2, nil)
+	if err != nil {
+		log.Fatal("This should never happen")
+	}
 
-	(*s.lock).Lock()
-	defer (*s.lock).Unlock()
-	*s.labels = labels
-	*s.val = intVal
+	oldVal := c.counterMap[keyHash]
+	diff := intVal - oldVal
+	if oldVal == intVal {
+		return
+	}
+	c.counterMap[keyHash] = intVal
+	c.counter.Add(ctx, int64(diff), labels...)
 }
 
 type incrementCounter struct {
