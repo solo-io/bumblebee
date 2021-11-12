@@ -22,9 +22,13 @@ import (
 
 type runOptions struct {
 	general *options.GeneralOptions
+
+	Debug bool
 }
 
-func addToFlags(flags *pflag.FlagSet, opts *runOptions) {}
+func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
+	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Output all user space map reads to the console for debugging purposes")
+}
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
 	runOptions := &runOptions{
@@ -61,7 +65,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return err
 	}
 
-	return runProg(cmd.Context(), progReader)
+	return runProg(cmd.Context(), progReader, opts.Debug)
 }
 
 func getProgram(
@@ -111,7 +115,7 @@ func getProgram(
 	return progReader, nil
 }
 
-func runProg(ctx context.Context, progReader io.ReaderAt) error {
+func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -128,6 +132,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 	}
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
+		Verbose:  debug,
 	}
 
 	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})

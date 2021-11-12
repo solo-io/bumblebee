@@ -3,11 +3,9 @@ package stats
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
-	hashstructure "github.com/mitchellh/hashstructure/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -91,9 +89,20 @@ type metricsProvider struct {
 }
 
 func (m *metricsProvider) NewSetCounter(name string) SetInstrument {
+	val := new(int64)
+	labels := new([]attribute.KeyValue)
+	observerLock := &sync.RWMutex{}
+	_ = metric.Must(m.meter).NewInt64CounterObserver(name, func(c context.Context, ior metric.Int64ObserverResult) {
+		(*observerLock).RLock()
+		value := *val
+		labels := *labels
+		(*observerLock).RUnlock()
+		ior.Observe(value, labels...)
+	})
 	return &setCounter{
-		counter:    metric.Must(m.meter).NewInt64Counter(name),
-		counterMap: make(map[uint64]int64),
+		val:    val,
+		labels: labels,
+		lock:   observerLock,
 	}
 }
 
@@ -122,8 +131,9 @@ func (m *metricsProvider) NewGauge(name string) SetInstrument {
 }
 
 type setCounter struct {
-	counter    metric.Int64Counter
-	counterMap map[uint64]int64
+	val    *int64
+	labels *[]attribute.KeyValue
+	lock   *sync.RWMutex
 }
 
 func (s *setCounter) Set(
@@ -132,15 +142,12 @@ func (s *setCounter) Set(
 	decodedKey map[string]string,
 ) {
 
-	keyHash, labels := transformLabels(decodedKey)
+	labels := transformLabels(decodedKey)
 
-	oldVal := s.counterMap[keyHash]
-	diff := intVal - oldVal
-	if oldVal == intVal {
-		return
-	}
-	s.counterMap[keyHash] = intVal
-	s.counter.Add(ctx, int64(diff), labels...)
+	(*s.lock).Lock()
+	defer (*s.lock).Unlock()
+	*s.labels = labels
+	*s.val = intVal
 }
 
 type incrementCounter struct {
@@ -151,7 +158,7 @@ func (i *incrementCounter) Increment(
 	ctx context.Context,
 	decodedKey map[string]string,
 ) {
-	_, labels := transformLabels(decodedKey)
+	labels := transformLabels(decodedKey)
 	i.counter.Add(ctx, 1, labels...)
 }
 
@@ -167,7 +174,7 @@ func (g *gauge) Set(
 	decodedKey map[string]string,
 ) {
 
-	_, labels := transformLabels(decodedKey)
+	labels := transformLabels(decodedKey)
 
 	(*g.lock).Lock()
 	defer (*g.lock).Unlock()
@@ -177,7 +184,7 @@ func (g *gauge) Set(
 
 func transformLabels(
 	decodedKey map[string]string,
-) (uint64, []attribute.KeyValue) {
+) []attribute.KeyValue {
 
 	labels := []attribute.KeyValue{}
 	for k, v := range decodedKey {
@@ -186,9 +193,5 @@ func transformLabels(
 		labels = append(labels, thisKv)
 	}
 
-	keyHash, err := hashstructure.Hash(decodedKey, hashstructure.FormatV2, nil)
-	if err != nil {
-		log.Fatal("This should never happen")
-	}
-	return keyHash, labels
+	return labels
 }

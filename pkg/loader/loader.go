@@ -131,11 +131,16 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
-			var increment stats.IncrementInstrument = &noopIncrement{}
+			var increment stats.IncrementInstrument
+			verbose := opts.Verbose
 			if isCounterMap(bpfMap) {
 				increment = l.metricsProvider.NewIncrementCounter(name)
+			} else if isPrintMap(bpfMap) {
+				increment = &noopIncrement{}
+				verbose = true
+			} else {
+				continue
 			}
-			verbose := opts.Verbose || isPrintMap(bpfMap)
 			eg.Go(func() error {
 				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
 				return l.startRingBuf(ctx, btfMapMap, coll, increment, name, verbose)
@@ -150,6 +155,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			} else if isGaugeMap(bpfMap) {
 				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name)
+			} else {
+				continue
 			}
 			eg.Go(func() error {
 				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
@@ -210,7 +217,20 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		printKeys(name, stringLabels, verbose)
+		if !verbose {
+			continue
+		}
+		printMap := map[string]interface{}{
+			"mapName": name,
+			"entry":   stringLabels,
+		}
+
+		byt, err := json.Marshal(printMap)
+		if err != nil {
+			pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
+			continue
+		}
+		fmt.Printf("%s\n", byt)
 
 	}
 }
@@ -230,14 +250,15 @@ func (l *loader) startHashMap(
 	for {
 		select {
 		case <-ticker.C:
-			// var all_cpu_value []uint64
+
+			var entries []kvPair
+
 			mapIter := liveMap.Iterate()
 			for {
 				// Use generic key,value so we can decode ourselves
 				var (
 					key, value []byte
 				)
-				// log.Println("Checking Iterator..")
 				if !mapIter.Next(&key, &value) {
 					break
 				}
@@ -267,10 +288,25 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				printKeys(name, stringLabels, verbose)
-
-				fmt.Printf("Value (%s): %d\n", name, intVal)
+				entries = append(entries, kvPair{Key: stringLabels, Value: fmt.Sprint(intVal)})
 			}
+
+			if len(entries) == 0 || !verbose {
+				continue
+			}
+
+			printMap := map[string]interface{}{
+				"mapName": name,
+				"entries": entries,
+			}
+
+			byt, err := json.Marshal(printMap)
+			if err != nil {
+				pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
+				continue
+			}
+			fmt.Printf("%s\n", byt)
+
 		case <-ctx.Done():
 			return nil
 		}
@@ -286,16 +322,9 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 	return keyMap
 }
 
-func printKeys(name string, data map[string]string, verbose bool) {
-	if !verbose {
-		return
-	}
-	byt, err := json.Marshal(data)
-	if err != nil {
-		pterm.Debug.Printfln("unable to unmarshal data, this should never happen %s", err)
-		return
-	}
-	fmt.Printf("Keys (%s): %s\n", name, byt)
+type kvPair struct {
+	Key   map[string]string `json:"key"`
+	Value string            `json:"value"`
 }
 
 type noopIncrement struct{}
