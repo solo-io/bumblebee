@@ -15,11 +15,16 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
+	"github.com/solo-io/ebpf/pkg/decoder"
+	"github.com/solo-io/ebpf/pkg/stats"
 	"golang.org/x/sync/errgroup"
 )
 
 type LoadOptions struct {
+	// Program bytes to load
 	EbpfProg io.ReaderAt
+	// Log all events, this can be very loud
+	Verbose bool
 }
 
 type Loader interface {
@@ -27,8 +32,8 @@ type Loader interface {
 }
 
 func NewLoader(
-	decoderFactory DecoderFactory,
-	metricsProvider MetricsProvider,
+	decoderFactory decoder.DecoderFactory,
+	metricsProvider stats.MetricsProvider,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
@@ -55,8 +60,8 @@ func isCounterMap(spec *ebpf.MapSpec) bool {
 }
 
 type loader struct {
-	decoderFactory  DecoderFactory
-	metricsProvider MetricsProvider
+	decoderFactory  decoder.DecoderFactory
+	metricsProvider stats.MetricsProvider
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
@@ -126,26 +131,28 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		case ebpf.PerfEventArray:
 			fallthrough
 		case ebpf.RingBuf:
-			if !isPrintMap(bpfMap) {
-				continue
+			var increment stats.IncrementInstrument = &noopIncrement{}
+			if isCounterMap(bpfMap) {
+				increment = l.metricsProvider.NewIncrementCounter(name)
 			}
+			verbose := opts.Verbose || isPrintMap(bpfMap)
 			eg.Go(func() error {
 				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
-				return l.startRingBuf(ctx, btfMapMap, coll, name)
+				return l.startRingBuf(ctx, btfMapMap, coll, increment, name, verbose)
 			})
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
-			var instrument Instrument
+			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap) {
 				pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
-				instrument = l.metricsProvider.NewCounter(bpfMap.Name)
+				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name)
 			} else if isGaugeMap(bpfMap) {
 				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
 			})
 		default:
 			// TODO: Support more map types
@@ -160,7 +167,9 @@ func (l *loader) startRingBuf(
 	ctx context.Context,
 	btfMapMap map[string]*btf.Map,
 	coll *ebpf.Collection,
+	incrementInstrument stats.IncrementInstrument,
 	name string,
+	verbose bool,
 ) error {
 	// Initialize decoder
 	d := l.decoderFactory()
@@ -199,12 +208,9 @@ func (l *loader) startRingBuf(
 			return err
 		}
 
-		// TODO: Handle statistic, or structured logging
-		byt, err := json.Marshal(result)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s: %s\n", name, byt)
+		stringLabels := stringify(result)
+		incrementInstrument.Increment(ctx, stringLabels)
+		printKeys(name, stringLabels, verbose)
 
 	}
 }
@@ -213,8 +219,9 @@ func (l *loader) startHashMap(
 	ctx context.Context,
 	mapSpec *ebpf.MapSpec,
 	liveMap *ebpf.Map,
-	instrument Instrument,
+	instrument stats.SetInstrument,
 	name string,
+	verbose bool,
 ) error {
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
@@ -258,11 +265,43 @@ func (l *loader) startHashMap(
 				if !ok {
 					log.Fatal("only uint64 allowed")
 				}
+				stringLabels := stringify(decodedKey)
+				instrument.Set(ctx, int64(intVal), stringLabels)
+				printKeys(name, stringLabels, verbose)
 
-				instrument.Set(ctx, int64(intVal), decodedKey)
+				fmt.Printf("Value (%s): %d\n", name, intVal)
 			}
 		case <-ctx.Done():
 			return nil
 		}
 	}
+}
+
+func stringify(decodedBinary map[string]interface{}) map[string]string {
+	keyMap := map[string]string{}
+	for k, v := range decodedBinary {
+		valAsStr := fmt.Sprint(v)
+		keyMap[k] = valAsStr
+	}
+	return keyMap
+}
+
+func printKeys(name string, data map[string]string, verbose bool) {
+	if !verbose {
+		return
+	}
+	byt, err := json.Marshal(data)
+	if err != nil {
+		pterm.Debug.Printfln("unable to unmarshal data, this should never happen %s", err)
+		return
+	}
+	fmt.Printf("Keys (%s): %s\n", name, byt)
+}
+
+type noopIncrement struct{}
+
+func (n *noopIncrement) Increment(
+	ctx context.Context,
+	decodedKey map[string]string,
+) {
 }

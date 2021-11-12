@@ -1,4 +1,4 @@
-package loader
+package stats
 
 import (
 	"context"
@@ -73,26 +73,37 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 }
 
 type MetricsProvider interface {
-	NewCounter(name string) Instrument
-	NewGauge(name string) Instrument
+	NewSetCounter(name string) SetInstrument
+	NewIncrementCounter(name string) IncrementInstrument
+	NewGauge(name string) SetInstrument
 }
 
-type Instrument interface {
-	Set(ctx context.Context, val int64, labels map[string]interface{})
+type IncrementInstrument interface {
+	Increment(ctx context.Context, labels map[string]string)
+}
+
+type SetInstrument interface {
+	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
 type metricsProvider struct {
 	meter metric.Meter
 }
 
-func (m *metricsProvider) NewCounter(name string) Instrument {
-	return &counter{
+func (m *metricsProvider) NewSetCounter(name string) SetInstrument {
+	return &setCounter{
 		counter:    metric.Must(m.meter).NewInt64Counter(name),
 		counterMap: make(map[uint64]int64),
 	}
 }
 
-func (m *metricsProvider) NewGauge(name string) Instrument {
+func (m *metricsProvider) NewIncrementCounter(name string) IncrementInstrument {
+	return &incrementCounter{
+		counter: metric.Must(m.meter).NewInt64Counter(name),
+	}
+}
+
+func (m *metricsProvider) NewGauge(name string) SetInstrument {
 	val := new(int64)
 	labels := new([]attribute.KeyValue)
 	observerLock := &sync.RWMutex{}
@@ -110,38 +121,38 @@ func (m *metricsProvider) NewGauge(name string) Instrument {
 	}
 }
 
-type counter struct {
+type setCounter struct {
 	counter    metric.Int64Counter
 	counterMap map[uint64]int64
 }
 
-func (c *counter) Set(
+func (s *setCounter) Set(
 	ctx context.Context,
 	intVal int64,
-	decodedKey map[string]interface{},
+	decodedKey map[string]string,
 ) {
 
-	labels := []attribute.KeyValue{}
-	keyMap := map[string]string{}
-	for k, v := range decodedKey {
-		valAsStr := fmt.Sprint(v)
-		thisKv := attribute.String(k, valAsStr)
-		labels = append(labels, thisKv)
-		keyMap[k] = valAsStr
-	}
+	keyHash, labels := transformLabels(decodedKey)
 
-	keyHash, err := hashstructure.Hash(keyMap, hashstructure.FormatV2, nil)
-	if err != nil {
-		log.Fatal("This should never happen")
-	}
-
-	oldVal := c.counterMap[keyHash]
+	oldVal := s.counterMap[keyHash]
 	diff := intVal - oldVal
 	if oldVal == intVal {
 		return
 	}
-	c.counterMap[keyHash] = intVal
-	c.counter.Add(ctx, int64(diff), labels...)
+	s.counterMap[keyHash] = intVal
+	s.counter.Add(ctx, int64(diff), labels...)
+}
+
+type incrementCounter struct {
+	counter metric.Int64Counter
+}
+
+func (i *incrementCounter) Increment(
+	ctx context.Context,
+	decodedKey map[string]string,
+) {
+	_, labels := transformLabels(decodedKey)
+	i.counter.Add(ctx, 1, labels...)
 }
 
 type gauge struct {
@@ -153,20 +164,31 @@ type gauge struct {
 func (g *gauge) Set(
 	ctx context.Context,
 	intVal int64,
-	decodedKey map[string]interface{},
+	decodedKey map[string]string,
 ) {
 
-	labels := []attribute.KeyValue{}
-	keyMap := map[string]string{}
-	for k, v := range decodedKey {
-		valAsStr := fmt.Sprint(v)
-		thisKv := attribute.String(k, valAsStr)
-		labels = append(labels, thisKv)
-		keyMap[k] = valAsStr
-	}
+	_, labels := transformLabels(decodedKey)
 
 	(*g.lock).Lock()
 	defer (*g.lock).Unlock()
 	*g.labels = labels
 	*g.val = intVal
+}
+
+func transformLabels(
+	decodedKey map[string]string,
+) (uint64, []attribute.KeyValue) {
+
+	labels := []attribute.KeyValue{}
+	for k, v := range decodedKey {
+		valAsStr := fmt.Sprint(v)
+		thisKv := attribute.String(k, valAsStr)
+		labels = append(labels, thisKv)
+	}
+
+	keyHash, err := hashstructure.Hash(decodedKey, hashstructure.FormatV2, nil)
+	if err != nil {
+		log.Fatal("This should never happen")
+	}
+	return keyHash, labels
 }

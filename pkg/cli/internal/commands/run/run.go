@@ -14,6 +14,7 @@ import (
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/loader"
 	"github.com/solo-io/ebpf/pkg/spec"
+	"github.com/solo-io/ebpf/pkg/stats"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -128,7 +129,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 		EbpfProg: progReader,
 	}
 
-	promProvider, err := loader.NewPrometheusMetricsProvider(ctx, &loader.PrometheusOpts{})
+	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
 	if err != nil {
 		return err
 	}
