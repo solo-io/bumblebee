@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
+	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
 	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -135,7 +136,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt) error {
 	}
 
 	progLoader := loader.NewLoader(
-		loader.NewDecoderFactory(),
+		decoder.NewDecoderFactory(),
 		promProvider,
 	)
 	return progLoader.Load(ctx, progOptions)
