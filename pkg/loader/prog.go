@@ -117,8 +117,6 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	pterm.Info.Println("Starting map watches")
-
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for name, bpfMap := range spec.Maps {
@@ -132,6 +130,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				continue
 			}
 			eg.Go(func() error {
+				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
 				return l.startRingBuf(ctx, btfMapMap, coll, name)
 			})
 		case ebpf.Array:
@@ -139,8 +138,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		case ebpf.Hash:
 			var instrument Instrument
 			if isCounterMap(bpfMap) {
+				pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
 				instrument = l.metricsProvider.NewCounter(bpfMap.Name)
 			} else if isGaugeMap(bpfMap) {
+				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name)
 			}
 			eg.Go(func() error {
@@ -238,11 +239,13 @@ func (l *loader) startHashMap(
 				}
 				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Key, key)
 				if err != nil {
+					fmt.Println("error decoding key")
 					return err
 				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
+					fmt.Println("error decoding value")
 					return err
 				}
 

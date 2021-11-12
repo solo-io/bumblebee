@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -82,7 +83,7 @@ func (d *decoder) DecodeBtfBinary(
 		}
 		return map[string]interface{}{"": val}, nil
 	default:
-		return nil, errors.New("unsupported type")
+		return nil, fmt.Errorf("unsupported type, %s", typedBtf.String())
 	}
 }
 
