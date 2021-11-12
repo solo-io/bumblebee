@@ -2,6 +2,8 @@
 # Versioning
 #----------------------------------------------------------------------------------
 OUTDIR ?= _output
+HUB ?= "gcr.io/"
+
 
 RELEASE := "true"
 ifeq ($(TAGGED_VERSION),)
@@ -22,7 +24,9 @@ SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 #----------------------------------------------------------------------------------
 
 docker-build:
-	docker build ./builder -f builder/Dockerfile -t gcr.io/gloobpf/bpfbuilder:$(VERSION) 
+#   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
+#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)gloobpf/bpfbuilder:$(VERSION)`
+	docker build ./builder -f builder/Dockerfile -t $(HUB)gloobpf/bpfbuilder:$(VERSION)
 
 docker-push:
 	docker push gcr.io/gloobpf/bpfbuilder:$(VERSION) 
