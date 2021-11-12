@@ -59,6 +59,10 @@ func isCounterMap(spec *ebpf.MapSpec) bool {
 	return strings.Contains(spec.SectionName, counterMapType)
 }
 
+func isTrackedMap(spec *ebpf.MapSpec) bool {
+	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
+}
+
 type loader struct {
 	decoderFactory  decoder.DecoderFactory
 	metricsProvider stats.MetricsProvider
@@ -127,6 +131,11 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
+
+		if !isTrackedMap(bpfMap) {
+			continue
+		}
+
 		switch bpfMap.Type {
 		case ebpf.PerfEventArray:
 			fallthrough
@@ -134,12 +143,14 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			var increment stats.IncrementInstrument
 			verbose := opts.Verbose
 			if isCounterMap(bpfMap) {
-				increment = l.metricsProvider.NewIncrementCounter(name)
+				labelKeys, err := getLabelsForMapKey(bpfMap)
+				if err != nil {
+					return err
+				}
+				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
 			} else if isPrintMap(bpfMap) {
 				increment = &noopIncrement{}
 				verbose = true
-			} else {
-				continue
 			}
 			eg.Go(func() error {
 				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
@@ -148,15 +159,17 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
+			labelKeys, err := getLabelsForMapKey(bpfMap)
+			if err != nil {
+				return err
+			}
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap) {
 				pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
-				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name)
+				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
 			} else if isGaugeMap(bpfMap) {
 				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
-				instrument = l.metricsProvider.NewGauge(bpfMap.Name)
-			} else {
-				continue
+				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
 				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
@@ -244,6 +257,9 @@ func (l *loader) startHashMap(
 	verbose bool,
 ) error {
 
+	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
+	// gauge.
+
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
@@ -326,6 +342,19 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 type kvPair struct {
 	Key   map[string]string `json:"key"`
 	Value string            `json:"value"`
+}
+
+func getLabelsForMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
+	structKey, ok := mapSpec.BTF.Key.(*btf.Struct)
+	if !ok {
+		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.BTF.Value.String())
+	}
+
+	keys := make([]string, 0, len(structKey.Members))
+	for _, v := range structKey.Members {
+		keys = append(keys, v.Name)
+	}
+	return keys, nil
 }
 
 type noopIncrement struct{}

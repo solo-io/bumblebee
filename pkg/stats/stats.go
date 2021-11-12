@@ -5,21 +5,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/mitchellh/hashstructure/v2"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/global"
-	metric_sdk "go.opentelemetry.io/otel/sdk/export/metric"
-	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
-	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
-	selector "go.opentelemetry.io/otel/sdk/metric/selector/simple"
 )
 
 const (
-	ebpfMeter = "ebpf.solo.io"
+	ebpfNamespace = "ebpf_solo_io"
 )
 
 type PrometheusOpts struct {
@@ -38,24 +32,9 @@ func (p *PrometheusOpts) initDefaults() {
 
 func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (MetricsProvider, error) {
 	opts.initDefaults()
-	config := prometheus.Config{}
-	// TODO: Figure out these options
-	c := controller.New(
-		processor.NewFactory(
-			selector.NewWithExactDistribution(),
-			metric_sdk.CumulativeExportKindSelector(),
-			processor.WithMemory(true),
-		),
-	)
-	exporter, err := prometheus.New(config, c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize prometheus exporter %v", err)
-	}
-	global.SetMeterProvider(exporter.MeterProvider())
 
-	meter := exporter.MeterProvider().Meter(ebpfMeter)
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc(opts.MetricsPath, exporter.ServeHTTP)
+	serveMux.Handle(opts.MetricsPath, promhttp.Handler())
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", opts.Port),
 		Handler: serveMux,
@@ -69,13 +48,13 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 		server.Close()
 	}()
 
-	return &metricsProvider{meter: meter}, nil
+	return &metricsProvider{}, nil
 }
 
 type MetricsProvider interface {
-	NewSetCounter(name string) SetInstrument
-	NewIncrementCounter(name string) IncrementInstrument
-	NewGauge(name string) SetInstrument
+	NewSetCounter(name string, labels []string) SetInstrument
+	NewIncrementCounter(name string, labels []string) IncrementInstrument
+	NewGauge(name string, labels []string) SetInstrument
 }
 
 type IncrementInstrument interface {
@@ -90,40 +69,36 @@ type metricsProvider struct {
 	meter metric.Meter
 }
 
-func (m *metricsProvider) NewSetCounter(name string) SetInstrument {
-	counter := metric.Must(m.meter).NewInt64Counter(name)
+func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrument {
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: ebpfNamespace,
+		Name:      name,
+	}, labels)
+
+	prometheus.MustRegister(counter)
 	return &setCounter{
 		counter:    counter,
 		counterMap: map[uint64]int64{},
 	}
 }
 
-func (m *metricsProvider) NewIncrementCounter(name string) IncrementInstrument {
+func (m *metricsProvider) NewIncrementCounter(name string, labels []string) IncrementInstrument {
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: ebpfNamespace,
+	}, labels)
+
+	prometheus.MustRegister(counter)
 	return &incrementCounter{
-		counter: metric.Must(m.meter).NewInt64Counter(name),
+		counter: counter,
 	}
 }
 
-func (m *metricsProvider) NewGauge(name string) SetInstrument {
-	val := new(int64)
-	labels := new([]attribute.KeyValue)
-	observerLock := &sync.RWMutex{}
-	_ = metric.Must(m.meter).NewInt64GaugeObserver(name, func(c context.Context, ior metric.Int64ObserverResult) {
-		(*observerLock).RLock()
-		value := *val
-		labels := *labels
-		(*observerLock).RUnlock()
-		ior.Observe(value, labels...)
-	})
-	return &gauge{
-		val:    val,
-		labels: labels,
-		lock:   observerLock,
-	}
+func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
+	return &gauge{}
 }
 
 type setCounter struct {
-	counter    metric.Int64Counter
+	counter    *prometheus.CounterVec
 	counterMap map[uint64]int64
 }
 
@@ -133,7 +108,6 @@ func (c *setCounter) Set(
 	decodedKey map[string]string,
 ) {
 
-	labels := transformLabels(decodedKey)
 	keyHash, err := hashstructure.Hash(decodedKey, hashstructure.FormatV2, nil)
 	if err != nil {
 		log.Fatal("This should never happen")
@@ -145,25 +119,22 @@ func (c *setCounter) Set(
 		return
 	}
 	c.counterMap[keyHash] = intVal
-	c.counter.Add(ctx, int64(diff), labels...)
+	c.counter.With(prometheus.Labels(decodedKey)).Add(float64(diff))
 }
 
 type incrementCounter struct {
-	counter metric.Int64Counter
+	counter *prometheus.CounterVec
 }
 
 func (i *incrementCounter) Increment(
 	ctx context.Context,
 	decodedKey map[string]string,
 ) {
-	labels := transformLabels(decodedKey)
-	i.counter.Add(ctx, 1, labels...)
+	i.counter.With(prometheus.Labels(decodedKey)).Inc()
 }
 
 type gauge struct {
-	val    *int64
-	labels *[]attribute.KeyValue
-	lock   *sync.RWMutex
+	gauge *prometheus.GaugeVec
 }
 
 func (g *gauge) Set(
@@ -171,25 +142,5 @@ func (g *gauge) Set(
 	intVal int64,
 	decodedKey map[string]string,
 ) {
-
-	labels := transformLabels(decodedKey)
-
-	(*g.lock).Lock()
-	defer (*g.lock).Unlock()
-	*g.labels = labels
-	*g.val = intVal
-}
-
-func transformLabels(
-	decodedKey map[string]string,
-) []attribute.KeyValue {
-
-	labels := []attribute.KeyValue{}
-	for k, v := range decodedKey {
-		valAsStr := fmt.Sprint(v)
-		thisKv := attribute.String(k, valAsStr)
-		labels = append(labels, thisKv)
-	}
-
-	return labels
+	g.gauge.With(prometheus.Labels(decodedKey)).Set(float64(intVal))
 }
