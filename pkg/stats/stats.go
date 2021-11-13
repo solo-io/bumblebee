@@ -9,7 +9,6 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel/metric"
 )
 
 const (
@@ -65,9 +64,7 @@ type SetInstrument interface {
 	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
-type metricsProvider struct {
-	meter metric.Meter
-}
+type metricsProvider struct{}
 
 func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrument {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
