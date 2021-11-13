@@ -8,30 +8,52 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
+type InitOptions struct {
+	Language string
+	MapType  string
+	FilePath string
+}
+
+func addToFlags(flags *pflag.FlagSet, opts *InitOptions) {
+	flags.StringVarP(&opts.Language, "languague", "l", "", "Language to use for the bpf program")
+	flags.StringVarP(&opts.MapType, "map", "m", "", "Map type to initialize")
+	flags.StringVarP(&opts.FilePath, "file", "f", "", "File to create skeleton in")
+
+}
 func Command() *cobra.Command {
+	opts := &InitOptions{}
+
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a sample BPF program",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return initialize()
+			return initialize(opts)
 		},
 		SilenceUsage: true,
 	}
+	addToFlags(cmd.PersistentFlags(), opts)
 
 	return cmd
 }
 
-func initialize() error {
-	_, err := selectLanguageInteractive()
-	if err != nil {
-		return err
+func initialize(opts *InitOptions) error {
+	var err error
+	if opts.Language == "" {
+		_, err = selectLanguageInteractive()
+		if err != nil {
+			return err
+		}
 	}
 
-	mapType, err := selectMapTypeInteractive()
-	if err != nil {
-		return err
+	mapType := opts.MapType
+	if mapType == "" {
+		mapType, err = selectMapTypeInteractive()
+		if err != nil {
+			return err
+		}
 	}
 
 	mapTemplate := mapTypeToTemplateData[mapType]
@@ -42,9 +64,12 @@ func initialize() error {
 		return err
 	}
 
-	fileLocation, err := getFileLocation()
-	if err != nil {
-		return err
+	fileLocation := opts.FilePath
+	if fileLocation == "" {
+		fileLocation, err = getFileLocation()
+		if err != nil {
+			return err
+		}
 	}
 
 	fn, err := os.Create(fileLocation)
