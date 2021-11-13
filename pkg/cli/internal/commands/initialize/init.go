@@ -2,6 +2,7 @@ package initialize // Can't name init because it's a hardcoded const in golang
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"text/template"
 
@@ -12,15 +13,17 @@ import (
 )
 
 type InitOptions struct {
-	Language string
-	MapType  string
-	FilePath string
+	Language   string
+	MapType    string
+	FilePath   string
+	OutputType string
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *InitOptions) {
 	flags.StringVarP(&opts.Language, "languague", "l", "", "Language to use for the bpf program")
 	flags.StringVarP(&opts.MapType, "map", "m", "", "Map type to initialize")
 	flags.StringVarP(&opts.FilePath, "file", "f", "", "File to create skeleton in")
+	flags.StringVarP(&opts.OutputType, "output-type", "o", "", "The output type for your map")
 
 }
 func Command() *cobra.Command {
@@ -57,7 +60,22 @@ func initialize(opts *InitOptions) error {
 	}
 
 	mapTemplate := mapTypeToTemplateData[mapType]
+
+	outputType := opts.OutputType
+	if outputType == "" {
+		_, err = selectOutputTypeInteractive()
+		if err != nil {
+			return err
+		}
+	}
+	// mapTemplate.OutputType = outputType
+
 	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
+	_, err = tmpl.New("map").Parse(ringbufMapTmpl)
+	if err != nil {
+		fmt.Println("err while parsing sub tmpl")
+		return err
+	}
 
 	fileBuf := &bytes.Buffer{}
 	if err := tmpl.Execute(fileBuf, mapTemplate); err != nil {
@@ -99,6 +117,14 @@ func selectMapTypeInteractive() (string, error) {
 		"What type of map should we initialize",
 		"Selected Map Type:",
 		supportedMapTypes,
+	)
+}
+
+func selectOutputTypeInteractive() (string, error) {
+	return selectValueInteractive(
+		"What type of output would you like from your map",
+		"Selected Output Type:",
+		supportedOutputTypes,
 	)
 }
 

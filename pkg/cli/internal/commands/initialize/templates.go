@@ -5,6 +5,10 @@ const (
 
 	mapTypeRingbuffer = "RingBuffer"
 	mapTypeHash       = "HashMap"
+
+	outputTypePrint   = "print"
+	outputTypeCounter = "counter"
+	outputTypeGauge   = "gauge"
 )
 
 // map of language name to description
@@ -17,31 +21,49 @@ var supportedMapTypes = []string{
 	mapTypeRingbuffer,
 }
 
+var supportedOutputTypes = []string{
+	outputTypePrint,
+	outputTypeCounter,
+	outputTypeGauge,
+}
+
 var mapTypeToTemplateData = map[string]*templateData{
 	mapTypeRingbuffer: ringbufTemplate(),
 	// Create hash templates
 	mapTypeHash: ringbufTemplate(),
 }
 
+type MapData struct {
+	MapType    string
+	OutputType string
+}
+
 type templateData struct {
 	StructData   string
-	MapData      string
+	MapData      MapData
 	FunctionBody string
 }
 
 func ringbufTemplate() *templateData {
 	return &templateData{
-		StructData:   ringbufStruct,
-		MapData:      ringbufMap,
+		StructData: ringbufStruct,
+		MapData: MapData{
+			MapType:    "BPF_MAP_TYPE_RINGBUF",
+			OutputType: ".print",
+		},
 		FunctionBody: ringbufBody,
 	}
 }
 
-const ringbufMap = `struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
+const ringbufMapTmpl = `
+{{define "RINGBUF"}}
+struct {
+	__uint(type, {{.MapType}});
 	__uint(max_entries, 1 << 24);
 	__type(value, struct event_t);
-} events SEC(".maps.print");`
+} events SEC(".maps{{.OutputType}}");
+{{end}}
+`
 
 const ringbufStruct = `struct event_t {
 	// 2. Add rinbuf struct data here.
@@ -78,7 +100,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // This is the definition for the global map which both our
 // bpf program and user space program can access.
 // More info and map types can be found here: https://www.man7.org/linux/man-pages/man2/bpf.2.html
-{{ .MapData }}
+{{ template "RINGBUF" .MapData }}
 
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
