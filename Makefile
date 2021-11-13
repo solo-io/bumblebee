@@ -39,3 +39,21 @@ docker-push:
 ebpfctl-linux-amd64: $(OUTDIR)/ebpfctl-linux-amd64
 $(OUTDIR)/ebpfctl-linux-amd64: $(SOURCES)
 	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
+
+.PHONY: ebpfctl-linux-arm64
+ebpfctl-linux-arm64: $(OUTDIR)/ebpfctl-linux-arm64
+$(OUTDIR)/ebpfctl-linux-arm64: $(SOURCES)
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
+
+.PHONY: build-cli
+build-cli: ebpfctl-linux-amd64 ebpfctl-linux-arm64
+
+##----------------------------------------------------------------------------------
+## Release
+##----------------------------------------------------------------------------------
+
+.PHONY: upload-github-release-assets
+upload-github-release-assets: build-cli
+ifeq ($(RELEASE),"true")
+	go run ci/release_assets.go
+endif
