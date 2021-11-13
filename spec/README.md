@@ -13,14 +13,12 @@ The eBPF Image specification defines how to bundle eBPF kernel programs as conta
 
 
 
-## WASM Artifact Image Specification v0.0.0
+## eBPF Artifact Image Specification v0.0.0
 
 - [Description](#description)
     - [Layers](#layers)
     - [Running OCI Images with Envoy](#running-oci-images-with-envoy)
 - [Format](#format)
-- [Envoy WASM Filter Specification](#envoy-wasm-filter-specification)
-    - [Example](#example)
 
 ### Description:
 
