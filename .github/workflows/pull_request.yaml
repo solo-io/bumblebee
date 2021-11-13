@@ -34,6 +34,10 @@ jobs:
       - name: lint
         env:
           TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          cd ${{ matrix.project }} && ./ci/check-code-gen.sh
+          go mod tidy
+          if [[ $(git status --porcelain --untracked-files=no | wc -l) -ne 0 ]]; then
+            echo "Need to run go mod tidy before committing"
+            git diff
+            exit 1;
+          fi
