@@ -35,15 +35,22 @@ docker-push:
 # CLI
 #----------------------------------------------------------------------------------
 
-.PHONY: ebpfctl-linux-amd64
-ebpfctl-linux-amd64: $(OUTDIR)/ebpfctl-linux-amd64
+
 $(OUTDIR)/ebpfctl-linux-amd64: $(SOURCES)
 	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
 
-.PHONY: ebpfctl-linux-arm64
-ebpfctl-linux-arm64: $(OUTDIR)/ebpfctl-linux-arm64
+.PHONY: ebpfctl-linux-amd64
+ebpfctl-linux-amd64: $(OUTDIR)/ebpfctl-linux-amd64.sha256
+$(OUTDIR)/ebpfctl-linux-amd64.sha256: $(OUTDIR)/ebpfctl-linux-amd64
+	sha256sum $(OUTDIR)/ebpfctl-linux-amd64 > $@
+
 $(OUTDIR)/ebpfctl-linux-arm64: $(SOURCES)
 	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
+
+.PHONY: ebpfctl-linux-arm64
+ebpfctl-linux-arm64: $(OUTDIR)/ebpfctl-linux-arm64.sha256
+$(OUTDIR)/ebpfctl-linux-arm64.sha256: $(OUTDIR)/ebpfctl-linux-arm64
+	sha256sum $(OUTDIR)/ebpfctl-linux-arm64 > $@
 
 .PHONY: build-cli
 build-cli: ebpfctl-linux-amd64 ebpfctl-linux-arm64

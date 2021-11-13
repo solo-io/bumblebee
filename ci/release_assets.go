@@ -7,20 +7,20 @@ import (
 func main() {
 	const buildDir = "_output"
 	const repoOwner = "solo-io"
-	const repoName = "ebpf"
+	const repoName = "eBPF"
 
-	assets := make([]githubutils.ReleaseAssetSpec, 3)
-	assets[0] = githubutils.ReleaseAssetSpec{
-		Name:       "ebpfctl-linux-amd64",
-		ParentPath: buildDir,
-		UploadSHA:  true,
+	assets := []githubutils.ReleaseAssetSpec{
+		{
+			Name:       "ebpfctl-linux-amd64",
+			ParentPath: buildDir,
+			UploadSHA:  true,
+		},
+		{
+			Name:       "ebpfctl-linux-arm64",
+			ParentPath: buildDir,
+			UploadSHA:  true,
+		},
 	}
-	assets[1] = githubutils.ReleaseAssetSpec{
-		Name:       "ebpfctl-linux-arm64",
-		ParentPath: buildDir,
-		UploadSHA:  true,
-	}
-
 	spec := githubutils.UploadReleaseAssetSpec{
 		Owner:             repoOwner,
 		Repo:              repoName,

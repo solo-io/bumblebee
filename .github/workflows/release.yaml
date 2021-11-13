@@ -28,7 +28,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
       - name: Upload Assets
-        run: make upload-github-release-assets
+        run: ls && make upload-github-release-assets
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
