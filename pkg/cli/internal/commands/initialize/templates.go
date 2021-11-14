@@ -4,15 +4,6 @@ const (
 	languageC = "C"
 )
 
-type TemplateOption struct {
-	Name     string
-	Template string
-}
-
-func (o TemplateOption) String() string {
-	return o.Name
-}
-
 // map of language name to description
 var supportedLanguages = []string{
 	languageC,
@@ -29,26 +20,18 @@ var mapTypeToTemplateData = map[string]*templateData{
 	hashMap: hashMapTemplate(),
 }
 
-var (
-	print = TemplateOption{
-		Name:     "print",
-		Template: ".print",
-	}
-	counter = TemplateOption{
-		Name:     "counter",
-		Template: ".counter",
-	}
-	gauge = TemplateOption{
-		Name:     "gauge",
-		Template: ".gauge",
-	}
+const (
+	outputPrint   = "print"
+	outputCounter = "counter"
+	outputGauge   = "gauge"
 )
-var outputDict = map[string]TemplateOption{
-	print.Name:   print,
-	counter.Name: counter,
-	gauge.Name:   gauge,
+
+var supportedOutputTypes = []string{outputPrint, outputCounter, outputGauge}
+var mapOutputTypeToTemplateData = map[string]string{
+	outputPrint:   ".print",
+	outputCounter: ".counter",
+	outputGauge:   ".gauge",
 }
-var supportedOutputTypes = []TemplateOption{print, counter, gauge}
 
 type templateData struct {
 	StructData   string
@@ -59,7 +42,7 @@ type templateData struct {
 
 type MapData struct {
 	MapType     string
-	OutputType  TemplateOption
+	OutputType  string
 	MapTemplate string
 }
 
@@ -89,7 +72,7 @@ const ringbufMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps{{.OutputType.Template}}");`
+} events SEC(".maps{{.OutputType}}");`
 
 const ringbufStruct = `struct event_t {
 	// 2. Add rinbuf struct data here.
@@ -116,7 +99,7 @@ const hashMapTmpl = `struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} values SEC(".maps{{.OutputType.Template}}");`
+} values SEC(".maps{{.OutputType}}");`
 
 const hashKeyStruct = `struct dimensions_t {
 	// 2. Add dimensions to your value. This struct will be used as the key in the hash map of your data.

@@ -67,7 +67,7 @@ func initialize(opts *InitOptions) error {
 			return err
 		}
 	}
-	mapTemplate.MapData.OutputType = outputDict[outputType]
+	mapTemplate.MapData.OutputType = mapOutputTypeToTemplateData[outputType]
 
 	mapTmpl := template.Must(template.New("map-tmpl").Parse(mapTemplate.MapData.MapTemplate))
 	mapBuf := &bytes.Buffer{}
