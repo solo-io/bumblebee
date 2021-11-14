@@ -2,7 +2,6 @@ package initialize // Can't name init because it's a hardcoded const in golang
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"text/template"
 
@@ -63,19 +62,21 @@ func initialize(opts *InitOptions) error {
 
 	outputType := opts.OutputType
 	if outputType == "" {
-		_, err = selectOutputTypeInteractive()
+		outputType, err = selectOutputTypeInteractive()
 		if err != nil {
 			return err
 		}
 	}
 	mapTemplate.MapData.OutputType = outputDict[outputType]
 
-	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
-	_, err = tmpl.New("map").Parse(ringbufMapTmpl)
-	if err != nil {
-		fmt.Println("err while parsing sub tmpl")
+	mapTmpl := template.Must(template.New("map-tmpl").Parse(mapTemplate.MapData.MapTemplate))
+	mapBuf := &bytes.Buffer{}
+	if err := mapTmpl.Execute(mapBuf, mapTemplate.MapData); err != nil {
 		return err
 	}
+	mapTemplate.RenderedMap = mapBuf.String()
+
+	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
 
 	fileBuf := &bytes.Buffer{}
 	if err := tmpl.Execute(fileBuf, mapTemplate); err != nil {

@@ -18,17 +18,16 @@ var supportedLanguages = []string{
 	languageC,
 }
 
-var (
-	ringBuf = TemplateOption{
-		Name:     "RingBuffer",
-		Template: "BPF_MAP_TYPE_RINGBUF",
-	}
-	hashMap = TemplateOption{
-		Name:     "HashMap",
-		Template: "BPF_MAP_TYPE_HASH",
-	}
+const (
+	ringBuf = "RingBuffer"
+	hashMap = "HashMap"
 )
-var supportedMapTypes = []TemplateOption{ringBuf, hashMap}
+
+var supportedMapTypes = []string{ringBuf, hashMap}
+var mapTypeToTemplateData = map[string]*templateData{
+	ringBuf: ringbufTemplate(),
+	hashMap: hashMapTemplate(),
+}
 
 var (
 	print = TemplateOption{
@@ -51,50 +50,52 @@ var outputDict = map[string]TemplateOption{
 }
 var supportedOutputTypes = []TemplateOption{print, counter, gauge}
 
-var mapTypeToTemplateData = map[string]*templateData{
-	ringBuf.Name: ringbufTemplate(),
-	// Create hash templates
-	hashMap.Name: ringbufTemplate(),
-}
-
-type MapData struct {
-	MapType    TemplateOption
-	OutputType TemplateOption
-}
-
 type templateData struct {
 	StructData   string
 	MapData      MapData
 	FunctionBody string
+	RenderedMap  string
+}
+
+type MapData struct {
+	MapType     string
+	OutputType  TemplateOption
+	MapTemplate string
 }
 
 func ringbufTemplate() *templateData {
 	return &templateData{
 		StructData: ringbufStruct,
 		MapData: MapData{
-			MapType:    ringBuf,
-			OutputType: print,
+			MapType:     ringBuf,
+			MapTemplate: ringbufMapTmpl,
 		},
 		FunctionBody: ringbufBody,
 	}
 }
 
-const ringbufMapTmpl = `
-{{define "RINGBUF"}}
-struct {
+func hashMapTemplate() *templateData {
+	return &templateData{
+		StructData: hashKeyStruct,
+		MapData: MapData{
+			MapType:     hashMap,
+			MapTemplate: hashMapTmpl,
+		},
+		FunctionBody: hashMapBody,
+	}
+}
+
+const ringbufMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
-	__uint(type, {{.MapType.Template}});
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps{{.OutputType.Template}}");
-{{end}}
-`
+} events SEC(".maps{{.OutputType.Template}}");`
 
 const ringbufStruct = `struct event_t {
 	// 2. Add rinbuf struct data here.
 } __attribute__((packed));`
 
-const ringbufBody = `
-	// Init event pointer
+const ringbufBody = `// Init event pointer
 	struct event_t *event;
 
 	// Reserve a spot in the ringbuffer for our event
@@ -108,6 +109,43 @@ const ringbufBody = `
 	// event->pid = bpf_get_current_pid_tgid();
 
 	bpf_ringbuf_submit(event, 0);
+`
+
+const hashMapTmpl = `struct {
+	__uint(max_entries, 1 << 24);
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct dimensions_t);
+	__type(value, u64);
+} values SEC(".maps{{.OutputType.Template}}");`
+
+const hashKeyStruct = `struct dimensions_t {
+	// 2. Add dimensions to your value. This struct will be used as the key in the hash map of your data.
+	// These will be treated as labels on your metrics.
+	// In this example we will have single field which contains the PID of the process
+	u32 pid;
+} __attribute__((packed));`
+
+const hashMapBody = `// initialize our struct which will be the key in the hash map
+	struct dimensions_t key;
+	u32 pid;
+	u64 counter;
+	u64 *counterp;
+
+	// get the pid for the current process which has entered the tcp_v4_connect function
+	pid = bpf_get_current_pid_tgid();
+	key.pid = pid;
+
+	// check if we have an existing value for this key
+	counterp = bpf_map_lookup_elem(&values, &key);
+	if (!counterp) {
+		bpf_printk("no entry found for pid: %u}", key.pid);
+		counter = 1;
+	}
+	else {
+		bpf_printk("found existing value '%llu' for pid: %u", *counterp, key.pid);
+		counter = *counterp + 1;
+	}
+	bpf_map_update_elem(&values, &key, &counter, 0);
 `
 
 const fileTemplate = `#include "vmlinux.h"
@@ -124,7 +162,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // This is the definition for the global map which both our
 // bpf program and user space program can access.
 // More info and map types can be found here: https://www.man7.org/linux/man-pages/man2/bpf.2.html
-{{ template "RINGBUF" .MapData }}
+{{ .RenderedMap }}
 
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
