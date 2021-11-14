@@ -1,5 +1,17 @@
 package initialize
 
+type templateData struct {
+	StructData   string
+	MapData      MapData
+	FunctionBody string
+	RenderedMap  string
+}
+
+type MapData struct {
+	OutputType  string
+	MapTemplate string
+}
+
 const (
 	languageC = "C"
 )
@@ -20,6 +32,26 @@ var mapTypeToTemplateData = map[string]*templateData{
 	hashMap: hashMapTemplate(),
 }
 
+func ringbufTemplate() *templateData {
+	return &templateData{
+		StructData: ringbufStruct,
+		MapData: MapData{
+			MapTemplate: ringbufMapTmpl,
+		},
+		FunctionBody: ringbufBody,
+	}
+}
+
+func hashMapTemplate() *templateData {
+	return &templateData{
+		StructData: hashKeyStruct,
+		MapData: MapData{
+			MapTemplate: hashMapTmpl,
+		},
+		FunctionBody: hashMapBody,
+	}
+}
+
 const (
 	outputPrint   = "print"
 	outputCounter = "counter"
@@ -31,41 +63,6 @@ var mapOutputTypeToTemplateData = map[string]string{
 	outputPrint:   ".print",
 	outputCounter: ".counter",
 	outputGauge:   ".gauge",
-}
-
-type templateData struct {
-	StructData   string
-	MapData      MapData
-	FunctionBody string
-	RenderedMap  string
-}
-
-type MapData struct {
-	MapType     string
-	OutputType  string
-	MapTemplate string
-}
-
-func ringbufTemplate() *templateData {
-	return &templateData{
-		StructData: ringbufStruct,
-		MapData: MapData{
-			MapType:     ringBuf,
-			MapTemplate: ringbufMapTmpl,
-		},
-		FunctionBody: ringbufBody,
-	}
-}
-
-func hashMapTemplate() *templateData {
-	return &templateData{
-		StructData: hashKeyStruct,
-		MapData: MapData{
-			MapType:     hashMap,
-			MapTemplate: hashMapTmpl,
-		},
-		FunctionBody: hashMapBody,
-	}
 }
 
 const ringbufMapTmpl = `struct {
@@ -91,8 +88,7 @@ const ringbufBody = `// Init event pointer
 	// For example:
 	// event->pid = bpf_get_current_pid_tgid();
 
-	bpf_ringbuf_submit(event, 0);
-`
+	bpf_ringbuf_submit(event, 0);`
 
 const hashMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
@@ -108,9 +104,11 @@ const hashKeyStruct = `struct dimensions_t {
 	u32 pid;
 } __attribute__((packed));`
 
-const hashMapBody = `// initialize our struct which will be the key in the hash map
+const hashMapBody = `	// initialize our struct which will be the key in the hash map
 	struct dimensions_t key;
+	// initialize variable used to track PID of process calling tcp_v4_connect
 	u32 pid;
+	// define variable used to track the count of function calls, and a pointer to it for plumbing
 	u64 counter;
 	u64 *counterp;
 
@@ -121,15 +119,18 @@ const hashMapBody = `// initialize our struct which will be the key in the hash 
 	// check if we have an existing value for this key
 	counterp = bpf_map_lookup_elem(&values, &key);
 	if (!counterp) {
+		// debug log to help see how the program works
 		bpf_printk("no entry found for pid: %u}", key.pid);
+		// no entry found, so this is the first occurrence, set value to 1
 		counter = 1;
 	}
 	else {
 		bpf_printk("found existing value '%llu' for pid: %u", *counterp, key.pid);
+		// we found an entry, so let's increment the existing value for this PID
 		counter = *counterp + 1;
 	}
-	bpf_map_update_elem(&values, &key, &counter, 0);
-`
+	// update our map with the new value of the counter
+	bpf_map_update_elem(&values, &key, &counter, 0);`
 
 const fileTemplate = `#include "vmlinux.h"
 #include "bpf/bpf_helpers.h"
