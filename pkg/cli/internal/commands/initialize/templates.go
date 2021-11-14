@@ -2,40 +2,64 @@ package initialize
 
 const (
 	languageC = "C"
-
-	mapTypeRingbuffer = "RingBuffer"
-	mapTypeHash       = "HashMap"
-
-	outputTypePrint   = "print"
-	outputTypeCounter = "counter"
-	outputTypeGauge   = "gauge"
 )
+
+type TemplateOption struct {
+	Name     string
+	Template string
+}
+
+func (o TemplateOption) String() string {
+	return o.Name
+}
 
 // map of language name to description
 var supportedLanguages = []string{
 	languageC,
 }
 
-var supportedMapTypes = []string{
-	mapTypeHash,
-	mapTypeRingbuffer,
-}
+var (
+	ringBuf = TemplateOption{
+		Name:     "RingBuffer",
+		Template: "BPF_MAP_TYPE_RINGBUF",
+	}
+	hashMap = TemplateOption{
+		Name:     "HashMap",
+		Template: "BPF_MAP_TYPE_HASH",
+	}
+)
+var supportedMapTypes = []TemplateOption{ringBuf, hashMap}
 
-var supportedOutputTypes = []string{
-	outputTypePrint,
-	outputTypeCounter,
-	outputTypeGauge,
+var (
+	print = TemplateOption{
+		Name:     "print",
+		Template: ".print",
+	}
+	counter = TemplateOption{
+		Name:     "counter",
+		Template: ".counter",
+	}
+	gauge = TemplateOption{
+		Name:     "gauge",
+		Template: ".gauge",
+	}
+)
+var outputDict = map[string]TemplateOption{
+	print.Name:   print,
+	counter.Name: counter,
+	gauge.Name:   gauge,
 }
+var supportedOutputTypes = []TemplateOption{print, counter, gauge}
 
 var mapTypeToTemplateData = map[string]*templateData{
-	mapTypeRingbuffer: ringbufTemplate(),
+	ringBuf.Name: ringbufTemplate(),
 	// Create hash templates
-	mapTypeHash: ringbufTemplate(),
+	hashMap.Name: ringbufTemplate(),
 }
 
 type MapData struct {
-	MapType    string
-	OutputType string
+	MapType    TemplateOption
+	OutputType TemplateOption
 }
 
 type templateData struct {
@@ -48,8 +72,8 @@ func ringbufTemplate() *templateData {
 	return &templateData{
 		StructData: ringbufStruct,
 		MapData: MapData{
-			MapType:    "BPF_MAP_TYPE_RINGBUF",
-			OutputType: ".print",
+			MapType:    ringBuf,
+			OutputType: print,
 		},
 		FunctionBody: ringbufBody,
 	}
@@ -58,10 +82,10 @@ func ringbufTemplate() *templateData {
 const ringbufMapTmpl = `
 {{define "RINGBUF"}}
 struct {
-	__uint(type, {{.MapType}});
 	__uint(max_entries, 1 << 24);
+	__uint(type, {{.MapType.Template}});
 	__type(value, struct event_t);
-} events SEC(".maps{{.OutputType}}");
+} events SEC(".maps{{.OutputType.Template}}");
 {{end}}
 `
 

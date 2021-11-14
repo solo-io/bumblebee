@@ -68,7 +68,7 @@ func initialize(opts *InitOptions) error {
 			return err
 		}
 	}
-	// mapTemplate.OutputType = outputType
+	mapTemplate.MapData.OutputType = outputDict[outputType]
 
 	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
 	_, err = tmpl.New("map").Parse(ringbufMapTmpl)
