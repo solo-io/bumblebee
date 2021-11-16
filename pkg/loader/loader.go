@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -260,6 +261,8 @@ func (l *loader) startHashMap(
 	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
 	// gauge.
 
+	var printHash uint64
+
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
@@ -316,6 +319,13 @@ func (l *loader) startHashMap(
 				"mapName": name,
 				"entries": entries,
 			}
+
+			newPrintHash, _ := hashstructure.Hash(printMap, hashstructure.FormatV2, nil)
+			// Do not print if the data has not changed
+			if printHash == newPrintHash {
+				continue
+			}
+			printHash = newPrintHash
 
 			byt, err := json.Marshal(printMap)
 			if err != nil {
