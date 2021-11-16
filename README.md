@@ -78,9 +78,6 @@ These types can be used in the structs which populate our maps to instruct the r
 
 Logging may be the simplest output format of our `eBPF` probes, but it is also incredibly powerful for both observability and debugging. Logging in our system comes in two main forms. Event based, and timer based. These two types of loggings are used based on the underlying map type which is being logged. When logging a `RingBuffer` each event is handled/logged individually, and therefore it will only be printed once. However, when using a `HashMap` the data has a longer life, and therefore the printing will happen each time there is an update. Let's look at a couple of quick examples to demonstrate this.
 
-##### HashMap
-
-
 ##### RingBuffer
 
 The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](#TUTORIAL.md) for more in depth steps.
@@ -101,6 +98,23 @@ After running the program, I simply run `curl httpbin.org` in a seperate termina
 ```
 The data in contained is not particularly interesting, but rather the formatting and structure. We have printed the map name this data came from, as well as all the data contains. Notice that the uptime of the system is also printed as a human readable duration, because the `typedef duration` was used in the source struct!
 
+##### HashMap
+
+The source for this example can be found in `./examples/tcpconnect/tcpconnect.c`. Detailed steps on building and running are omitted here, please see our [tutorial](#TUTORIAL.md) for more in depth steps.
+
+When looking at the program itself, we can see that the struct being passed into the `HashMap` has the following structure. Keep this in mind when looking at the log line below.
+```C
+struct dimensions_t {
+	ipv4_addr saddr;
+	ipv4_addr daddr;
+} __attribute__((packed));
+```
+
+After running the program, I simply run `curl httpbin.org` a few times in a seperate terminal and the following log line appeared.
+```json
+{"entries":[{"key":{"daddr":"18.232.227.86","saddr":"10.128.0.79"},"value":"2"},{"key":{"daddr":"34.192.79.103","saddr":"10.128.0.79"},"value":"5"}],"mapName":"sockets_ext"}
+```
+This one differs slightly from the `RingBuffer` example above in a couple important ways. First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer. Secondly, there are multiple key/value pairs, rather than a single value. Each key/value pair represents in this case an upstream/downstream address pair, and the number of connections. Also worth noting that the data described using the `typedef ipv4_addr` gets formatted as the underlying IP type by the printer.
 
 #### Metrics
 
