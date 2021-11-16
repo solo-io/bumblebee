@@ -55,6 +55,10 @@ $(OUTDIR)/ebpfctl-linux-arm64.sha256: $(OUTDIR)/ebpfctl-linux-arm64
 .PHONY: build-cli
 build-cli: ebpfctl-linux-amd64 ebpfctl-linux-arm64
 
+.PHONY: install-cli
+install-cli:
+	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ebpfctl/main.go
+
 ##----------------------------------------------------------------------------------
 ## Release
 ##----------------------------------------------------------------------------------

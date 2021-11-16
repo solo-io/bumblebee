@@ -57,6 +57,7 @@ struct {
 	__type(value, struct event_t);
 } events SEC(".maps.print");
 
+
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 {

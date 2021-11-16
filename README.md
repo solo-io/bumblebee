@@ -76,6 +76,32 @@ These types can be used in the structs which populate our maps to instruct the r
 
 #### Logging
 
+Logging may be the simplest output format of our `eBPF` probes, but it is also incredibly powerful for both observability and debugging. Logging in our system comes in two main forms. Event based, and timer based. These two types of loggings are used based on the underlying map type which is being logged. When logging a `RingBuffer` each event is handled/logged individually, and therefore it will only be printed once. However, when using a `HashMap` the data has a longer life, and therefore the printing will happen each time there is an update. Let's look at a couple of quick examples to demonstrate this.
+
+##### HashMap
+
+
+##### RingBuffer
+
+The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](#TUTORIAL.md) for more in depth steps.
+
+
+When looking at the program itself, we can see that the struct being passed into the `RingBuffer` has the following structure. Keep this in mind when looking at the log line below.
+```C
+struct event_t {
+	u32 pid;
+	u32 uid;
+	duration uptime;
+} __attribute__((packed));
+```
+
+After running the program, I simply run `curl httpbin.org` in a seperate terminal and the following log line appeared.
+```json
+{"entry":{"pid":"1478616", "uid":"1003","uptime":"359h58m30.242761006s"},"mapName":"events"}
+```
+The data in contained is not particularly interesting, but rather the formatting and structure. We have printed the map name this data came from, as well as all the data contains. Notice that the uptime of the system is also printed as a human readable duration, because the `typedef duration` was used in the source struct!
+
+
 #### Metrics
 
 
