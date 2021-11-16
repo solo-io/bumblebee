@@ -7,7 +7,7 @@ The first step to get started is to install `ebpfctl` using one of the [installa
 
 `ebpfctl` is a tool which allows for easier development and running of `eBPF` programs. Specifically we allow users to run their `eBPF` probes without running any user space code. We accomplish this using a set of conventions, and a 
 
-Once `ebpfctl` has been installed we can go ahead an initialize our first `eBPF` probe! To do this let's head over to our [tutorial](#TUTORIAL.md).
+Once `ebpfctl` has been installed we can go ahead an initialize our first `eBPF` probe! To do this let's head over to our [tutorial](TUTORIAL.md).
 
 
 ### BPF conventions
