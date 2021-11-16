@@ -20,7 +20,7 @@ For more detailed examples of these, please see our [tutorial](#TUTORIAL.md). Th
 
 #### Maps
 
-As the `ebpfctl` runner is primarily targeted at observability at this time, much of the user space functionality of the tool is centered around the maps. The extension of the maps allows our user space runner to interpret and process the data from these maps in a generic way. The 2 main types of maps which are supported at this time are `RingBuffer` and `HashMap`. There is some overlap in the functionality of the two within our runner, but also some important differences.
+As the `ebpfctl` runner is primarily targeted at observability, much of the user space functionality of the tool is centered around the maps. The extension of the maps allows our user space runner to interpret and process the data from these maps in a generic way. The 2 main types of maps which are supported at this time are `RingBuffer` and `HashMap`. There is some overlap in the functionality of the two within our runner, but also some important differences.
 
 **Important Note:** Currently all structs used in maps which are meant to be processed by our user space runner cannot be nested. This may be added in the future for the logging/eventing, but not for metrics.
 
@@ -117,6 +117,30 @@ After running the program, I simply run `curl httpbin.org` a few times in a sepe
 This one differs slightly from the `RingBuffer` example above in a couple important ways. First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer. Secondly, there are multiple key/value pairs, rather than a single value. Each key/value pair represents in this case an upstream/downstream address pair, and the number of connections. Also worth noting that the data described using the `typedef ipv4_addr` gets formatted as the underlying IP type by the printer.
 
 #### Metrics
+
+Potentially even more powerful than the logging features of the `ebpfctl` runner are it's metrics capabilities. As opposed to the logging feature, the metrics feature allows for creation and export of generic metrics + labels from `eBPF` probes. A couple simple, yet powerful, examples of this functionality are in the `examples` folder. `activeconn` keeps track of all active tcpv4 connections in a gauge with source/dest IP as the metric labels. The `tcpconnect` example does something similar, but it increments a counter for each new connection, rather than maintaining all active.
+
+##### Counter
+
+Currently there are 2 ways to use a gauge with `ebpfctl`. One with a `HashMap` and one with a `RingBuffer`.
+
+An example of the both the `RingBuffer` counter and `HashMap` counter exist in the `examples/tcpconnect` folder. The program tracks the number of TCP connections using both map types to illustrate their use. We do not recommend saving the same value two seperate ways.
+
+After starting the program, and curling httpbin a few times we can, we can get the metrics from `curl localhost:9091/metrics | grep events`
+```
+# HELP ebpf_solo_io_events_hash 
+# TYPE ebpf_solo_io_events_hash counter
+ebpf_solo_io_events_hash{daddr="18.232.227.86",saddr="10.128.0.79"} 9
+ebpf_solo_io_events_hash{daddr="3.216.167.140",saddr="10.128.0.79"} 5
+# HELP ebpf_solo_io_events_ring 
+# TYPE ebpf_solo_io_events_ring counter
+ebpf_solo_io_events_ring{daddr="18.232.227.86",saddr="10.128.0.79"} 9
+ebpf_solo_io_events_ring{daddr="3.216.167.140",saddr="10.128.0.79"} 5
+```
+
+As we can see the number of connections are being tracked both from our `HashMap` and `RingBuffer` implementation.
+
+##### Gauge 
 
 
 ## Installation

@@ -24,7 +24,13 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} sockets_ext SEC(".maps.counter");
+} events_hash SEC(".maps.counter");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 1 << 24);
+	__type(value, struct dimensions_t);
+} events_ring SEC(".maps.counter");
 
 static __always_inline int
 enter_tcp_connect(struct pt_regs *ctx, struct sock *sk)
@@ -50,7 +56,7 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 	__u32 daddr;
 	u64 val;
 	u64 *valp;
-	struct dimensions_t key = {};
+	struct dimensions_t hash_key = {};
 
 	bpf_printk("exit: getting sk for tid: '%u', ret is: '%d'", tid, ret);
 	skpp = bpf_map_lookup_elem(&sockets, &tid);
@@ -63,20 +69,35 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 	bpf_printk("exit: found sk for tid: %u", tid);
 	BPF_CORE_READ_INTO(&saddr, sk, __sk_common.skc_rcv_saddr);
 	BPF_CORE_READ_INTO(&daddr, sk, __sk_common.skc_daddr);
-	key.saddr = saddr;
-	key.daddr = daddr;
+	hash_key.saddr = saddr;
+	hash_key.daddr = daddr;
 
-	valp = bpf_map_lookup_elem(&sockets_ext, &key);
+	// Set Hash map
+	valp = bpf_map_lookup_elem(&events_hash, &hash_key);
 	if (!valp) {
-		bpf_printk("no entry for {saddr: %u, daddr: %u}", key.saddr, key.daddr);
+		bpf_printk("no entry for {saddr: %u, daddr: %u}", hash_key.saddr, hash_key.daddr);
 		val = 1;
 	}
 	else {
-		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, key.saddr, key.daddr);
+		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, hash_key.saddr, hash_key.daddr);
 		val = *valp + 1;
 	}
-	bpf_map_update_elem(&sockets_ext, &key, &val, 0);
+	bpf_map_update_elem(&events_hash, &hash_key, &val, 0);
 	bpf_map_delete_elem(&sockets, &tid);
+
+	// Set Ringbuffer
+	struct dimensions_t *ring_val;
+
+	ring_val = bpf_ringbuf_reserve(&events_ring, sizeof(struct dimensions_t), 0);
+	if (!ring_val) {
+		return 0;
+	}
+
+	ring_val->saddr = saddr;
+	ring_val->daddr = daddr;
+
+	bpf_ringbuf_submit(ring_val, 0);
+
 	return 0;
 }
 
