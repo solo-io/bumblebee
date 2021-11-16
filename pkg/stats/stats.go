@@ -82,6 +82,7 @@ func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrum
 func (m *metricsProvider) NewIncrementCounter(name string, labels []string) IncrementInstrument {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: ebpfNamespace,
+		Name:      name,
 	}, labels)
 
 	prometheus.MustRegister(counter)
@@ -91,7 +92,13 @@ func (m *metricsProvider) NewIncrementCounter(name string, labels []string) Incr
 }
 
 func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
-	return &gauge{}
+	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: ebpfNamespace,
+		Name:      name,
+	}, labels)
+	return &gauge{
+		gauge: gaugeVec,
+	}
 }
 
 type setCounter struct {

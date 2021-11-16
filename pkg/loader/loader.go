@@ -142,12 +142,11 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			fallthrough
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
+			// TODO: Support *btf.Union
+			structType := btfMapMap[name].Value.(*btf.Struct)
 			verbose := opts.Verbose
 			if isCounterMap(bpfMap) {
-				labelKeys, err := getLabelsForMapKey(bpfMap)
-				if err != nil {
-					return err
-				}
+				labelKeys := getLabelsForBtfStruct(structType)
 				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
 			} else if isPrintMap(bpfMap) {
 				increment = &noopIncrement{}
@@ -155,12 +154,12 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			}
 			eg.Go(func() error {
 				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
-				return l.startRingBuf(ctx, btfMapMap, coll, increment, name, verbose)
+				return l.startRingBuf(ctx, structType, coll, increment, name, verbose)
 			})
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
-			labelKeys, err := getLabelsForMapKey(bpfMap)
+			labelKeys, err := getLabelsForHashMapKey(bpfMap)
 			if err != nil {
 				return err
 			}
@@ -186,7 +185,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 func (l *loader) startRingBuf(
 	ctx context.Context,
-	btfMapMap map[string]*btf.Map,
+	valueStruct *btf.Struct,
 	coll *ebpf.Collection,
 	incrementInstrument stats.IncrementInstrument,
 	name string,
@@ -194,9 +193,6 @@ func (l *loader) startRingBuf(
 ) error {
 	// Initialize decoder
 	d := l.decoderFactory()
-
-	// TODO: Support *btf.Union
-	t := btfMapMap[name].Value.(*btf.Struct)
 
 	// Open a ringbuf reader from userspace RINGBUF map described in the
 	// eBPF C program.
@@ -224,7 +220,7 @@ func (l *loader) startRingBuf(
 			pterm.Warning.Printf("reading from reader: %s", err)
 			continue
 		}
-		result, err := d.DecodeBtfBinary(ctx, t, record.RawSample)
+		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
 		if err != nil {
 			return err
 		}
@@ -354,17 +350,21 @@ type kvPair struct {
 	Value string            `json:"value"`
 }
 
-func getLabelsForMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
+func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
 	structKey, ok := mapSpec.BTF.Key.(*btf.Struct)
 	if !ok {
 		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.BTF.Value.String())
 	}
 
+	return getLabelsForBtfStruct(structKey), nil
+}
+
+func getLabelsForBtfStruct(structKey *btf.Struct) []string {
 	keys := make([]string, 0, len(structKey.Members))
 	for _, v := range structKey.Members {
 		keys = append(keys, v.Name)
 	}
-	return keys, nil
+	return keys
 }
 
 type noopIncrement struct{}
