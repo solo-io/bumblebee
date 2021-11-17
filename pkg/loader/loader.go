@@ -131,6 +131,17 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
+	app := tview.NewApplication()
+	flex := tview.NewFlex()
+	go func() {
+		if err := app.SetRoot(flex, true).Run(); err != nil {
+			panic(err)
+		}
+		// ticker := time.NewTicker(1 * time.Second)
+		// for range ticker.C {
+		// 	app.Draw()
+		// }
+	}()
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
@@ -174,7 +185,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, flex, app)
 			})
 		default:
 			// TODO: Support more map types
@@ -254,6 +265,8 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	verbose bool,
+	flex *tview.Flex,
+	app *tview.Application,
 ) error {
 
 	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
@@ -261,18 +274,9 @@ func (l *loader) startHashMap(
 
 	var printHash uint64
 
-	app := tview.NewApplication()
-	// textView := tview.NewTextView().SetChangedFunc(func() {
-	// 	app.Draw()
-	// })
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
-
-	go func() {
-		if err := app.SetRoot(table, true).Run(); err != nil {
-			panic(err)
-		}
-	}()
+	flex.AddItem(table, 0, 1, false)
 
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
@@ -341,7 +345,7 @@ func (l *loader) startHashMap(
 			entry := entries[0]
 			theekMap := entry.Key
 			keyStructKeys := []string{}
-			for kk, _ := range theekMap {
+			for kk := range theekMap {
 				keyStructKeys = append(keyStructKeys, kk)
 			}
 			sort.Strings(keyStructKeys)
