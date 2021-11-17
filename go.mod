@@ -36,6 +36,8 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/gdamore/encoding v1.0.0 // indirect
+	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-github/v32 v32.0.0 // indirect
@@ -46,6 +48,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/k0kubun/pp v2.3.0+incompatible // indirect
 	github.com/klauspost/compress v1.11.13 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
@@ -59,6 +62,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
+	github.com/rivo/tview v0.0.0-20211109175620-badfa0f0b301 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rotisserie/eris v0.1.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect

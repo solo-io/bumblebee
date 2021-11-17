@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
+	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/stats"
 	"golang.org/x/sync/errgroup"
@@ -259,6 +261,19 @@ func (l *loader) startHashMap(
 
 	var printHash uint64
 
+	app := tview.NewApplication()
+	// textView := tview.NewTextView().SetChangedFunc(func() {
+	// 	app.Draw()
+	// })
+	table := tview.NewTable().SetFixed(1, 0)
+	table.SetBorder(true).SetTitle(name)
+
+	go func() {
+		if err := app.SetRoot(table, true).Run(); err != nil {
+			panic(err)
+		}
+	}()
+
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
@@ -323,12 +338,47 @@ func (l *loader) startHashMap(
 			}
 			printHash = newPrintHash
 
-			byt, err := json.Marshal(printMap)
-			if err != nil {
-				pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-				continue
+			entry := entries[0]
+			theekMap := entry.Key
+			keyStructKeys := []string{}
+			for kk, _ := range theekMap {
+				keyStructKeys = append(keyStructKeys, kk)
 			}
-			fmt.Printf("%s\n", byt)
+			sort.Strings(keyStructKeys)
+
+			table.ScrollToBeginning().Clear()
+			c := 0
+			for i, k := range keyStructKeys {
+				cell := tview.NewTableCell(k).SetExpansion(1)
+				// table.SetCellSimple(0, i, k)
+				table.SetCell(0, i, cell)
+				c++
+			}
+			cell := tview.NewTableCell("value").SetExpansion(1)
+			table.SetCell(0, c, cell)
+			for r, entry := range entries {
+				r++
+				ekMap := entry.Key
+				eVal := entry.Value
+				c := 0
+				for kk, kv := range keyStructKeys {
+					cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
+					table.SetCell(r, kk, cell)
+					c++
+				}
+				cell := tview.NewTableCell(eVal).SetExpansion(1)
+				table.SetCell(r, c, cell)
+			}
+			app.Draw()
+
+			// byt, err := json.Marshal(printMap)
+			// if err != nil {
+			// 	pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
+			// 	continue
+			// }
+			// textView.Clear()
+			// fmt.Fprintf(textView, "%s\n", byt)
+			// fmt.Printf("%s\n", byt)
 
 		case <-ctx.Done():
 			return nil
