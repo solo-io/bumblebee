@@ -15,10 +15,10 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
-	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
+	"github.com/solo-io/ebpf/pkg/internal/version"
+	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
 	"golang.org/x/sync/errgroup"
 )
@@ -131,17 +131,17 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	app := tview.NewApplication()
-	flex := tview.NewFlex()
-	go func() {
-		if err := app.SetRoot(flex, true).Run(); err != nil {
-			panic(err)
-		}
-		// ticker := time.NewTicker(1 * time.Second)
-		// for range ticker.C {
-		// 	app.Draw()
-		// }
-	}()
+	// app := tview.NewApplication()
+	// flex := tview.NewFlex()
+	// go func() {
+	// 	if err := app.SetRoot(flex, true).Run(); err != nil {
+	// 		panic(err)
+	// 	}
+	// 	// ticker := time.NewTicker(1 * time.Second)
+	// 	// for range ticker.C {
+	// 	// 	app.Draw()
+	// 	// }
+	// }()
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
@@ -185,7 +185,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, flex, app)
+				// return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, flex, app)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
 			})
 		default:
 			// TODO: Support more map types
@@ -265,18 +266,18 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	verbose bool,
-	flex *tview.Flex,
-	app *tview.Application,
+	// flex *tview.Flex,
+	// app *tview.Application,
 ) error {
 
 	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
 	// gauge.
 
-	var printHash uint64
-
-	table := tview.NewTable().SetFixed(1, 0)
-	table.SetBorder(true).SetTitle(name)
-	flex.AddItem(table, 0, 1, false)
+	// table := tview.NewTable().SetFixed(1, 0)
+	// table.SetBorder(true).SetTitle(name)
+	// flex.AddItem(table, 0, 1, false)
+	m := printer.NewMonitor()
+	go m.Watch("test")
 
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
@@ -286,7 +287,7 @@ func (l *loader) startHashMap(
 		select {
 		case <-ticker.C:
 
-			var entries []kvPair
+			var entries []version.KvPair
 
 			mapIter := liveMap.Iterate()
 			for {
@@ -323,24 +324,18 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				entries = append(entries, kvPair{Key: stringLabels, Value: fmt.Sprint(intVal)})
+				thisKvPair := version.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
+				entries = append(entries, thisKvPair)
 			}
 
 			if len(entries) == 0 || !verbose {
 				continue
 			}
 
-			printMap := map[string]interface{}{
-				"mapName": name,
-				"entries": entries,
+			m.MyChan <- version.MapEntries{
+				Name:    name,
+				Entries: entries,
 			}
-
-			newPrintHash, _ := hashstructure.Hash(printMap, hashstructure.FormatV2, nil)
-			// Do not print if the data has not changed
-			if printHash == newPrintHash {
-				continue
-			}
-			printHash = newPrintHash
 
 			entry := entries[0]
 			theekMap := entry.Key
@@ -350,39 +345,33 @@ func (l *loader) startHashMap(
 			}
 			sort.Strings(keyStructKeys)
 
-			table.ScrollToBeginning().Clear()
-			c := 0
-			for i, k := range keyStructKeys {
-				cell := tview.NewTableCell(k).SetExpansion(1)
-				// table.SetCellSimple(0, i, k)
-				table.SetCell(0, i, cell)
-				c++
-			}
-			cell := tview.NewTableCell("value").SetExpansion(1)
-			table.SetCell(0, c, cell)
-			for r, entry := range entries {
-				r++
-				ekMap := entry.Key
-				eVal := entry.Value
-				c := 0
-				for kk, kv := range keyStructKeys {
-					cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
-					table.SetCell(r, kk, cell)
-					c++
-				}
-				cell := tview.NewTableCell(eVal).SetExpansion(1)
-				table.SetCell(r, c, cell)
-			}
-			app.Draw()
-
-			// byt, err := json.Marshal(printMap)
-			// if err != nil {
-			// 	pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-			// 	continue
+			// table.ScrollToBeginning().Clear()
+			// c := 0
+			// for i, k := range keyStructKeys {
+			// 	cell := tview.NewTableCell(k).SetExpansion(1)
+			// 	// table.SetCellSimple(0, i, k)
+			// 	table.SetCell(0, i, cell)
+			// 	c++
 			// }
+			// cell := tview.NewTableCell("value").SetExpansion(1)
+			// table.SetCell(0, c, cell)
+			// for r, entry := range entries {
+			// 	r++
+			// 	ekMap := entry.Key
+			// 	eVal := entry.Value
+			// 	c := 0
+			// 	for kk, kv := range keyStructKeys {
+			// 		cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
+			// 		table.SetCell(r, kk, cell)
+			// 		c++
+			// 	}
+			// 	cell := tview.NewTableCell(eVal).SetExpansion(1)
+			// 	table.SetCell(r, c, cell)
+			// }
+			// app.Draw()
+
 			// textView.Clear()
 			// fmt.Fprintf(textView, "%s\n", byt)
-			// fmt.Printf("%s\n", byt)
 
 		case <-ctx.Done():
 			return nil
@@ -397,11 +386,6 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 		keyMap[k] = valAsStr
 	}
 	return keyMap
-}
-
-type kvPair struct {
-	Key   map[string]string `json:"key"`
-	Value string            `json:"value"`
 }
 
 func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
