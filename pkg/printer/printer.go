@@ -1,10 +1,8 @@
 package printer
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/mitchellh/hashstructure/v2"
+	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/internal/version"
 )
 
@@ -17,11 +15,26 @@ var mapOfMaps = make(map[string]MapValue)
 
 type Monitor struct {
 	MyChan chan version.MapEntries
+	App    *tview.Application
+	Flex   *tview.Flex
 }
 
 func NewMonitor() Monitor {
+	app := tview.NewApplication()
+	flex := tview.NewFlex()
+	go func() {
+		if err := app.SetRoot(flex, true).Run(); err != nil {
+			panic(err)
+		}
+		// ticker := time.NewTicker(1 * time.Second)
+		// for range ticker.C {
+		// 	app.Draw()
+		// }
+	}()
 	return Monitor{
 		MyChan: make(chan version.MapEntries),
+		App:    app,
+		Flex:   flex,
 	}
 }
 
@@ -42,15 +55,15 @@ func (m *Monitor) Watch(_ string) {
 		mapOfMaps[r.Name] = newMapVal
 
 		// print
-		printMap := map[string]interface{}{
-			"mapName": r.Name,
-			"entries": r.Entries,
-		}
-		byt, err := json.Marshal(printMap)
-		if err != nil {
-			fmt.Printf("error marshalling map data, this should never happen, %s\n", err)
-			continue
-		}
-		fmt.Printf("%s\n", byt)
+		// printMap := map[string]interface{}{
+		// 	"mapName": r.Name,
+		// 	"entries": r.Entries,
+		// }
+		// byt, err := json.Marshal(printMap)
+		// if err != nil {
+		// 	fmt.Printf("error marshalling map data, this should never happen, %s\n", err)
+		// 	continue
+		// }
+		// fmt.Printf("%s\n", byt)
 	}
 }

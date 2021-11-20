@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
+	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/internal/version"
 	"github.com/solo-io/ebpf/pkg/printer"
@@ -131,17 +132,6 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	// app := tview.NewApplication()
-	// flex := tview.NewFlex()
-	// go func() {
-	// 	if err := app.SetRoot(flex, true).Run(); err != nil {
-	// 		panic(err)
-	// 	}
-	// 	// ticker := time.NewTicker(1 * time.Second)
-	// 	// for range ticker.C {
-	// 	// 	app.Draw()
-	// 	// }
-	// }()
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
@@ -269,15 +259,11 @@ func (l *loader) startHashMap(
 	// flex *tview.Flex,
 	// app *tview.Application,
 ) error {
-
-	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
-	// gauge.
-
-	// table := tview.NewTable().SetFixed(1, 0)
-	// table.SetBorder(true).SetTitle(name)
-	// flex.AddItem(table, 0, 1, false)
 	m := printer.NewMonitor()
 	go m.Watch("test")
+	table := tview.NewTable().SetFixed(1, 0)
+	table.SetBorder(true).SetTitle(name)
+	m.Flex.AddItem(table, 0, 1, false)
 
 	d := l.decoderFactory()
 	// Read loop reporting the total amount of times the kernel
@@ -345,30 +331,30 @@ func (l *loader) startHashMap(
 			}
 			sort.Strings(keyStructKeys)
 
-			// table.ScrollToBeginning().Clear()
-			// c := 0
-			// for i, k := range keyStructKeys {
-			// 	cell := tview.NewTableCell(k).SetExpansion(1)
-			// 	// table.SetCellSimple(0, i, k)
-			// 	table.SetCell(0, i, cell)
-			// 	c++
-			// }
-			// cell := tview.NewTableCell("value").SetExpansion(1)
-			// table.SetCell(0, c, cell)
-			// for r, entry := range entries {
-			// 	r++
-			// 	ekMap := entry.Key
-			// 	eVal := entry.Value
-			// 	c := 0
-			// 	for kk, kv := range keyStructKeys {
-			// 		cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
-			// 		table.SetCell(r, kk, cell)
-			// 		c++
-			// 	}
-			// 	cell := tview.NewTableCell(eVal).SetExpansion(1)
-			// 	table.SetCell(r, c, cell)
-			// }
-			// app.Draw()
+			table.ScrollToBeginning().Clear()
+			c := 0
+			for i, k := range keyStructKeys {
+				cell := tview.NewTableCell(k).SetExpansion(1)
+				// table.SetCellSimple(0, i, k)
+				table.SetCell(0, i, cell)
+				c++
+			}
+			cell := tview.NewTableCell("value").SetExpansion(1)
+			table.SetCell(0, c, cell)
+			for r, entry := range entries {
+				r++
+				ekMap := entry.Key
+				eVal := entry.Value
+				c := 0
+				for kk, kv := range keyStructKeys {
+					cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
+					table.SetCell(r, kk, cell)
+					c++
+				}
+				cell := tview.NewTableCell(eVal).SetExpansion(1)
+				table.SetCell(r, c, cell)
+			}
+			m.App.Draw()
 
 			// textView.Clear()
 			// fmt.Fprintf(textView, "%s\n", byt)
