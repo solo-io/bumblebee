@@ -124,6 +124,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stopper
+		fmt.Println("got sigterm or interrupt")
 		cancel()
 	}()
 	// Allow the current process to lock memory for eBPF resources.

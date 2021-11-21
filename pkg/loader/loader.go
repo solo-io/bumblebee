@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
-	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/internal/version"
 	"github.com/solo-io/ebpf/pkg/printer"
@@ -130,8 +128,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	eg, ctx := errgroup.WithContext(ctx)
+	m := printer.NewMonitor()
+	go m.Watch("test")
 
+	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range spec.Maps {
 		name := name
 		bpfMap := bpfMap
@@ -175,8 +175,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				// return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, flex, app)
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, m)
 			})
 		default:
 			// TODO: Support more map types
@@ -256,25 +255,23 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	verbose bool,
-	// flex *tview.Flex,
-	// app *tview.Application,
+	m printer.Monitor,
 ) error {
-	m := printer.NewMonitor()
-	go m.Watch("test")
-	table := tview.NewTable().SetFixed(1, 0)
-	table.SetBorder(true).SetTitle(name)
-	m.Flex.AddItem(table, 0, 1, false)
 
+	m.NewHashMap(name)
 	d := l.decoderFactory()
+	// go func() {
+	// 	<-ctx.Done()
+	// 	fmt.Println("got done?")
+	// }()
+
 	// Read loop reporting the total amount of times the kernel
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-
 			var entries []version.KvPair
-
 			mapIter := liveMap.Iterate()
 			for {
 				// Use generic key,value so we can decode ourselves
@@ -323,43 +320,9 @@ func (l *loader) startHashMap(
 				Entries: entries,
 			}
 
-			entry := entries[0]
-			theekMap := entry.Key
-			keyStructKeys := []string{}
-			for kk := range theekMap {
-				keyStructKeys = append(keyStructKeys, kk)
-			}
-			sort.Strings(keyStructKeys)
-
-			table.ScrollToBeginning().Clear()
-			c := 0
-			for i, k := range keyStructKeys {
-				cell := tview.NewTableCell(k).SetExpansion(1)
-				// table.SetCellSimple(0, i, k)
-				table.SetCell(0, i, cell)
-				c++
-			}
-			cell := tview.NewTableCell("value").SetExpansion(1)
-			table.SetCell(0, c, cell)
-			for r, entry := range entries {
-				r++
-				ekMap := entry.Key
-				eVal := entry.Value
-				c := 0
-				for kk, kv := range keyStructKeys {
-					cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
-					table.SetCell(r, kk, cell)
-					c++
-				}
-				cell := tview.NewTableCell(eVal).SetExpansion(1)
-				table.SetCell(r, c, cell)
-			}
-			m.App.Draw()
-
-			// textView.Clear()
-			// fmt.Fprintf(textView, "%s\n", byt)
-
 		case <-ctx.Done():
+			fmt.Println("got done in hashmap loop, returning")
+			close(m.MyChan)
 			return nil
 		}
 	}
