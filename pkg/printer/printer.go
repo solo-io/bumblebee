@@ -4,10 +4,19 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/internal/version"
 )
+
+const titleText = ` ______     ______     ______   ______   ______     ______   __        
+/\  ___\   /\  == \   /\  == \ /\  ___\ /\  ___\   /\__  _\ /\ \       
+\ \  __\   \ \  __<   \ \  _-/ \ \  __\ \ \ \____  \/_/\ \/ \ \ \____  
+ \ \_____\  \ \_____\  \ \_\    \ \_\    \ \_____\    \ \_\  \ \_____\ 
+  \/_____/   \/_____/   \/_/     \/_/     \/_____/     \/_/   \/_____/ 
+
+                              					(powered by solo.io)  `
 
 type MapValue struct {
 	Hash    uint64
@@ -25,7 +34,7 @@ type Monitor struct {
 
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
-	flex := tview.NewFlex()
+	flex := tview.NewFlex().SetDirection(tview.FlexRow)
 	go func() {
 		if err := app.SetRoot(flex, true).Run(); err != nil {
 			panic(err)
@@ -35,6 +44,9 @@ func NewMonitor() Monitor {
 		// 	app.Draw()
 		// }
 	}()
+	title := tview.NewTextView()
+	fmt.Fprint(title, titleText)
+	flex.AddItem(title, 10, 0, false)
 	return Monitor{
 		MyChan: make(chan version.MapEntries),
 		App:    app,
@@ -69,12 +81,12 @@ func (m *Monitor) Watch(_ string) {
 		table.ScrollToBeginning().Clear()
 		c := 0
 		for i, k := range keyStructKeys {
-			cell := tview.NewTableCell(k).SetExpansion(1)
+			cell := tview.NewTableCell(k).SetExpansion(1).SetTextColor(tcell.ColorYellow)
 			// table.SetCellSimple(0, i, k)
 			table.SetCell(0, i, cell)
 			c++
 		}
-		cell := tview.NewTableCell("value").SetExpansion(1)
+		cell := tview.NewTableCell("value").SetExpansion(1).SetTextColor(tcell.ColorYellow)
 		table.SetCell(0, c, cell)
 		for r, entry := range newMapVal.Entries {
 			r++
