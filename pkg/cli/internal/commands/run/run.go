@@ -14,6 +14,7 @@ import (
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
+	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/solo-io/ebpf/pkg/stats"
 	"github.com/spf13/cobra"
@@ -119,6 +120,9 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	m := printer.NewMonitor()
+	go m.Watch("test")
+
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
@@ -126,6 +130,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 		<-stopper
 		fmt.Println("got sigterm or interrupt")
 		cancel()
+		close(m.MyChan)
 	}()
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -144,6 +149,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
 		promProvider,
+		m,
 	)
 	return progLoader.Load(ctx, progOptions)
 }

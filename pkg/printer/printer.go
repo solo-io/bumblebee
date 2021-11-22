@@ -3,6 +3,7 @@ package printer
 import (
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
@@ -25,6 +26,7 @@ type MapValue struct {
 }
 
 var mapOfMaps = make(map[string]MapValue)
+var mapMutex = sync.RWMutex{}
 
 type Monitor struct {
 	MyChan chan version.MapEntries
@@ -35,15 +37,6 @@ type Monitor struct {
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
-	go func() {
-		if err := app.SetRoot(flex, true).Run(); err != nil {
-			panic(err)
-		}
-		// ticker := time.NewTicker(1 * time.Second)
-		// for range ticker.C {
-		// 	app.Draw()
-		// }
-	}()
 	title := tview.NewTextView()
 	fmt.Fprint(title, titleText)
 	flex.AddItem(title, 10, 0, false)
@@ -52,6 +45,18 @@ func NewMonitor() Monitor {
 		App:    app,
 		Flex:   flex,
 	}
+}
+
+func (m *Monitor) Start() {
+	go func() {
+		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
+			panic(err)
+		}
+		// ticker := time.NewTicker(1 * time.Second)
+		// for range ticker.C {
+		// 	app.Draw()
+		// }
+	}()
 }
 
 func (m *Monitor) Watch(_ string) {
@@ -78,7 +83,7 @@ func (m *Monitor) Watch(_ string) {
 		sort.Strings(keyStructKeys)
 
 		table := newMapVal.Table
-		table.ScrollToBeginning().Clear()
+		// table.ScrollToBeginning().Clear()
 		c := 0
 		for i, k := range keyStructKeys {
 			cell := tview.NewTableCell(k).SetExpansion(1).SetTextColor(tcell.ColorYellow)
@@ -101,6 +106,7 @@ func (m *Monitor) Watch(_ string) {
 			cell := tview.NewTableCell(eVal).SetExpansion(1)
 			table.SetCell(r, c, cell)
 		}
+		m.App.SetFocus(table)
 		m.App.Draw()
 
 		// print logic
@@ -122,8 +128,10 @@ func (m *Monitor) NewHashMap(name string) *tview.Table {
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
 	m.Flex.AddItem(table, 0, 1, false)
+	mapMutex.Lock()
 	entry := mapOfMaps[name]
 	entry.Table = table
 	mapOfMaps[name] = entry
+	mapMutex.Unlock()
 	return table
 }

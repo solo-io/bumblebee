@@ -33,13 +33,21 @@ type Loader interface {
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
+type loader struct {
+	decoderFactory  decoder.DecoderFactory
+	metricsProvider stats.MetricsProvider
+	printMonitor    printer.Monitor
+}
+
 func NewLoader(
 	decoderFactory decoder.DecoderFactory,
 	metricsProvider stats.MetricsProvider,
+	printMonitor printer.Monitor,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
 		metricsProvider: metricsProvider,
+		printMonitor:    printMonitor,
 	}
 }
 
@@ -63,11 +71,6 @@ func isCounterMap(spec *ebpf.MapSpec) bool {
 
 func isTrackedMap(spec *ebpf.MapSpec) bool {
 	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
-}
-
-type loader struct {
-	decoderFactory  decoder.DecoderFactory
-	metricsProvider stats.MetricsProvider
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
@@ -128,8 +131,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	m := printer.NewMonitor()
-	go m.Watch("test")
+	l.printMonitor.Start()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range spec.Maps {
@@ -175,7 +177,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, m)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, l.printMonitor)
 			})
 		default:
 			// TODO: Support more map types
@@ -322,7 +324,6 @@ func (l *loader) startHashMap(
 
 		case <-ctx.Done():
 			fmt.Println("got done in hashmap loop, returning")
-			close(m.MyChan)
 			return nil
 		}
 	}
