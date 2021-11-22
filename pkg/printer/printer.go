@@ -52,14 +52,12 @@ func (m *Monitor) Start() {
 		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
 			panic(err)
 		}
-		// ticker := time.NewTicker(1 * time.Second)
-		// for range ticker.C {
-		// 	app.Draw()
-		// }
 	}()
+	// goroutine for updating the TUI data based on updates from loader watching maps
+	go m.Watch()
 }
 
-func (m *Monitor) Watch(_ string) {
+func (m *Monitor) Watch() {
 	for r := range m.MyChan {
 		current := mapOfMaps[r.Name]
 		newPrintHash, _ := hashstructure.Hash(r.Entries, hashstructure.FormatV2, nil)

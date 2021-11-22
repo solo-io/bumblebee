@@ -121,7 +121,6 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	m := printer.NewMonitor()
-	go m.Watch("test")
 
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)

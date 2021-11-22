@@ -131,6 +131,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
+	// render the TUI and start the event loop
 	l.printMonitor.Start()
 
 	eg, ctx := errgroup.WithContext(ctx)
