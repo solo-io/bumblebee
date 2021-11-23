@@ -24,10 +24,12 @@ type MapValue struct {
 	Hash    uint64
 	Entries []version.KvPair
 	Table   *tview.Table
+	Index   int
 }
 
 var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
+var currentIndex int
 
 type Monitor struct {
 	MyChan chan version.MapEntries
@@ -35,17 +37,48 @@ type Monitor struct {
 	Flex   *tview.Flex
 }
 
+func nextSlide(app *tview.Application) {
+	if len(mapOfMaps) <= 1 {
+		return
+	}
+	if currentIndex+1 == len(mapOfMaps) {
+		currentIndex = 0
+	} else {
+		currentIndex++
+	}
+	mapMutex.RLock()
+	for _, v := range mapOfMaps {
+		if v.Index == currentIndex {
+			app.SetFocus(v.Table)
+			return
+		}
+	}
+	mapMutex.RUnlock()
+}
+
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlN {
+			nextSlide(app)
+			return nil
+		}
+		// } else if event.Key() == tcell.KeyCtrlP {
+		// 	previousSlide()
+		// 	return nil
+		// }
+		return event
+	})
 	title := tview.NewTextView().SetTextAlign(tview.AlignCenter).SetTextColor(tcell.ColorLightCyan)
 	fmt.Fprint(title, titleText)
 	flex.AddItem(title, 10, 0, false)
-	return Monitor{
+	m := Monitor{
 		MyChan: make(chan version.MapEntries),
 		App:    app,
 		Flex:   flex,
 	}
+	return m
 }
 
 func (m *Monitor) Start() {
@@ -131,13 +164,19 @@ func (m *Monitor) Watch() {
 }
 
 func (m *Monitor) NewHashMap(name string) *tview.Table {
+	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
 	m.Flex.AddItem(table, 0, 1, false)
-	mapMutex.Lock()
-	entry := mapOfMaps[name]
-	entry.Table = table
+	i := len(mapOfMaps)
+	entry := MapValue{
+		Table: table,
+		Index: i,
+	}
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
+	if i == 0 {
+		m.App.SetFocus(table)
+	}
 	return table
 }
