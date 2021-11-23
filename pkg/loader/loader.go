@@ -178,7 +178,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, l.printMonitor)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
 			})
 		default:
 			// TODO: Support more map types
@@ -247,7 +247,6 @@ func (l *loader) startRingBuf(
 			continue
 		}
 		fmt.Printf("%s\n", byt)
-
 	}
 }
 
@@ -258,18 +257,10 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	verbose bool,
-	m printer.Monitor,
 ) error {
-
-	m.NewHashMap(name)
+	l.printMonitor.NewHashMap(name)
 	d := l.decoderFactory()
-	// go func() {
-	// 	<-ctx.Done()
-	// 	fmt.Println("got done?")
-	// }()
 
-	// Read loop reporting the total amount of times the kernel
-	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
@@ -300,7 +291,6 @@ func (l *loader) startHashMap(
 				}
 
 				// TODO: Check this information at load time
-
 				if len(decodedValue) > 1 {
 					log.Fatal("only 1 value allowed")
 				}
@@ -318,7 +308,7 @@ func (l *loader) startHashMap(
 				continue
 			}
 
-			m.MyChan <- version.MapEntries{
+			l.printMonitor.MyChan <- version.MapEntries{
 				Name:    name,
 				Entries: entries,
 			}

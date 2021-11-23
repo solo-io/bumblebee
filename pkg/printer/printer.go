@@ -11,7 +11,8 @@ import (
 	"github.com/solo-io/ebpf/pkg/internal/version"
 )
 
-const titleText = ` ______     ______     ______   ______   ______     ______   __        
+const titleText = `
+ ______     ______     ______   ______   ______     ______   __        
 /\  ___\   /\  == \   /\  == \ /\  ___\ /\  ___\   /\__  _\ /\ \       
 \ \  __\   \ \  __<   \ \  _-/ \ \  __\ \ \ \____  \/_/\ \/ \ \ \____  
  \ \_____\  \ \_____\  \ \_\    \ \_\    \ \_____\    \ \_\  \ \_____\ 
@@ -37,7 +38,7 @@ type Monitor struct {
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
-	title := tview.NewTextView()
+	title := tview.NewTextView().SetTextAlign(tview.AlignCenter).SetTextColor(tcell.ColorLightCyan)
 	fmt.Fprint(title, titleText)
 	flex.AddItem(title, 10, 0, false)
 	return Monitor{
@@ -72,6 +73,8 @@ func (m *Monitor) Watch() {
 		newMapVal.Hash = newPrintHash
 		mapOfMaps[r.Name] = newMapVal
 
+		// sort fields in key struct for consistent render order
+		// TODO: use the BTF map info for this
 		entry := r.Entries[0]
 		theekMap := entry.Key
 		keyStructKeys := []string{}
@@ -80,19 +83,24 @@ func (m *Monitor) Watch() {
 		}
 		sort.Strings(keyStructKeys)
 
+		// get the instance of Table we will update
 		table := newMapVal.Table
-		// table.ScrollToBeginning().Clear()
+		// render the first row containing the keys
 		c := 0
 		for i, k := range keyStructKeys {
 			cell := tview.NewTableCell(k).SetExpansion(1).SetTextColor(tcell.ColorYellow)
-			// table.SetCellSimple(0, i, k)
 			table.SetCell(0, i, cell)
 			c++
 		}
+		// last column in first row is value of the map (i.e. the counter/gauge/etc.)
 		cell := tview.NewTableCell("value").SetExpansion(1).SetTextColor(tcell.ColorYellow)
 		table.SetCell(0, c, cell)
+
+		// now render each row according to the Entries we were sent by the loader
+		// TODO: should we sort/order this in any specific way? right now they are
+		// simply in iteration order of the underlying BTF map
 		for r, entry := range newMapVal.Entries {
-			r++
+			r++ // increment the row index as the 0-th row is taken by the header
 			ekMap := entry.Key
 			eVal := entry.Value
 			c := 0
