@@ -11,14 +11,23 @@ import (
 	"github.com/solo-io/ebpf/pkg/internal/version"
 )
 
-const titleText = `
+const titleText = `[aqua]
  ______     ______     ______   ______   ______     ______   __        
 /\  ___\   /\  == \   /\  == \ /\  ___\ /\  ___\   /\__  _\ /\ \       
 \ \  __\   \ \  __<   \ \  _-/ \ \  __\ \ \ \____  \/_/\ \/ \ \ \____  
  \ \_____\  \ \_____\  \ \_\    \ \_\    \ \_____\    \ \_\  \ \_____\ 
   \/_____/   \/_____/   \/_/     \/_/     \/_____/     \/_/   \/_____/ 
 
-                              					(powered by solo.io)  `
+                              					 [aquamarine](powered by solo.io) `
+
+const helpText = `
+
+[crimson]version:   [white]1337
+[crimson]Lorem:     [white]Ipsum
+[chartreuse]<ctrl-n>   [white]Cycle through tables
+
+
+`
 
 type MapValue struct {
 	Hash    uint64
@@ -70,9 +79,19 @@ func NewMonitor() Monitor {
 		// }
 		return event
 	})
-	title := tview.NewTextView().SetTextAlign(tview.AlignCenter).SetTextColor(tcell.ColorLightCyan)
+	title := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
+	// SetTextColor(tcell.ColorLightCyan)
+	// title.SetBorder(true)
+	help := tview.NewTextView().
+		SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
+	// SetTextColor(tcell.ColorWhite)
+	// help.SetBorder(true)
 	fmt.Fprint(title, titleText)
-	flex.AddItem(title, 10, 0, false)
+	fmt.Fprint(help, helpText)
+	flex.AddItem(tview.NewFlex().
+		AddItem(title, 0, 1, false).
+		AddItem(help, 0, 1, false), 9, 0, false)
 	m := Monitor{
 		MyChan: make(chan version.MapEntries),
 		App:    app,
@@ -145,7 +164,7 @@ func (m *Monitor) Watch() {
 			cell := tview.NewTableCell(eVal).SetExpansion(1)
 			table.SetCell(r, c, cell)
 		}
-		m.App.SetFocus(table)
+		// m.App.SetFocus(table)
 		m.App.Draw()
 
 		// print logic
