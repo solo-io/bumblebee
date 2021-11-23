@@ -178,7 +178,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, labelKeys)
 			})
 		default:
 			// TODO: Support more map types
@@ -257,8 +257,9 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	verbose bool,
+	keys []string,
 ) error {
-	l.printMonitor.NewHashMap(name)
+	l.printMonitor.NewHashMap(name, keys)
 	d := l.decoderFactory()
 
 	ticker := time.NewTicker(1 * time.Second)

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/cilium/ebpf"
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/rivo/tview"
@@ -34,6 +35,8 @@ type MapValue struct {
 	Entries []version.KvPair
 	Table   *tview.Table
 	Index   int
+	Type    ebpf.MapType
+	Keys    []string
 }
 
 var mapOfMaps = make(map[string]MapValue)
@@ -125,21 +128,11 @@ func (m *Monitor) Watch() {
 		newMapVal.Hash = newPrintHash
 		mapOfMaps[r.Name] = newMapVal
 
-		// sort fields in key struct for consistent render order
-		// TODO: use the BTF map info for this
-		entry := r.Entries[0]
-		theekMap := entry.Key
-		keyStructKeys := []string{}
-		for kk := range theekMap {
-			keyStructKeys = append(keyStructKeys, kk)
-		}
-		sort.Strings(keyStructKeys)
-
 		// get the instance of Table we will update
 		table := newMapVal.Table
 		// render the first row containing the keys
 		c := 0
-		for i, k := range keyStructKeys {
+		for i, k := range current.Keys {
 			cell := tview.NewTableCell(k).SetExpansion(1).SetTextColor(tcell.ColorYellow)
 			table.SetCell(0, i, cell)
 			c++
@@ -156,7 +149,7 @@ func (m *Monitor) Watch() {
 			ekMap := entry.Key
 			eVal := entry.Value
 			c := 0
-			for kk, kv := range keyStructKeys {
+			for kk, kv := range current.Keys {
 				cell := tview.NewTableCell(ekMap[kv]).SetExpansion(1)
 				table.SetCell(r, kk, cell)
 				c++
@@ -182,7 +175,7 @@ func (m *Monitor) Watch() {
 	fmt.Println("no more entries, closing")
 }
 
-func (m *Monitor) NewHashMap(name string) *tview.Table {
+func (m *Monitor) NewRingBuf(name string) *tview.Table {
 	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
@@ -191,6 +184,30 @@ func (m *Monitor) NewHashMap(name string) *tview.Table {
 	entry := MapValue{
 		Table: table,
 		Index: i,
+		Type:  ebpf.RingBuf,
+	}
+	mapOfMaps[name] = entry
+	mapMutex.Unlock()
+	if i == 0 {
+		m.App.SetFocus(table)
+	}
+	return table
+}
+
+func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
+	keysCopy := make([]string, len(keys))
+	copy(keysCopy, keys)
+	sort.Strings(keysCopy)
+	mapMutex.Lock()
+	table := tview.NewTable().SetFixed(1, 0)
+	table.SetBorder(true).SetTitle(name)
+	m.Flex.AddItem(table, 0, 1, false)
+	i := len(mapOfMaps)
+	entry := MapValue{
+		Table: table,
+		Index: i,
+		Type:  ebpf.Hash,
+		Keys:  keysCopy,
 	}
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
