@@ -25,9 +25,9 @@ const titleText = `[aqua]
 
 const helpText = `
 
-[crimson]version:   [white]1337
-[crimson]Lorem:     [white]Ipsum
-[chartreuse]<ctrl-n>   [white]Cycle through tables
+[chartreuse]<ctrl-n>   [white]Select next table
+[chartreuse]<ctrl-p>   [white]Select previous table
+[chartreuse]<ctrl-c>   [white]Quit
 
 
 `
@@ -51,7 +51,7 @@ type Monitor struct {
 	Flex   *tview.Flex
 }
 
-func nextSlide(app *tview.Application) {
+func nextTable(app *tview.Application) {
 	if len(mapOfMaps) <= 1 {
 		return
 	}
@@ -70,18 +70,36 @@ func nextSlide(app *tview.Application) {
 	mapMutex.RUnlock()
 }
 
+func prevTable(app *tview.Application) {
+	if len(mapOfMaps) <= 1 {
+		return
+	}
+	if currentIndex == 0 {
+		currentIndex = len(mapOfMaps) - 1
+	} else {
+		currentIndex--
+	}
+	mapMutex.RLock()
+	for _, v := range mapOfMaps {
+		if v.Index == currentIndex {
+			app.SetFocus(v.Table)
+			return
+		}
+	}
+	mapMutex.RUnlock()
+}
+
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlN {
-			nextSlide(app)
+			nextTable(app)
+			return nil
+		} else if event.Key() == tcell.KeyCtrlP {
+			prevTable(app)
 			return nil
 		}
-		// } else if event.Key() == tcell.KeyCtrlP {
-		// 	previousSlide()
-		// 	return nil
-		// }
 		return event
 	})
 	title := tview.NewTextView().
