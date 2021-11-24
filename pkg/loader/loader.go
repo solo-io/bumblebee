@@ -266,7 +266,6 @@ func (l *loader) startHashMap(
 	for {
 		select {
 		case <-ticker.C:
-			var entries []version.KvPair
 			mapIter := liveMap.Iterate()
 			for {
 				// Use generic key,value so we can decode ourselves
@@ -302,17 +301,14 @@ func (l *loader) startHashMap(
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
 				thisKvPair := version.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				entries = append(entries, thisKvPair)
+				l.printMonitor.MyChan <- version.MapEntry{
+					Name:  name,
+					Entry: thisKvPair,
+				}
 			}
-
-			if len(entries) == 0 || !verbose {
-				continue
-			}
-
-			l.printMonitor.MyChan <- version.MapEntries{
-				Name:    name,
-				Entries: entries,
-			}
+			// if len(entries) == 0 || !verbose {
+			// 	continue
+			// }
 
 		case <-ctx.Done():
 			fmt.Println("got done in hashmap loop, returning")
