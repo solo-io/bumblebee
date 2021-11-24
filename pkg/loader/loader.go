@@ -2,7 +2,6 @@ package loader
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -151,8 +150,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			// TODO: Support *btf.Union
 			structType := btfMapMap[name].Value.(*btf.Struct)
 			verbose := opts.Verbose
+			labelKeys := getLabelsForBtfStruct(structType)
 			if isCounterMap(bpfMap) {
-				labelKeys := getLabelsForBtfStruct(structType)
 				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
 			} else if isPrintMap(bpfMap) {
 				increment = &noopIncrement{}
@@ -160,7 +159,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			}
 			eg.Go(func() error {
 				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
-				return l.startRingBuf(ctx, structType, coll, increment, name, verbose)
+				return l.startRingBuf(ctx, structType, coll, increment, name, verbose, labelKeys)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -196,7 +195,9 @@ func (l *loader) startRingBuf(
 	incrementInstrument stats.IncrementInstrument,
 	name string,
 	verbose bool,
+	keys []string,
 ) error {
+	l.printMonitor.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
 
@@ -233,20 +234,26 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		if !verbose {
-			continue
+		l.printMonitor.MyChan <- version.MapEntry{
+			Name: name,
+			Entry: version.KvPair{
+				Key: stringLabels,
+			},
 		}
-		printMap := map[string]interface{}{
-			"mapName": name,
-			"entry":   stringLabels,
-		}
+		// if !verbose {
+		// 	continue
+		// }
+		// printMap := map[string]interface{}{
+		// 	"mapName": name,
+		// 	"entry":   stringLabels,
+		// }
 
-		byt, err := json.Marshal(printMap)
-		if err != nil {
-			pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-			continue
-		}
-		fmt.Printf("%s\n", byt)
+		// byt, err := json.Marshal(printMap)
+		// if err != nil {
+		// 	pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
+		// 	continue
+		// }
+		// fmt.Printf("%s\n", byt)
 	}
 }
 
