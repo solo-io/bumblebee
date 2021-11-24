@@ -44,6 +44,7 @@ type MapValue struct {
 var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
+var running bool
 
 type Monitor struct {
 	MyChan chan version.MapEntry
@@ -85,9 +86,12 @@ func NewMonitor() Monitor {
 
 func (m *Monitor) Start() {
 	go func() {
+		running = true
 		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
 			panic(err)
 		}
+		fmt.Println("stopped app")
+		running = false
 	}()
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go m.Watch()
@@ -167,7 +171,9 @@ func (m *Monitor) Watch() {
 			cell := tview.NewTableCell(eVal).SetExpansion(1)
 			table.SetCell(r, c, cell)
 		}
-		m.App.Draw()
+		if running {
+			m.App.Draw()
+		}
 	}
 	fmt.Println("no more entries, closing")
 }

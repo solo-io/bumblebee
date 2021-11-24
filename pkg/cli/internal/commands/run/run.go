@@ -129,7 +129,6 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 		<-stopper
 		fmt.Println("got sigterm or interrupt")
 		cancel()
-		close(m.MyChan)
 	}()
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -150,5 +149,8 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 		promProvider,
 		m,
 	)
-	return progLoader.Load(ctx, progOptions)
+	err = progLoader.Load(ctx, progOptions)
+	close(m.MyChan)
+	return err
+
 }
