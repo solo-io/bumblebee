@@ -51,44 +51,6 @@ type Monitor struct {
 	Flex   *tview.Flex
 }
 
-func nextTable(app *tview.Application) {
-	if len(mapOfMaps) <= 1 {
-		return
-	}
-	if currentIndex+1 == len(mapOfMaps) {
-		currentIndex = 0
-	} else {
-		currentIndex++
-	}
-	mapMutex.RLock()
-	for _, v := range mapOfMaps {
-		if v.Index == currentIndex {
-			app.SetFocus(v.Table)
-			return
-		}
-	}
-	mapMutex.RUnlock()
-}
-
-func prevTable(app *tview.Application) {
-	if len(mapOfMaps) <= 1 {
-		return
-	}
-	if currentIndex == 0 {
-		currentIndex = len(mapOfMaps) - 1
-	} else {
-		currentIndex--
-	}
-	mapMutex.RLock()
-	for _, v := range mapOfMaps {
-		if v.Index == currentIndex {
-			app.SetFocus(v.Table)
-			return
-		}
-	}
-	mapMutex.RUnlock()
-}
-
 func NewMonitor() Monitor {
 	app := tview.NewApplication()
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
@@ -256,6 +218,44 @@ func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
 		m.App.SetFocus(table)
 	}
 	return table
+}
+
+func nextTable(app *tview.Application) {
+	if len(mapOfMaps) <= 1 {
+		return
+	}
+	if currentIndex+1 == len(mapOfMaps) {
+		currentIndex = 0
+	} else {
+		currentIndex++
+	}
+	mapMutex.RLock()
+	for _, v := range mapOfMaps {
+		if v.Index == currentIndex {
+			app.SetFocus(v.Table)
+			return
+		}
+	}
+	mapMutex.RUnlock()
+}
+
+func prevTable(app *tview.Application) {
+	if len(mapOfMaps) <= 1 {
+		return
+	}
+	if currentIndex == 0 {
+		currentIndex = len(mapOfMaps) - 1
+	} else {
+		currentIndex--
+	}
+	mapMutex.RLock()
+	for _, v := range mapOfMaps {
+		if v.Index == currentIndex {
+			app.SetFocus(v.Table)
+			return
+		}
+	}
+	mapMutex.RUnlock()
 }
 
 // print logic
