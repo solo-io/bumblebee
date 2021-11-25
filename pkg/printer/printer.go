@@ -1,6 +1,7 @@
 package printer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -52,8 +53,14 @@ type Monitor struct {
 	Flex   *tview.Flex
 }
 
-func NewMonitor() Monitor {
+func NewMonitor(cancel context.CancelFunc) Monitor {
 	app := tview.NewApplication()
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlC {
+			cancel()
+		}
+		return event
+	})
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlN {

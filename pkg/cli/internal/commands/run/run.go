@@ -120,7 +120,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	m := printer.NewMonitor()
+	m := printer.NewMonitor(cancel)
 
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
@@ -128,7 +128,6 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
 	go func() {
 		<-stopper
 		fmt.Println("got sigterm or interrupt")
-		cancel()
 	}()
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
