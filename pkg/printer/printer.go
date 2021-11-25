@@ -134,6 +134,10 @@ func (m *Monitor) Watch() {
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
 			m.renderRingBuf(r)
 		}
+		// update the screen if the UI is still running
+		if running {
+			m.App.Draw()
+		}
 	}
 	fmt.Println("no more entries, closing")
 }
@@ -164,9 +168,6 @@ func (m *Monitor) renderRingBuf(incoming MapEntry) {
 			table.SetCell(r, kk, cell)
 			c++
 		}
-	}
-	if running {
-		m.App.Draw()
 	}
 }
 
@@ -234,9 +235,6 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 		}
 		cell := tview.NewTableCell(eVal).SetExpansion(1)
 		table.SetCell(r, c, cell)
-	}
-	if running {
-		m.App.Draw()
 	}
 }
 
