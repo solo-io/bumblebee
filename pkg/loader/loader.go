@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
-	"github.com/solo-io/ebpf/pkg/internal/version"
 	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
 	"golang.org/x/sync/errgroup"
@@ -234,9 +233,9 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		l.printMonitor.MyChan <- version.MapEntry{
+		l.printMonitor.MyChan <- printer.MapEntry{
 			Name: name,
-			Entry: version.KvPair{
+			Entry: printer.KvPair{
 				Key: stringLabels,
 			},
 		}
@@ -307,8 +306,8 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				thisKvPair := version.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				l.printMonitor.MyChan <- version.MapEntry{
+				thisKvPair := printer.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
+				l.printMonitor.MyChan <- printer.MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
 				}

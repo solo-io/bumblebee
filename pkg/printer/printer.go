@@ -12,7 +12,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/rivo/tview"
-	"github.com/solo-io/ebpf/pkg/internal/version"
 )
 
 const titleText = `[aqua]
@@ -33,9 +32,25 @@ const helpText = `
 
 `
 
+type KvPair struct {
+	Key   map[string]string `json:"key"`
+	Value string            `json:"value"`
+	Hash  uint64
+}
+
+type MapEntries struct {
+	Name    string
+	Entries []KvPair
+}
+
+type MapEntry struct {
+	Name  string
+	Entry KvPair
+}
+
 type MapValue struct {
 	Hash    uint64
-	Entries []version.KvPair
+	Entries []KvPair
 	Table   *tview.Table
 	Index   int
 	Type    ebpf.MapType
@@ -48,7 +63,7 @@ var currentIndex int
 var running bool
 
 type Monitor struct {
-	MyChan chan version.MapEntry
+	MyChan chan MapEntry
 	App    *tview.Application
 	Flex   *tview.Flex
 }
@@ -84,7 +99,7 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		AddItem(title, 0, 1, false).
 		AddItem(help, 0, 1, false), 9, 0, false)
 	m := Monitor{
-		MyChan: make(chan version.MapEntry),
+		MyChan: make(chan MapEntry),
 		App:    app,
 		Flex:   flex,
 	}
@@ -123,7 +138,7 @@ func (m *Monitor) Watch() {
 	fmt.Println("no more entries, closing")
 }
 
-func (m *Monitor) renderRingBuf(incoming version.MapEntry) {
+func (m *Monitor) renderRingBuf(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -155,7 +170,7 @@ func (m *Monitor) renderRingBuf(incoming version.MapEntry) {
 	}
 }
 
-func (m *Monitor) renderHash(incoming version.MapEntry) {
+func (m *Monitor) renderHash(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
@@ -232,7 +247,7 @@ func (m *Monitor) NewRingBuf(name string, keys []string) *tview.Table {
 	sort.Strings(keysCopy)
 
 	// create the array for containing the entries
-	entries := make([]version.KvPair, 0, 10)
+	entries := make([]KvPair, 0, 10)
 
 	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
@@ -261,7 +276,7 @@ func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
 	sort.Strings(keysCopy)
 
 	// create the array for containing the entries
-	entries := make([]version.KvPair, 0, 10)
+	entries := make([]KvPair, 0, 10)
 
 	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
