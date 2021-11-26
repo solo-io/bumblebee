@@ -265,10 +265,10 @@ func (m *Monitor) NewRingBuf(name string, keys []string) *tview.Table {
 	// create the array for containing the entries
 	entries := make([]KvPair, 0, 10)
 
-	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
-	m.Flex.AddItem(table, 0, 1, false)
+
+	mapMutex.Lock()
 	i := len(mapOfMaps)
 	entry := MapValue{
 		Table:   table,
@@ -279,9 +279,13 @@ func (m *Monitor) NewRingBuf(name string, keys []string) *tview.Table {
 	}
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
-	if i == 0 {
-		m.App.SetFocus(table)
-	}
+
+	m.App.QueueUpdateDraw(func() {
+		m.Flex.AddItem(table, 0, 1, false)
+		if i == 0 {
+			m.App.SetFocus(table)
+		}
+	})
 	return table
 }
 
@@ -294,10 +298,10 @@ func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
 	// create the array for containing the entries
 	entries := make([]KvPair, 0, 10)
 
-	mapMutex.Lock()
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
-	m.Flex.AddItem(table, 0, 1, false)
+
+	mapMutex.Lock()
 	i := len(mapOfMaps)
 	entry := MapValue{
 		Table:   table,
@@ -308,9 +312,13 @@ func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
 	}
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
-	if i == 0 {
-		m.App.SetFocus(table)
-	}
+
+	m.App.QueueUpdateDraw(func() {
+		m.Flex.AddItem(table, 0, 1, false)
+		if i == 0 {
+			m.App.SetFocus(table)
+		}
+	})
 	return table
 }
 

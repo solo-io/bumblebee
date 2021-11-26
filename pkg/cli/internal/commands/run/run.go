@@ -85,14 +85,10 @@ func getProgram(
 		programSpinner *pterm.SpinnerPrinter
 	)
 	fetchText := tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
-	// m.App.QueueUpdate(func() { m.InfoPanel.AddItem(fetchText, 0, 1, false) })
 	m.InfoPanel.AddItem(fetchText, 1, 0, false)
 	_, err := os.Stat(progLocation)
 	if err != nil {
 		fmt.Fprintf(fetchText, "Fetching program from registry: %s", progLocation)
-		// programSpinner, _ = pterm.DefaultSpinner.Start(
-		// 	fmt.Sprintf("Fetching program from registry: %s", progLocation),
-		// )
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -110,9 +106,6 @@ func getProgram(
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
 		fmt.Fprintf(fetchText, "Fetching program from file: %s", progLocation)
-		// programSpinner, _ = pterm.DefaultSpinner.Start(
-		// 	fmt.Sprintf("Fetching program from file: %s", progLocation),
-		// )
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
@@ -123,7 +116,6 @@ func getProgram(
 	}
 	fetchText.Clear()
 	fmt.Fprintf(fetchText, "successfully Fetching program from: %s", progLocation)
-	// programSpinner.Success()
 
 	return progReader, nil
 }
