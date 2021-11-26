@@ -63,9 +63,10 @@ var currentIndex int
 var running bool
 
 type Monitor struct {
-	MyChan chan MapEntry
-	App    *tview.Application
-	Flex   *tview.Flex
+	MyChan    chan MapEntry
+	App       *tview.Application
+	Flex      *tview.Flex
+	InfoPanel *tview.Flex
 }
 
 func NewMonitor(cancel context.CancelFunc) Monitor {
@@ -87,21 +88,38 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		}
 		return event
 	})
+
+	header := tview.NewGrid().SetRows(0).SetColumns(0, 0, 0)
 	title := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
-	// title.SetBorder(true)
+	fmt.Fprint(title, titleText)
+
+	infoPanel := tview.NewFlex().SetDirection(tview.FlexRow)
+	emptyLine := tview.NewTextView()
+	fmt.Fprintln(emptyLine, "")
+	fmt.Fprintln(emptyLine, "hello world")
+	infoPanel.AddItem(emptyLine, 2, 0, false)
+
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
-	// help.SetBorder(true)
-	fmt.Fprint(title, titleText)
 	fmt.Fprint(help, helpText)
-	flex.AddItem(tview.NewFlex().
-		AddItem(title, 0, 1, false).
-		AddItem(help, 0, 1, false), 9, 0, false)
+
+	header.AddItem(title, 0, 0, 1, 1, 0, 0, false)
+	header.AddItem(infoPanel, 0, 1, 1, 1, 0, 0, false)
+	header.AddItem(help, 0, 2, 1, 1, 0, 0, false)
+
+	flex.AddItem(header, 9, 0, false)
+	// flex.AddItem(tview.NewFlex().
+	// 	AddItem(title, 0, 1, false).
+	// 	AddItem(tview.NewFlex().
+	// 		AddItem(infoPanel, 0, 1, false).
+	// 		AddItem(help, 0, 1, false), 0, 1, false), 9, 0, false)
+
 	m := Monitor{
-		MyChan: make(chan MapEntry),
-		App:    app,
-		Flex:   flex,
+		MyChan:    make(chan MapEntry),
+		App:       app,
+		Flex:      flex,
+		InfoPanel: infoPanel,
 	}
 	return m
 }

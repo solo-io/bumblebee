@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/pterm/pterm"
+	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -73,11 +73,16 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
-	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
+	// loaderProgress, _ := pterm.DefaultSpinner.Start("")
+
+	loadText := tview.NewTextView().SetChangedFunc(func() { l.printMonitor.App.Draw() })
+	l.printMonitor.InfoPanel.AddItem(loadText, 1, 0, false)
+	fmt.Fprintln(loadText, "Loading BPF program and maps into Kernel")
+
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
-		loaderProgress.Fail()
+		// loaderProgress.Fail()
 		return err
 	}
 
@@ -95,13 +100,17 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		loaderProgress.Fail()
+		// loaderProgress.Fail()
 		return err
 	}
 	defer coll.Close()
-	loaderProgress.Success()
+	loadText.Clear()
+	fmt.Fprintln(loadText, "success Loading BPF program and maps into Kernel")
 
-	linkerProgress, _ := pterm.DefaultSpinner.Start("Linking BPF functions to associated probe/tracepoint")
+	// linkerProgress, _ := pterm.DefaultSpinner.Start
+	linkText := tview.NewTextView().SetChangedFunc(func() { l.printMonitor.App.Draw() })
+	l.printMonitor.InfoPanel.AddItem(linkText, 1, 0, false)
+	fmt.Fprintln(linkText, "Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {
@@ -111,26 +120,29 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					linkerProgress.Fail()
+					// linkerProgress.Fail()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					linkerProgress.Fail()
+					// linkerProgress.Fail()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
 			}
 			defer kp.Close()
 		default:
-			linkerProgress.Fail()
+			// linkerProgress.Fail()
 			return errors.New("only kprobe programs supported")
 		}
 	}
-	linkerProgress.Success()
+	linkText.Clear()
+	fmt.Fprintf(linkText, "success Linking BPF functions to associated probe/tracepoint")
+	// linkerProgress.Success()
 
+	l.printMonitor.InfoPanel.AddItem(tview.NewBox(), 0, 1, false)
 	// render the TUI and start the event loop
-	l.printMonitor.Start()
+	// l.printMonitor.Start()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range spec.Maps {
@@ -157,7 +169,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				verbose = true
 			}
 			eg.Go(func() error {
-				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
+				// pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
 				return l.startRingBuf(ctx, structType, coll, increment, name, verbose, labelKeys)
 			})
 		case ebpf.Array:
@@ -169,10 +181,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			}
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap) {
-				pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
+				// pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
 			} else if isGaugeMap(bpfMap) {
-				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
+				// pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
@@ -213,7 +225,7 @@ func (l *loader) startRingBuf(
 		<-ctx.Done()
 
 		if err := rd.Close(); err != nil {
-			pterm.Warning.Printf("closing ringbuf reader: %s", err)
+			// pterm.Warning.Printf("closing ringbuf reader: %s", err)
 		}
 	}()
 
@@ -223,7 +235,7 @@ func (l *loader) startRingBuf(
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return nil
 			}
-			pterm.Warning.Printf("reading from reader: %s", err)
+			// pterm.Warning.Printf("reading from reader: %s", err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)

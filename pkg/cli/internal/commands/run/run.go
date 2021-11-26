@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
+	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
@@ -59,31 +60,39 @@ $ run localhost:5000/oras:ringbuf-demo
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
+	ctx, cancel := context.WithCancel(cmd.Context())
+	m := printer.NewMonitor(cancel)
+	m.Start()
 	// gauranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
+	progReader, err := getProgram(ctx, opts.general, progLocation, m)
 	if err != nil {
 		return err
 	}
 
-	return runProg(cmd.Context(), progReader, opts.Debug)
+	return runProg(ctx, cancel, progReader, opts.Debug, m)
 }
 
 func getProgram(
 	ctx context.Context,
 	opts *options.GeneralOptions,
 	progLocation string,
+	m printer.Monitor,
 ) (io.ReaderAt, error) {
 
 	var (
 		progReader     io.ReaderAt
 		programSpinner *pterm.SpinnerPrinter
 	)
+	fetchText := tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+	// m.App.QueueUpdate(func() { m.InfoPanel.AddItem(fetchText, 0, 1, false) })
+	m.InfoPanel.AddItem(fetchText, 1, 0, false)
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from registry: %s", progLocation),
-		)
+		fmt.Fprintf(fetchText, "Fetching program from registry: %s", progLocation)
+		// programSpinner, _ = pterm.DefaultSpinner.Start(
+		// 	fmt.Sprintf("Fetching program from registry: %s", progLocation),
+		// )
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -100,9 +109,10 @@ func getProgram(
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from file: %s", progLocation),
-		)
+		fmt.Fprintf(fetchText, "Fetching program from file: %s", progLocation)
+		// programSpinner, _ = pterm.DefaultSpinner.Start(
+		// 	fmt.Sprintf("Fetching program from file: %s", progLocation),
+		// )
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
@@ -111,16 +121,14 @@ func getProgram(
 			return nil, err
 		}
 	}
-	programSpinner.Success()
+	fetchText.Clear()
+	fmt.Fprintf(fetchText, "successfully Fetching program from: %s", progLocation)
+	// programSpinner.Success()
 
 	return progReader, nil
 }
 
-func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
-
-	ctx, cancel := context.WithCancel(ctx)
-
-	m := printer.NewMonitor(cancel)
+func runProg(ctx context.Context, cancel context.CancelFunc, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
 
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
