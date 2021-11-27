@@ -257,39 +257,14 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 }
 
 func (m *Monitor) NewRingBuf(name string, keys []string) *tview.Table {
-	// get a copy of keys, sort for consistent key/label ordering
-	keysCopy := make([]string, len(keys))
-	copy(keysCopy, keys)
-	sort.Strings(keysCopy)
-
-	// create the array for containing the entries
-	entries := make([]KvPair, 0, 10)
-
-	table := tview.NewTable().SetFixed(1, 0)
-	table.SetBorder(true).SetTitle(name)
-
-	mapMutex.Lock()
-	i := len(mapOfMaps)
-	entry := MapValue{
-		Table:   table,
-		Index:   i,
-		Type:    ebpf.RingBuf,
-		Keys:    keysCopy,
-		Entries: entries,
-	}
-	mapOfMaps[name] = entry
-	mapMutex.Unlock()
-
-	m.App.QueueUpdateDraw(func() {
-		m.Flex.AddItem(table, 0, 1, false)
-		if i == 0 {
-			m.App.SetFocus(table)
-		}
-	})
-	return table
+	return m.makeMapValue(name, keys, ebpf.RingBuf)
 }
 
 func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
+	return m.makeMapValue(name, keys, ebpf.Hash)
+}
+
+func (m *Monitor) makeMapValue(name string, keys []string, mapType ebpf.MapType) *tview.Table {
 	// get a copy of keys, sort for consistent key/label ordering
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)
@@ -306,7 +281,7 @@ func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
 	entry := MapValue{
 		Table:   table,
 		Index:   i,
-		Type:    ebpf.Hash,
+		Type:    mapType,
 		Keys:    keysCopy,
 		Entries: entries,
 	}
