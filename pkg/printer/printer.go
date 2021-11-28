@@ -148,7 +148,6 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
 	fmt.Fprint(title, titleText)
 
-	// infoPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	infoPanel := tview.NewGrid().SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0).SetColumns(0)
 	fillInfoPanel(infoPanel)
 	infoPanel.AddItem(fetchTextPlaceholder, 2, 0, 1, 1, 0, 0, false)
@@ -164,11 +163,6 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 	header.AddItem(help, 0, 2, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 9, 0, false)
-	// flex.AddItem(tview.NewFlex().
-	// 	AddItem(title, 0, 1, false).
-	// 	AddItem(tview.NewFlex().
-	// 		AddItem(infoPanel, 0, 1, false).
-	// 		AddItem(help, 0, 1, false), 0, 1, false), 9, 0, false)
 
 	m := Monitor{
 		MyChan:    make(chan MapEntry),
@@ -188,8 +182,6 @@ func (m *Monitor) Start() {
 		fmt.Println("stopped app")
 		running = false
 	}()
-	// goroutine for updating the TUI data based on updates from loader watching maps
-	go m.Watch()
 }
 
 func (m *Monitor) Watch() {

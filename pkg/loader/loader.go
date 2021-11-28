@@ -72,8 +72,6 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
-	// loaderProgress, _ := pterm.DefaultSpinner.Start("")
-
 	l.printMonitor.SetLoadText("Loading BPF program and maps into Kernel")
 
 	// Generate the spec from out eBPF elf file
@@ -97,13 +95,13 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		// loaderProgress.Fail()
+		l.printMonitor.SetLoadText("failure Loading BPF program and maps into Kernel")
+		l.printMonitor.App.Stop()
 		return err
 	}
 	defer coll.Close()
 	l.printMonitor.SetLoadText("success Loading BPF program and maps into Kernel")
 
-	// linkerProgress, _ := pterm.DefaultSpinner.Start
 	l.printMonitor.SetLinkText("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
@@ -114,19 +112,22 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					// linkerProgress.Fail()
+					l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
+					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					// linkerProgress.Fail()
+					l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
+					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
 			}
 			defer kp.Close()
 		default:
-			// linkerProgress.Fail()
+			l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
+			l.printMonitor.App.Stop()
 			return errors.New("only kprobe programs supported")
 		}
 	}

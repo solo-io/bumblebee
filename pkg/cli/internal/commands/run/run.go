@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
@@ -61,7 +60,6 @@ $ run localhost:5000/oras:ringbuf-demo
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	m := printer.NewMonitor(cancel)
-	m.Start()
 	// gauranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(ctx, opts.general, progLocation, m)
@@ -79,10 +77,7 @@ func getProgram(
 	m printer.Monitor,
 ) (io.ReaderAt, error) {
 
-	var (
-		progReader     io.ReaderAt
-		programSpinner *pterm.SpinnerPrinter
-	)
+	var progReader io.ReaderAt
 	_, err := os.Stat(progLocation)
 	if err != nil {
 		m.SetFetchText(fmt.Sprintf("Fetching program from registry: %s", progLocation))
@@ -96,8 +91,7 @@ func getProgram(
 			opts.AuthOptions.ToRegistryOptions(),
 		)
 		if err != nil {
-			programSpinner.UpdateText("Failed to load OCI image")
-			programSpinner.Fail()
+			m.SetFetchText("Failed to load OCI image")
 			return nil, err
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
@@ -106,8 +100,7 @@ func getProgram(
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
-			programSpinner.UpdateText("Failed to open BPF file")
-			programSpinner.Fail()
+			m.SetFetchText("Failed to open BPF file")
 			return nil, err
 		}
 	}
@@ -145,6 +138,10 @@ func runProg(ctx context.Context, cancel context.CancelFunc, progReader io.Reade
 		promProvider,
 		m,
 	)
+	// begin rendering the TUI
+	m.Start()
+	// goroutine for updating the TUI data based on updates from loader watching maps
+	go m.Watch()
 	err = progLoader.Load(ctx, progOptions)
 	close(m.MyChan)
 	return err
