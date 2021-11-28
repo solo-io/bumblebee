@@ -13,7 +13,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -75,9 +74,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	// loaderProgress, _ := pterm.DefaultSpinner.Start("")
 
-	loadText := tview.NewTextView().SetChangedFunc(func() { l.printMonitor.App.Draw() })
-	l.printMonitor.InfoPanel.AddItem(loadText, 1, 0, false)
-	fmt.Fprintln(loadText, "Loading BPF program and maps into Kernel")
+	l.printMonitor.SetLoadText("Loading BPF program and maps into Kernel")
 
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
@@ -104,13 +101,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		return err
 	}
 	defer coll.Close()
-	loadText.Clear()
-	fmt.Fprintln(loadText, "success Loading BPF program and maps into Kernel")
+	l.printMonitor.SetLoadText("success Loading BPF program and maps into Kernel")
 
 	// linkerProgress, _ := pterm.DefaultSpinner.Start
-	linkText := tview.NewTextView().SetChangedFunc(func() { l.printMonitor.App.Draw() })
-	l.printMonitor.InfoPanel.AddItem(linkText, 1, 0, false)
-	fmt.Fprintln(linkText, "Linking BPF functions to associated probe/tracepoint")
+	l.printMonitor.SetLinkText("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {
@@ -136,13 +130,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			return errors.New("only kprobe programs supported")
 		}
 	}
-	linkText.Clear()
-	fmt.Fprintf(linkText, "success Linking BPF functions to associated probe/tracepoint")
-	// linkerProgress.Success()
-
-	l.printMonitor.InfoPanel.AddItem(tview.NewBox(), 0, 1, false)
-	// render the TUI and start the event loop
-	// l.printMonitor.Start()
+	l.printMonitor.SetLinkText("success Linking BPF functions to associated probe/tracepoint")
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range spec.Maps {

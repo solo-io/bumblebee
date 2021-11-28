@@ -61,12 +61,66 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 var running bool
+var fetchTextPlaceholder = tview.NewBox()
+var fetchText *tview.TextView
+var loadTextPlaceholder = tview.NewBox()
+var loadText *tview.TextView
+var linkTextPlaceholder = tview.NewBox()
+var linkText *tview.TextView
 
 type Monitor struct {
 	MyChan    chan MapEntry
 	App       *tview.Application
 	Flex      *tview.Flex
-	InfoPanel *tview.Flex
+	InfoPanel *tview.Grid
+}
+
+func (m *Monitor) SetLinkText(text string) {
+	if linkText == nil {
+		m.InfoPanel.RemoveItem(linkTextPlaceholder)
+		linkText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(linkText, 4, 0, 1, 1, 0, 0, false)
+	} else {
+		linkText.Clear()
+	}
+	fmt.Fprint(linkText, text)
+}
+
+func (m *Monitor) SetLoadText(text string) {
+	if loadText == nil {
+		m.InfoPanel.RemoveItem(loadTextPlaceholder)
+		loadText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(loadText, 3, 0, 1, 1, 0, 0, false)
+	} else {
+		loadText.Clear()
+	}
+	fmt.Fprint(loadText, text)
+}
+
+func (m *Monitor) SetFetchText(text string) {
+	if fetchText == nil {
+		m.InfoPanel.RemoveItem(fetchTextPlaceholder)
+		fetchText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
+	} else {
+		fetchText.Clear()
+	}
+	fmt.Fprint(fetchText, text)
+}
+
+func fillInfoPanel(infoPanel *tview.Grid) {
+	empty0 := tview.NewBox()
+	empty1 := tview.NewBox()
+	empty5 := tview.NewBox()
+	empty6 := tview.NewBox()
+	empty7 := tview.NewBox()
+	empty8 := tview.NewBox()
+	infoPanel.AddItem(empty0, 0, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty1, 1, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty5, 5, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
 }
 
 func NewMonitor(cancel context.CancelFunc) Monitor {
@@ -94,11 +148,12 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
 	fmt.Fprint(title, titleText)
 
-	infoPanel := tview.NewFlex().SetDirection(tview.FlexRow)
-	emptyLine := tview.NewTextView()
-	fmt.Fprintln(emptyLine, "")
-	fmt.Fprintln(emptyLine, "hello world")
-	infoPanel.AddItem(emptyLine, 2, 0, false)
+	// infoPanel := tview.NewFlex().SetDirection(tview.FlexRow)
+	infoPanel := tview.NewGrid().SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0).SetColumns(0)
+	fillInfoPanel(infoPanel)
+	infoPanel.AddItem(fetchTextPlaceholder, 2, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(loadTextPlaceholder, 3, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(linkTextPlaceholder, 4, 0, 1, 1, 0, 0, false)
 
 	help := tview.NewTextView().
 		SetTextAlign(tview.AlignLeft).SetDynamicColors(true)

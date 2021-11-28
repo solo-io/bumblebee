@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
-	"github.com/rivo/tview"
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
@@ -84,11 +83,9 @@ func getProgram(
 		progReader     io.ReaderAt
 		programSpinner *pterm.SpinnerPrinter
 	)
-	fetchText := tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
-	m.InfoPanel.AddItem(fetchText, 1, 0, false)
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		fmt.Fprintf(fetchText, "Fetching program from registry: %s", progLocation)
+		m.SetFetchText(fmt.Sprintf("Fetching program from registry: %s", progLocation))
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -105,7 +102,7 @@ func getProgram(
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
-		fmt.Fprintf(fetchText, "Fetching program from file: %s", progLocation)
+		m.SetFetchText(fmt.Sprintf("Fetching program from file: %s", progLocation))
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
@@ -114,8 +111,8 @@ func getProgram(
 			return nil, err
 		}
 	}
-	fetchText.Clear()
-	fmt.Fprintf(fetchText, "successfully Fetching program from: %s", progLocation)
+	//TODO: handle both program/registry text here...
+	m.SetFetchText(fmt.Sprintf("success Fetching program from file: %s", progLocation))
 
 	return progReader, nil
 }
