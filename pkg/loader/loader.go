@@ -22,8 +22,8 @@ import (
 type LoadOptions struct {
 	// Program bytes to load
 	EbpfProg io.ReaderAt
-	// Log all events, this can be very loud
-	Verbose bool
+	// Log to debug.log file
+	Debug bool
 }
 
 type Loader interface {
@@ -77,7 +77,6 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
-		// loaderProgress.Fail()
 		return err
 	}
 
@@ -156,16 +155,14 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 			var increment stats.IncrementInstrument
 			// TODO: Support *btf.Union
 			structType := btfMapMap[name].Value.(*btf.Struct)
-			verbose := opts.Verbose
 			labelKeys := getLabelsForBtfStruct(structType)
 			if isCounterMap(bpfMap) {
 				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
 			} else if isPrintMap(bpfMap) {
 				increment = &noopIncrement{}
-				verbose = true
 			}
 			eg.Go(func() error {
-				return l.startRingBuf(ctx, structType, coll, increment, name, verbose, labelKeys)
+				return l.startRingBuf(ctx, structType, coll, increment, name, labelKeys)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -182,7 +179,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 			}
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, labelKeys)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, labelKeys)
 			})
 		default:
 			// TODO: Support more map types
@@ -202,7 +199,6 @@ func (l *loader) startRingBuf(
 	coll *ebpf.Collection,
 	incrementInstrument stats.IncrementInstrument,
 	name string,
-	verbose bool,
 	keys []string,
 ) error {
 	l.printMonitor.NewRingBuf(name, keys)
@@ -222,7 +218,7 @@ func (l *loader) startRingBuf(
 		<-ctx.Done()
 
 		if err := rd.Close(); err != nil {
-			// pterm.Warning.Printf("closing ringbuf reader: %s", err)
+			log.Printf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
 	}()
 
@@ -232,7 +228,7 @@ func (l *loader) startRingBuf(
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return nil
 			}
-			// pterm.Warning.Printf("reading from reader: %s", err)
+			log.Printf("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
@@ -257,7 +253,6 @@ func (l *loader) startHashMap(
 	liveMap *ebpf.Map,
 	instrument stats.SetInstrument,
 	name string,
-	verbose bool,
 	keys []string,
 ) error {
 	l.printMonitor.NewHashMap(name, keys)

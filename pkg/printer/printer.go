@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"sync"
 
@@ -69,6 +68,7 @@ type Monitor struct {
 	App       *tview.Application
 	Flex      *tview.Flex
 	InfoPanel *tview.Grid
+	Debug     bool
 }
 
 func (m *Monitor) SetLinkText(text string) {
@@ -104,7 +104,7 @@ func (m *Monitor) SetFetchText(text string) {
 	fmt.Fprint(fetchText, text)
 }
 
-func NewMonitor(cancel context.CancelFunc) Monitor {
+func NewMonitor(cancel context.CancelFunc, debug bool) Monitor {
 	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -154,6 +154,7 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		Flex:      flex,
 		InfoPanel: infoPanel,
 		CloseChan: closeChan,
+		Debug:     debug,
 	}
 	return m
 }
@@ -168,14 +169,6 @@ func (m *Monitor) Start() {
 }
 
 func (m *Monitor) Watch() {
-	f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	defer f.Close()
-
-	log.SetOutput(f)
-	log.Println("This is a test log entry")
 	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			m.renderHash(r)
@@ -221,7 +214,9 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
-		log.Printf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash)
+		if m.Debug {
+			log.Printf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash)
+		}
 		incoming.Entry.Hash = newHash
 		current.Entries = append(current.Entries, incoming.Entry)
 	} else {
@@ -230,22 +225,30 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 		var found = false
 		for idx = range current.Entries {
 			if current.Entries[idx].Hash == incomingHash {
-				log.Printf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash)
+				if m.Debug {
+					log.Printf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash)
+				}
 				found = true
 				break
 			}
 		}
 		if found {
 			if incoming.Entry.Value == current.Entries[idx].Value {
-				log.Printf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value)
+				if m.Debug {
+					log.Printf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value)
+				}
 				return
 			}
-			log.Printf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value)
+			if m.Debug {
+				log.Printf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value)
+			}
 			current.Entries[idx].Value = incoming.Entry.Value
 		} else {
 			newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
 			incoming.Entry.Hash = newHash
-			log.Printf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash)
+			if m.Debug {
+				log.Printf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash)
+			}
 			current.Entries = append(current.Entries, incoming.Entry)
 		}
 	}

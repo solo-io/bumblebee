@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,7 +28,7 @@ type runOptions struct {
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
-	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Output all user space map reads to the console for debugging purposes")
+	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -58,9 +59,18 @@ $ run localhost:5000/oras:ringbuf-demo
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
+	if opts.Debug {
+		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+	}
+
 	ctx, cancel := context.WithCancel(cmd.Context())
-	m := printer.NewMonitor(cancel)
-	// gauranteed to be length 1
+	m := printer.NewMonitor(cancel, opts.Debug)
+	// guaranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(ctx, opts.general, progLocation, m)
 	if err != nil {
@@ -125,7 +135,7 @@ func runProg(ctx context.Context, cancel context.CancelFunc, progReader io.Reade
 	}
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
-		Verbose:  debug,
+		Debug:    debug,
 	}
 
 	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
