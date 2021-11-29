@@ -193,7 +193,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
-	close(l.printMonitor.MyChan)
+	close(l.printMonitor.Entries)
 	return err
 }
 
@@ -243,7 +243,7 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		l.printMonitor.MyChan <- printer.MapEntry{
+		l.printMonitor.Entries <- printer.MapEntry{
 			Name: name,
 			Entry: printer.KvPair{
 				Key: stringLabels,
@@ -317,7 +317,7 @@ func (l *loader) startHashMap(
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
 				thisKvPair := printer.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				l.printMonitor.MyChan <- printer.MapEntry{
+				l.printMonitor.Entries <- printer.MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
 				}

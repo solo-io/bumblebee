@@ -38,11 +38,6 @@ type KvPair struct {
 	Hash  uint64
 }
 
-type MapEntries struct {
-	Name    string
-	Entries []KvPair
-}
-
 type MapEntry struct {
 	Name  string
 	Entry KvPair
@@ -69,7 +64,7 @@ var linkTextPlaceholder = tview.NewBox()
 var linkText *tview.TextView
 
 type Monitor struct {
-	MyChan    chan MapEntry
+	Entries   chan MapEntry
 	App       *tview.Application
 	Flex      *tview.Flex
 	InfoPanel *tview.Grid
@@ -165,7 +160,7 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 	flex.AddItem(header, 9, 0, false)
 
 	m := Monitor{
-		MyChan:    make(chan MapEntry),
+		Entries:   make(chan MapEntry),
 		App:       app,
 		Flex:      flex,
 		InfoPanel: infoPanel,
@@ -193,7 +188,7 @@ func (m *Monitor) Watch() {
 
 	log.SetOutput(f)
 	log.Println("This is a test log entry")
-	for r := range m.MyChan {
+	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			m.renderHash(r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
