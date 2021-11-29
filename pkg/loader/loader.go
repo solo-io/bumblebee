@@ -72,7 +72,7 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
-	l.printMonitor.SetLoadText("Loading BPF program and maps into Kernel")
+	l.printMonitor.SetLoadText("[yellow]Loading BPF program and maps into kernel...")
 
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
@@ -94,14 +94,14 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		l.printMonitor.SetLoadText("failure Loading BPF program and maps into Kernel")
+		l.printMonitor.SetLoadText("failure Loading BPF program and maps into kernel")
 		l.printMonitor.App.Stop()
 		return err
 	}
 	defer coll.Close()
-	l.printMonitor.SetLoadText("success Loading BPF program and maps into Kernel")
+	l.printMonitor.SetLoadText("[lime]BPF program and maps successfully loaded into kernel")
 
-	l.printMonitor.SetLinkText("Linking BPF functions to associated probe/tracepoint")
+	l.printMonitor.SetLinkText("[yellow]Linking BPF functions to associated probe/tracepoints...")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {
@@ -130,7 +130,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			return errors.New("only kprobe programs supported")
 		}
 	}
-	l.printMonitor.SetLinkText("success Linking BPF functions to associated probe/tracepoint")
+	l.printMonitor.SetLinkText("[lime]BPF functions successfully linked to associated probe/tracepoints")
 
 	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
 }

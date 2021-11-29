@@ -74,7 +74,7 @@ type Monitor struct {
 func (m *Monitor) SetLinkText(text string) {
 	if linkText == nil {
 		m.InfoPanel.RemoveItem(linkTextPlaceholder)
-		linkText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		linkText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
 		m.InfoPanel.AddItem(linkText, 4, 0, 1, 1, 0, 0, false)
 	} else {
 		linkText.Clear()
@@ -85,7 +85,7 @@ func (m *Monitor) SetLinkText(text string) {
 func (m *Monitor) SetLoadText(text string) {
 	if loadText == nil {
 		m.InfoPanel.RemoveItem(loadTextPlaceholder)
-		loadText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		loadText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
 		m.InfoPanel.AddItem(loadText, 3, 0, 1, 1, 0, 0, false)
 	} else {
 		loadText.Clear()
@@ -96,7 +96,7 @@ func (m *Monitor) SetLoadText(text string) {
 func (m *Monitor) SetFetchText(text string) {
 	if fetchText == nil {
 		m.InfoPanel.RemoveItem(fetchTextPlaceholder)
-		fetchText = tview.NewTextView().SetChangedFunc(func() { m.App.Draw() })
+		fetchText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
 		m.InfoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
 	} else {
 		fetchText.Clear()
@@ -164,7 +164,7 @@ func (m *Monitor) Start() {
 		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
 			panic(err)
 		}
-		fmt.Println("stopped app")
+		// fmt.Println("stopped app")
 	}()
 }
 

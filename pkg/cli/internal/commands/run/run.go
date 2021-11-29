@@ -90,7 +90,7 @@ func getProgram(
 	var progReader io.ReaderAt
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		m.SetFetchText(fmt.Sprintf("Fetching program from registry: %s", progLocation))
+		m.SetFetchText(fmt.Sprintf("Fetching program from registry: [aqua]%s", progLocation))
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -115,7 +115,7 @@ func getProgram(
 		}
 	}
 	//TODO: handle both program/registry text here...
-	m.SetFetchText(fmt.Sprintf("success Fetching program from file: %s", progLocation))
+	m.SetFetchText(fmt.Sprintf("Program location: [aqua]%s", progLocation))
 
 	return progReader, nil
 }
