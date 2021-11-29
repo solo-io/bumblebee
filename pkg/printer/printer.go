@@ -55,7 +55,7 @@ type MapValue struct {
 var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
-var running bool
+
 var fetchTextPlaceholder = tview.NewBox()
 var fetchText *tview.TextView
 var loadTextPlaceholder = tview.NewBox()
@@ -65,6 +65,7 @@ var linkText *tview.TextView
 
 type Monitor struct {
 	Entries   chan MapEntry
+	CloseChan chan error
 	App       *tview.Application
 	Flex      *tview.Flex
 	InfoPanel *tview.Grid
@@ -119,10 +120,13 @@ func fillInfoPanel(infoPanel *tview.Grid) {
 }
 
 func NewMonitor(cancel context.CancelFunc) Monitor {
+	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
 			cancel()
+			<-closeChan
+			close(closeChan)
 		}
 		return event
 	})
@@ -164,18 +168,17 @@ func NewMonitor(cancel context.CancelFunc) Monitor {
 		App:       app,
 		Flex:      flex,
 		InfoPanel: infoPanel,
+		CloseChan: closeChan,
 	}
 	return m
 }
 
 func (m *Monitor) Start() {
 	go func() {
-		running = true
 		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
 			panic(err)
 		}
 		fmt.Println("stopped app")
-		running = false
 	}()
 }
 
@@ -195,9 +198,7 @@ func (m *Monitor) Watch() {
 			m.renderRingBuf(r)
 		}
 		// update the screen if the UI is still running
-		if running {
-			m.App.Draw()
-		}
+		m.App.Draw()
 	}
 	fmt.Println("no more entries, closing")
 }

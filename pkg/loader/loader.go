@@ -194,6 +194,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 
 	err := eg.Wait()
 	close(l.printMonitor.Entries)
+	l.printMonitor.CloseChan <- err
 	return err
 }
 
