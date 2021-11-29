@@ -114,7 +114,6 @@ func getProgram(
 			return nil, err
 		}
 	}
-	//TODO: handle both program/registry text here...
 	m.SetFetchText(fmt.Sprintf("Program location: [aqua]%s", progLocation))
 
 	return progReader, nil
