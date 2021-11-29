@@ -165,7 +165,6 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 				verbose = true
 			}
 			eg.Go(func() error {
-				// pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
 				return l.startRingBuf(ctx, structType, coll, increment, name, verbose, labelKeys)
 			})
 		case ebpf.Array:
@@ -177,13 +176,12 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 			}
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap) {
-				// pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
 			} else if isGaugeMap(bpfMap) {
-				// pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
+				// TODO: output type of instrument in UI?
 				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose, labelKeys)
 			})
 		default:
@@ -250,20 +248,6 @@ func (l *loader) startRingBuf(
 				Key: stringLabels,
 			},
 		}
-		// if !verbose {
-		// 	continue
-		// }
-		// printMap := map[string]interface{}{
-		// 	"mapName": name,
-		// 	"entry":   stringLabels,
-		// }
-
-		// byt, err := json.Marshal(printMap)
-		// if err != nil {
-		// 	pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-		// 	continue
-		// }
-		// fmt.Printf("%s\n", byt)
 	}
 }
 
@@ -323,9 +307,6 @@ func (l *loader) startHashMap(
 					Entry: thisKvPair,
 				}
 			}
-			// if len(entries) == 0 || !verbose {
-			// 	continue
-			// }
 
 		case <-ctx.Done():
 			fmt.Println("got done in hashmap loop, returning")

@@ -33,8 +33,8 @@ const helpText = `
 `
 
 type KvPair struct {
-	Key   map[string]string `json:"key"`
-	Value string            `json:"value"`
+	Key   map[string]string
+	Value string
 	Hash  uint64
 }
 
@@ -102,21 +102,6 @@ func (m *Monitor) SetFetchText(text string) {
 		fetchText.Clear()
 	}
 	fmt.Fprint(fetchText, text)
-}
-
-func fillInfoPanel(infoPanel *tview.Grid) {
-	empty0 := tview.NewBox()
-	empty1 := tview.NewBox()
-	empty5 := tview.NewBox()
-	empty6 := tview.NewBox()
-	empty7 := tview.NewBox()
-	empty8 := tview.NewBox()
-	infoPanel.AddItem(empty0, 0, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty1, 1, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty5, 5, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
 }
 
 func NewMonitor(cancel context.CancelFunc) Monitor {
@@ -281,9 +266,6 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 	cell := tview.NewTableCell("value").SetExpansion(1).SetTextColor(tcell.ColorYellow)
 	table.SetCell(0, c, cell)
 
-	// now render each row according to the Entries we were sent by the loader
-	// TODO: should we sort/order this in any specific way? right now they are
-	// simply in iteration order of the underlying BTF map
 	for r, entry := range current.Entries {
 		r++ // increment the row index as the 0-th row is taken by the header
 		ekMap := entry.Key
@@ -378,14 +360,17 @@ func prevTable(app *tview.Application) {
 	mapMutex.RUnlock()
 }
 
-// print logic
-// printMap := map[string]interface{}{
-// 	"mapName": r.Name,
-// 	"entries": r.Entries,
-// }
-// byt, err := json.Marshal(printMap)
-// if err != nil {
-// 	fmt.Printf("error marshalling map data, this should never happen, %s\n", err)
-// 	continue
-// }
-// fmt.Printf("%s\n", byt)
+func fillInfoPanel(infoPanel *tview.Grid) {
+	empty0 := tview.NewBox()
+	empty1 := tview.NewBox()
+	empty5 := tview.NewBox()
+	empty6 := tview.NewBox()
+	empty7 := tview.NewBox()
+	empty8 := tview.NewBox()
+	infoPanel.AddItem(empty0, 0, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty1, 1, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty5, 5, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
+}
