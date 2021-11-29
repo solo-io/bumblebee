@@ -140,10 +140,7 @@ func runProg(ctx context.Context, cancel context.CancelFunc, progReader io.Reade
 	)
 	// begin rendering the TUI
 	m.Start()
-	// goroutine for updating the TUI data based on updates from loader watching maps
-	go m.Watch()
 	err = progLoader.Load(ctx, progOptions)
-	close(m.MyChan)
 	return err
 
 }

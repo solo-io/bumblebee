@@ -133,8 +133,15 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	l.printMonitor.SetLinkText("success Linking BPF functions to associated probe/tracepoint")
 
+	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
+}
+
+func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
+	// goroutine for updating the TUI data based on updates from loader watching maps
+	go l.printMonitor.Watch()
+
 	eg, ctx := errgroup.WithContext(ctx)
-	for name, bpfMap := range spec.Maps {
+	for name, bpfMap := range maps {
 		name := name
 		bpfMap := bpfMap
 
@@ -185,7 +192,9 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		}
 	}
 
-	return eg.Wait()
+	err := eg.Wait()
+	close(l.printMonitor.MyChan)
+	return err
 }
 
 func (l *loader) startRingBuf(
