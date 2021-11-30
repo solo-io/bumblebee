@@ -55,13 +55,6 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
-var fetchTextPlaceholder = tview.NewBox()
-var fetchText *tview.TextView
-var loadTextPlaceholder = tview.NewBox()
-var loadText *tview.TextView
-var linkTextPlaceholder = tview.NewBox()
-var linkText *tview.TextView
-
 type Monitor struct {
 	Entries   chan MapEntry
 	CloseChan chan error
@@ -71,7 +64,7 @@ type Monitor struct {
 	Debug     bool
 }
 
-func NewMonitor(cancel context.CancelFunc, debug bool) Monitor {
+func NewMonitor(cancel context.CancelFunc, debug bool, progLocation string) Monitor {
 	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -94,24 +87,28 @@ func NewMonitor(cancel context.CancelFunc, debug bool) Monitor {
 		return event
 	})
 
-	header := tview.NewGrid().SetRows(0).SetColumns(0, 0, 0)
+	header := tview.NewGrid().SetRows(0).SetColumns(0, 0)
+
 	title := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
 	fmt.Fprint(title, titleText)
 
 	infoPanel := tview.NewGrid().SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0).SetColumns(0)
 	fillInfoPanel(infoPanel)
-	infoPanel.AddItem(fetchTextPlaceholder, 2, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(loadTextPlaceholder, 3, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(linkTextPlaceholder, 4, 0, 1, 1, 0, 0, false)
 
-	help := tview.NewTextView().
-		SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
+	fetchText := tview.NewTextView().SetDynamicColors(true)
+	fmt.Fprintf(fetchText, "Program location: [aqua]%s", progLocation)
+	infoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
+
+	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
 	fmt.Fprint(help, helpText)
 
+	rightMenu := tview.NewFlex().SetDirection(tview.FlexColumn)
+	rightMenu.AddItem(infoPanel, 0, 1, false)
+	rightMenu.AddItem(help, 0, 1, false)
+
 	header.AddItem(title, 0, 0, 1, 1, 0, 0, false)
-	header.AddItem(infoPanel, 0, 1, 1, 1, 0, 0, false)
-	header.AddItem(help, 0, 2, 1, 1, 0, 0, false)
+	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 9, 0, false)
 
@@ -292,39 +289,6 @@ func (m *Monitor) makeMapValue(name string, keys []string, mapType ebpf.MapType)
 	return table
 }
 
-func (m *Monitor) SetLinkText(text string) {
-	if linkText == nil {
-		m.InfoPanel.RemoveItem(linkTextPlaceholder)
-		linkText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(linkText, 4, 0, 1, 1, 0, 0, false)
-	} else {
-		linkText.Clear()
-	}
-	fmt.Fprint(linkText, text)
-}
-
-func (m *Monitor) SetLoadText(text string) {
-	if loadText == nil {
-		m.InfoPanel.RemoveItem(loadTextPlaceholder)
-		loadText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(loadText, 3, 0, 1, 1, 0, 0, false)
-	} else {
-		loadText.Clear()
-	}
-	fmt.Fprint(loadText, text)
-}
-
-func (m *Monitor) SetFetchText(text string) {
-	if fetchText == nil {
-		m.InfoPanel.RemoveItem(fetchTextPlaceholder)
-		fetchText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
-	} else {
-		fetchText.Clear()
-	}
-	fmt.Fprint(fetchText, text)
-}
-
 func nextTable(app *tview.Application) {
 	if len(mapOfMaps) <= 1 {
 		return
@@ -366,12 +330,16 @@ func prevTable(app *tview.Application) {
 func fillInfoPanel(infoPanel *tview.Grid) {
 	empty0 := tview.NewBox()
 	empty1 := tview.NewBox()
+	empty3 := tview.NewBox()
+	empty4 := tview.NewBox()
 	empty5 := tview.NewBox()
 	empty6 := tview.NewBox()
 	empty7 := tview.NewBox()
 	empty8 := tview.NewBox()
 	infoPanel.AddItem(empty0, 0, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty1, 1, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty3, 3, 0, 1, 1, 0, 0, false)
+	infoPanel.AddItem(empty4, 4, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty5, 5, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)

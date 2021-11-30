@@ -84,16 +84,16 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		log.SetOutput(f)
 	}
 
-	ctx, cancel := context.WithCancel(cmd.Context())
-	// defer cancel to whenever the TUI has been closed (via <ctrl-c>)
-	m := printer.NewMonitor(cancel, opts.Debug)
 	// guaranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(ctx, opts.general, progLocation, m)
+	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
 	if err != nil {
 		return err
 	}
 
+	// defer cancel to whenever the TUI has been closed (via <ctrl-c>)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	m := printer.NewMonitor(cancel, opts.Debug, progLocation)
 	return runProg(ctx, progReader, opts.Debug, m)
 }
 
@@ -101,7 +101,6 @@ func getProgram(
 	ctx context.Context,
 	opts *options.GeneralOptions,
 	progLocation string,
-	m printer.Monitor,
 ) (io.ReaderAt, error) {
 
 	var (
@@ -113,7 +112,6 @@ func getProgram(
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from registry: %s", progLocation),
 		)
-		m.SetFetchText(fmt.Sprintf("Fetching program from registry: [aqua]%s", progLocation))
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -126,7 +124,6 @@ func getProgram(
 		if err != nil {
 			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
-			m.SetFetchText("Failed to load OCI image")
 			return nil, err
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
@@ -134,18 +131,15 @@ func getProgram(
 		programSpinner, _ = pterm.DefaultSpinner.Start(
 			fmt.Sprintf("Fetching program from file: %s", progLocation),
 		)
-		m.SetFetchText(fmt.Sprintf("Fetching program from file: %s", progLocation))
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
 			programSpinner.UpdateText("Failed to open BPF file")
 			programSpinner.Fail()
-			m.SetFetchText("Failed to open BPF file")
 			return nil, err
 		}
 	}
 	programSpinner.Success()
-	m.SetFetchText(fmt.Sprintf("Program location: [aqua]%s", progLocation))
 
 	return progReader, nil
 }
