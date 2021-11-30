@@ -69,6 +69,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	ctx, cancel := context.WithCancel(cmd.Context())
+	// defer cancel to whenever the TUI has been closed (via <ctrl-c>)
 	m := printer.NewMonitor(cancel, opts.Debug)
 	// guaranteed to be length 1
 	progLocation := args[0]
@@ -77,7 +78,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return err
 	}
 
-	return runProg(ctx, cancel, progReader, opts.Debug, m)
+	return runProg(ctx, progReader, opts.Debug, m)
 }
 
 func getProgram(
@@ -119,7 +120,7 @@ func getProgram(
 	return progReader, nil
 }
 
-func runProg(ctx context.Context, cancel context.CancelFunc, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
+func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
 
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
