@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -72,11 +73,13 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
+	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
 	l.printMonitor.SetLoadText("[yellow]Loading BPF program and maps into kernel...")
 
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
+		loaderProgress.Fail()
 		return err
 	}
 
@@ -94,13 +97,16 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
+		loaderProgress.Fail()
 		l.printMonitor.SetLoadText("failure Loading BPF program and maps into kernel")
 		l.printMonitor.App.Stop()
 		return err
 	}
 	defer coll.Close()
+	loaderProgress.Success()
 	l.printMonitor.SetLoadText("[lime]BPF program and maps successfully loaded into kernel")
 
+	linkerProgress, _ := pterm.DefaultSpinner.Start("Linking BPF functions to associated probe/tracepoint")
 	l.printMonitor.SetLinkText("[yellow]Linking BPF functions to associated probe/tracepoints...")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
@@ -111,6 +117,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
+					linkerProgress.Fail()
 					l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
 					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
@@ -118,6 +125,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
+					linkerProgress.Fail()
 					l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
 					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
@@ -125,17 +133,22 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			}
 			defer kp.Close()
 		default:
+			linkerProgress.Fail()
 			l.printMonitor.SetLinkText("error Linking BPF functions to associated probe/tracepoint")
 			l.printMonitor.App.Stop()
 			return errors.New("only kprobe programs supported")
 		}
 	}
+	linkerProgress.Success()
 	l.printMonitor.SetLinkText("[lime]BPF functions successfully linked to associated probe/tracepoints")
 
 	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
 }
 
 func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
+	pterm.Info.Println("Rendering TUI...")
+	// begin rendering the TUI
+	l.printMonitor.Start()
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go l.printMonitor.Watch()
 

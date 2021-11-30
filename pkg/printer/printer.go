@@ -71,39 +71,6 @@ type Monitor struct {
 	Debug     bool
 }
 
-func (m *Monitor) SetLinkText(text string) {
-	if linkText == nil {
-		m.InfoPanel.RemoveItem(linkTextPlaceholder)
-		linkText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(linkText, 4, 0, 1, 1, 0, 0, false)
-	} else {
-		linkText.Clear()
-	}
-	fmt.Fprint(linkText, text)
-}
-
-func (m *Monitor) SetLoadText(text string) {
-	if loadText == nil {
-		m.InfoPanel.RemoveItem(loadTextPlaceholder)
-		loadText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(loadText, 3, 0, 1, 1, 0, 0, false)
-	} else {
-		loadText.Clear()
-	}
-	fmt.Fprint(loadText, text)
-}
-
-func (m *Monitor) SetFetchText(text string) {
-	if fetchText == nil {
-		m.InfoPanel.RemoveItem(fetchTextPlaceholder)
-		fetchText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
-		m.InfoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
-	} else {
-		fetchText.Clear()
-	}
-	fmt.Fprint(fetchText, text)
-}
-
 func NewMonitor(cancel context.CancelFunc, debug bool) Monitor {
 	closeChan := make(chan error)
 	app := tview.NewApplication()
@@ -323,6 +290,39 @@ func (m *Monitor) makeMapValue(name string, keys []string, mapType ebpf.MapType)
 		}
 	})
 	return table
+}
+
+func (m *Monitor) SetLinkText(text string) {
+	if linkText == nil {
+		m.InfoPanel.RemoveItem(linkTextPlaceholder)
+		linkText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(linkText, 4, 0, 1, 1, 0, 0, false)
+	} else {
+		linkText.Clear()
+	}
+	fmt.Fprint(linkText, text)
+}
+
+func (m *Monitor) SetLoadText(text string) {
+	if loadText == nil {
+		m.InfoPanel.RemoveItem(loadTextPlaceholder)
+		loadText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(loadText, 3, 0, 1, 1, 0, 0, false)
+	} else {
+		loadText.Clear()
+	}
+	fmt.Fprint(loadText, text)
+}
+
+func (m *Monitor) SetFetchText(text string) {
+	if fetchText == nil {
+		m.InfoPanel.RemoveItem(fetchTextPlaceholder)
+		fetchText = tview.NewTextView().SetDynamicColors(true).SetChangedFunc(func() { m.App.Draw() })
+		m.InfoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
+	} else {
+		fetchText.Clear()
+	}
+	fmt.Fprint(fetchText, text)
 }
 
 func nextTable(app *tview.Application) {

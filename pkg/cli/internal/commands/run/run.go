@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
@@ -26,6 +27,8 @@ type runOptions struct {
 
 	Debug bool
 }
+
+var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
@@ -59,6 +62,19 @@ $ run localhost:5000/oras:ringbuf-demo
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
+	// Subscribe to signals for terminating the program.
+	// This is used until management of signals is passed to the TUI
+	stopper = make(chan os.Signal, 1)
+	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		for sig := range stopper {
+			if sig == os.Interrupt || sig == syscall.SIGTERM {
+				fmt.Println("got sigterm or interrupt")
+				os.Exit(0)
+			}
+		}
+	}()
+
 	if opts.Debug {
 		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
@@ -88,9 +104,15 @@ func getProgram(
 	m printer.Monitor,
 ) (io.ReaderAt, error) {
 
-	var progReader io.ReaderAt
+	var (
+		progReader     io.ReaderAt
+		programSpinner *pterm.SpinnerPrinter
+	)
 	_, err := os.Stat(progLocation)
 	if err != nil {
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from registry: %s", progLocation),
+		)
 		m.SetFetchText(fmt.Sprintf("Fetching program from registry: [aqua]%s", progLocation))
 
 		client := spec.NewEbpfOCICLient()
@@ -102,19 +124,27 @@ func getProgram(
 			opts.AuthOptions.ToRegistryOptions(),
 		)
 		if err != nil {
+			programSpinner.UpdateText("Failed to load OCI image")
+			programSpinner.Fail()
 			m.SetFetchText("Failed to load OCI image")
 			return nil, err
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from file: %s", progLocation),
+		)
 		m.SetFetchText(fmt.Sprintf("Fetching program from file: %s", progLocation))
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
+			programSpinner.UpdateText("Failed to open BPF file")
+			programSpinner.Fail()
 			m.SetFetchText("Failed to open BPF file")
 			return nil, err
 		}
 	}
+	programSpinner.Success()
 	m.SetFetchText(fmt.Sprintf("Program location: [aqua]%s", progLocation))
 
 	return progReader, nil
@@ -122,13 +152,6 @@ func getProgram(
 
 func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
 
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-stopper
-		fmt.Println("got sigterm or interrupt")
-	}()
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("could not raise memory limit: %v", err)
@@ -148,8 +171,10 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.
 		promProvider,
 		m,
 	)
-	// begin rendering the TUI
-	m.Start()
+	// shut down the local signal notification as the TUI will be taking control of it
+	// signal.Stop(stopper)
+	// close(stopper)
+
 	err = progLoader.Load(ctx, progOptions)
 	return err
 
