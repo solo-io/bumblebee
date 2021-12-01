@@ -113,14 +113,12 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
 					linkerProgress.Fail()
-					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
 					linkerProgress.Fail()
-					l.printMonitor.App.Stop()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
 			}
