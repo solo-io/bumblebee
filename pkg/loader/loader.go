@@ -139,8 +139,6 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	pterm.Info.Println("Rendering TUI...")
 	// begin rendering the TUI
 	l.printMonitor.Start()
-	// goroutine for updating the TUI data based on updates from loader watching maps
-	go l.printMonitor.Watch()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range maps {

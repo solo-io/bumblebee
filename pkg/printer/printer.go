@@ -129,6 +129,8 @@ func (m *Monitor) Start() {
 		}
 		// fmt.Println("stopped app")
 	}()
+	// goroutine for updating the TUI data based on updates from loader watching maps
+	go m.Watch()
 }
 
 func (m *Monitor) Watch() {
