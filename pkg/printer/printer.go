@@ -112,7 +112,7 @@ func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Mon
 	flex.AddItem(header, 9, 0, false)
 
 	m := Monitor{
-		Entries:   make(chan MapEntry),
+		Entries:   make(chan MapEntry, 20),
 		App:       app,
 		Flex:      flex,
 		InfoPanel: infoPanel,
