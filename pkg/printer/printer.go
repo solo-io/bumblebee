@@ -57,10 +57,10 @@ var currentIndex int
 type Monitor struct {
 	Entries   chan MapEntry
 	CloseChan chan error
-	App       *tview.Application
-	Flex      *tview.Flex
-	InfoPanel *tview.Grid
-	Debug     bool
+
+	debug    bool
+	tviewApp *tview.Application
+	flex     *tview.Flex
 }
 
 func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Monitor {
@@ -113,21 +113,20 @@ func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Mon
 
 	m := Monitor{
 		Entries:   make(chan MapEntry, 20),
-		App:       app,
-		Flex:      flex,
-		InfoPanel: infoPanel,
+		tviewApp:  app,
+		flex:      flex,
 		CloseChan: closeChan,
-		Debug:     debug,
+		debug:     debug,
 	}
 	return m
 }
 
 func (m *Monitor) Start() {
 	go func() {
-		if err := m.App.SetRoot(m.Flex, true).Run(); err != nil {
+		if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
 			panic(err)
 		}
-		// fmt.Println("stopped app")
+		m.debugLog("stopped app\n")
 	}()
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go m.Watch()
@@ -141,7 +140,7 @@ func (m *Monitor) Watch() {
 			m.renderRingBuf(r)
 		}
 		// update the screen if the UI is still running
-		m.App.Draw()
+		m.tviewApp.Draw()
 	}
 	fmt.Println("no more entries, closing")
 }
@@ -179,9 +178,7 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
-		if m.Debug {
-			log.Printf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash)
-		}
+		m.debugLog(fmt.Sprintf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash))
 		incoming.Entry.Hash = newHash
 		current.Entries = append(current.Entries, incoming.Entry)
 	} else {
@@ -190,30 +187,22 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 		var found = false
 		for idx = range current.Entries {
 			if current.Entries[idx].Hash == incomingHash {
-				if m.Debug {
-					log.Printf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash)
-				}
+				m.debugLog(fmt.Sprintf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash))
 				found = true
 				break
 			}
 		}
 		if found {
 			if incoming.Entry.Value == current.Entries[idx].Value {
-				if m.Debug {
-					log.Printf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value)
-				}
+				m.debugLog(fmt.Sprintf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value))
 				return
 			}
-			if m.Debug {
-				log.Printf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value)
-			}
+			m.debugLog(fmt.Sprintf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value))
 			current.Entries[idx].Value = incoming.Entry.Value
 		} else {
 			newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
 			incoming.Entry.Hash = newHash
-			if m.Debug {
-				log.Printf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash)
-			}
+			m.debugLog(fmt.Sprintf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash))
 			current.Entries = append(current.Entries, incoming.Entry)
 		}
 	}
@@ -281,10 +270,10 @@ func (m *Monitor) makeMapValue(name string, keys []string, mapType ebpf.MapType)
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
 
-	m.App.QueueUpdateDraw(func() {
-		m.Flex.AddItem(table, 0, 1, false)
+	m.tviewApp.QueueUpdateDraw(func() {
+		m.flex.AddItem(table, 0, 1, false)
 		if i == 0 {
-			m.App.SetFocus(table)
+			m.tviewApp.SetFocus(table)
 		}
 	})
 	return table
@@ -345,4 +334,10 @@ func fillInfoPanel(infoPanel *tview.Grid) {
 	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
+}
+
+func (m *Monitor) debugLog(text string) {
+	if m.debug {
+		log.Print(text)
+	}
 }
