@@ -219,7 +219,6 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
-
 		if err := rd.Close(); err != nil {
 			log.Printf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
@@ -279,14 +278,12 @@ func (l *loader) startHashMap(
 				}
 				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Key, key)
 				if err != nil {
-					fmt.Println("error decoding key")
-					return err
+					return fmt.Errorf("error decoding key: %w", err)
 				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
-					fmt.Println("error decoding value")
-					return err
+					return fmt.Errorf("error decoding value: %w", err)
 				}
 
 				// TODO: Check this information at load time

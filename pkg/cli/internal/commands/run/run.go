@@ -150,7 +150,6 @@ func getProgram(
 }
 
 func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
-
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("could not raise memory limit: %v", err)
@@ -170,11 +169,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.
 		promProvider,
 		m,
 	)
-	// shut down the local signal notification as the TUI will be taking control of it
-	// signal.Stop(stopper)
-	// close(stopper)
 
 	err = progLoader.Load(ctx, progOptions)
 	return err
-
 }
