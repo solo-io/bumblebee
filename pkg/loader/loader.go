@@ -313,7 +313,7 @@ func (l *loader) startHashMap(
 			}
 
 		case <-ctx.Done():
-			fmt.Println("got done in hashmap loop, returning")
+			// fmt.Println("got done in hashmap loop, returning")
 			return nil
 		}
 	}

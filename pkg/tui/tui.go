@@ -67,13 +67,13 @@ func NewApp(debug bool, progLocation string, l loader.Loader) App {
 	return a
 }
 
-var preWatchChan = make(chan struct{})
+var preWatchChan = make(chan error)
 
 func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	var errToReturn error
-	closeChan := make(chan error)
+	closeChan := make(chan error, 1)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
@@ -131,10 +131,17 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	}
 	go func() {
 		err := m.loader.Load(ctx, progOptions)
+		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
+		// let's close the Entries chan so m.Watch(...) will return and we will no longer call Draw() on
+		// the tview.App
 		close(m.Entries)
 		m.CloseChan <- err
+		preWatchChan <- err
 	}()
-	<-preWatchChan
+	err := <-preWatchChan
+	if err != nil {
+		return err
+	}
 	pterm.Info.Println("Rendering TUI...")
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go m.Watch()
@@ -147,7 +154,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 }
 
 func (a *App) PreWatchHandler() {
-	preWatchChan <- struct{}{}
+	preWatchChan <- nil
 }
 
 func (m *App) Watch() {
