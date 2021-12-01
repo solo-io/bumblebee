@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"log"
 	"sort"
 	"sync"
@@ -9,7 +11,9 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
+	"github.com/pterm/pterm"
 	"github.com/rivo/tview"
+	"github.com/solo-io/ebpf/pkg/loader"
 )
 
 const titleText = `[aqua]
@@ -30,20 +34,9 @@ const helpText = `
 
 `
 
-type KvPair struct {
-	Key   map[string]string
-	Value string
-	Hash  uint64
-}
-
-type MapEntry struct {
-	Name  string
-	Entry KvPair
-}
-
 type MapValue struct {
 	Hash    uint64
-	Entries []KvPair
+	Entries []loader.KvPair
 	Table   *tview.Table
 	Index   int
 	Type    ebpf.MapType
@@ -55,21 +48,37 @@ var mapMutex = sync.RWMutex{}
 var currentIndex int
 
 type App struct {
-	Entries   chan MapEntry
+	Entries   chan loader.MapEntry
 	CloseChan chan error
 
-	debug    bool
-	tviewApp *tview.Application
-	flex     *tview.Flex
+	debug        bool
+	tviewApp     *tview.Application
+	flex         *tview.Flex
+	loader       loader.Loader
+	progLocation string
 }
 
-func NewApp(cancelChan chan<- struct{}, debug bool, progLocation string) App {
+func NewApp(debug bool, progLocation string, l loader.Loader) App {
+	a := App{
+		debug:        debug,
+		loader:       l,
+		progLocation: progLocation,
+	}
+	return a
+}
+
+var preWatchChan = make(chan struct{})
+
+func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
+	ctx, cancel := context.WithCancel(ctx)
+
+	var errToReturn error
 	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
-			cancelChan <- struct{}{}
-			<-closeChan
+			cancel()
+			errToReturn = <-closeChan
 			close(closeChan)
 		}
 		return event
@@ -96,7 +105,7 @@ func NewApp(cancelChan chan<- struct{}, debug bool, progLocation string) App {
 	fillInfoPanel(infoPanel)
 
 	fetchText := tview.NewTextView().SetDynamicColors(true)
-	fmt.Fprintf(fetchText, "Program location: [aqua]%s", progLocation)
+	fmt.Fprintf(fetchText, "Program location: [aqua]%s", m.progLocation)
 	infoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
 
 	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
@@ -110,26 +119,35 @@ func NewApp(cancelChan chan<- struct{}, debug bool, progLocation string) App {
 	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 9, 0, false)
+	m.Entries = make(chan loader.MapEntry, 20)
+	m.tviewApp = app
+	m.flex = flex
+	m.CloseChan = closeChan
 
-	a := App{
-		Entries:   make(chan MapEntry, 20),
-		tviewApp:  app,
-		flex:      flex,
-		CloseChan: closeChan,
-		debug:     debug,
+	progOptions := &loader.LoadOptions{
+		EbpfProg: progReader,
+		Debug:    m.debug,
+		Watcher:  m,
 	}
-	return a
-}
-
-func (m *App) Start() {
 	go func() {
-		if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
-			panic(err)
-		}
-		m.debugLog("stopped app\n")
+		err := m.loader.Load(ctx, progOptions)
+		close(m.Entries)
+		m.CloseChan <- err
 	}()
+	<-preWatchChan
+	pterm.Info.Println("Rendering TUI...")
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go m.Watch()
+	// begin rendering the TUI
+	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
+		return err
+	}
+	m.debugLog("stopped app\n")
+	return errToReturn
+}
+
+func (a *App) PreWatchHandler() {
+	preWatchChan <- struct{}{}
 }
 
 func (m *App) Watch() {
@@ -145,7 +163,7 @@ func (m *App) Watch() {
 	fmt.Println("no more entries, closing")
 }
 
-func (m *App) renderRingBuf(incoming MapEntry) {
+func (m *App) renderRingBuf(incoming loader.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -174,7 +192,7 @@ func (m *App) renderRingBuf(incoming MapEntry) {
 	}
 }
 
-func (m *App) renderHash(incoming MapEntry) {
+func (m *App) renderHash(incoming loader.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
@@ -238,22 +256,26 @@ func (m *App) renderHash(incoming MapEntry) {
 	}
 }
 
-func (m *App) NewRingBuf(name string, keys []string) *tview.Table {
-	return m.makeMapValue(name, keys, ebpf.RingBuf)
+func (m *App) NewRingBuf(name string, keys []string) {
+	m.makeMapValue(name, keys, ebpf.RingBuf)
 }
 
-func (m *App) NewHashMap(name string, keys []string) *tview.Table {
-	return m.makeMapValue(name, keys, ebpf.Hash)
+func (m *App) NewHashMap(name string, keys []string) {
+	m.makeMapValue(name, keys, ebpf.Hash)
 }
 
-func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) *tview.Table {
+func (m *App) SendEntry(entry loader.MapEntry) {
+	m.Entries <- entry
+}
+
+func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	// get a copy of keys, sort for consistent key/label ordering
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)
 	sort.Strings(keysCopy)
 
 	// create the array for containing the entries
-	entries := make([]KvPair, 0, 10)
+	entries := make([]loader.KvPair, 0, 10)
 
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
@@ -276,7 +298,6 @@ func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) *tv
 			m.tviewApp.SetFocus(table)
 		}
 	})
-	return table
 }
 
 func nextTable(app *tview.Application) {

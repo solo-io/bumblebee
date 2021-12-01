@@ -16,7 +16,6 @@ import (
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/stats"
-	"github.com/solo-io/ebpf/pkg/tui"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -24,28 +23,44 @@ type LoadOptions struct {
 	// Program bytes to load
 	EbpfProg io.ReaderAt
 	// Log to debug.log file
-	Debug bool
+	Debug   bool
+	Watcher MapWatcher
 }
 
 type Loader interface {
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
+type KvPair struct {
+	Key   map[string]string
+	Value string
+	Hash  uint64
+}
+
+type MapEntry struct {
+	Name  string
+	Entry KvPair
+}
+
+type MapWatcher interface {
+	NewRingBuf(name string, keys []string)
+	NewHashMap(name string, keys []string)
+	SendEntry(entry MapEntry)
+	PreWatchHandler()
+}
+
 type loader struct {
 	decoderFactory  decoder.DecoderFactory
 	metricsProvider stats.MetricsProvider
-	app             tui.App
 }
 
 func NewLoader(
 	decoderFactory decoder.DecoderFactory,
 	metricsProvider stats.MetricsProvider,
-	app tui.App,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
 		metricsProvider: metricsProvider,
-		app:             app,
 	}
 }
 
@@ -134,9 +149,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 }
 
 func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
-	pterm.Info.Println("Rendering TUI...")
-	// begin rendering the TUI
-	l.app.Start()
+	opts.Watcher.PreWatchHandler()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range maps {
@@ -161,7 +174,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 				increment = &noopIncrement{}
 			}
 			eg.Go(func() error {
-				return l.startRingBuf(ctx, structType, coll, increment, name, labelKeys)
+				return l.startRingBuf(ctx, structType, coll, increment, name, labelKeys, opts)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -178,7 +191,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 			}
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, labelKeys)
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, labelKeys, opts)
 			})
 		default:
 			// TODO: Support more map types
@@ -187,8 +200,6 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
-	close(l.app.Entries)
-	l.app.CloseChan <- err
 	return err
 }
 
@@ -199,8 +210,9 @@ func (l *loader) startRingBuf(
 	incrementInstrument stats.IncrementInstrument,
 	name string,
 	keys []string,
+	opts *LoadOptions,
 ) error {
-	l.app.NewRingBuf(name, keys)
+	opts.Watcher.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
 
@@ -236,12 +248,12 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		l.app.Entries <- tui.MapEntry{
+		opts.Watcher.SendEntry(MapEntry{
 			Name: name,
-			Entry: tui.KvPair{
+			Entry: KvPair{
 				Key: stringLabels,
 			},
-		}
+		})
 	}
 }
 
@@ -252,8 +264,9 @@ func (l *loader) startHashMap(
 	instrument stats.SetInstrument,
 	name string,
 	keys []string,
+	opts *LoadOptions,
 ) error {
-	l.app.NewHashMap(name, keys)
+	opts.Watcher.NewHashMap(name, keys)
 	d := l.decoderFactory()
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -292,11 +305,11 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				thisKvPair := tui.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				l.app.Entries <- tui.MapEntry{
+				thisKvPair := KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
+				opts.Watcher.SendEntry(MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
-				}
+				})
 			}
 
 		case <-ctx.Done():

@@ -91,15 +91,23 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return err
 	}
 
-	// defer cancel to whenever the TUI has been closed (via <ctrl-c>)
-	ctx, cancel := context.WithCancel(cmd.Context())
-	cancelChan := make(chan struct{})
-	go func() {
-		<-cancelChan
-		cancel()
-	}()
-	app := tui.NewApp(cancelChan, opts.Debug, progLocation)
-	return runProg(ctx, progReader, opts.Debug, app)
+	// Allow the current process to lock memory for eBPF resources.
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("could not raise memory limit: %v", err)
+	}
+	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
+	if err != nil {
+		return err
+	}
+
+	progLoader := loader.NewLoader(
+		decoder.NewDecoderFactory(),
+		promProvider,
+	)
+
+	app := tui.NewApp(opts.Debug, progLocation, progLoader)
+	return app.Run(cmd.Context(), progReader)
+
 }
 
 func getProgram(
@@ -147,29 +155,4 @@ func getProgram(
 	programSpinner.Success()
 
 	return progReader, nil
-}
-
-func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, app tui.App) error {
-	// Allow the current process to lock memory for eBPF resources.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("could not raise memory limit: %v", err)
-	}
-	progOptions := &loader.LoadOptions{
-		EbpfProg: progReader,
-		Debug:    debug,
-	}
-
-	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
-	if err != nil {
-		return err
-	}
-
-	progLoader := loader.NewLoader(
-		decoder.NewDecoderFactory(),
-		promProvider,
-		app,
-	)
-
-	err = progLoader.Load(ctx, progOptions)
-	return err
 }
