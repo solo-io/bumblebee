@@ -1,7 +1,6 @@
 package printer
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -64,12 +63,12 @@ type Monitor struct {
 	Debug     bool
 }
 
-func NewMonitor(cancel context.CancelFunc, debug bool, progLocation string) Monitor {
+func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Monitor {
 	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
-			cancel()
+			cancelChan <- struct{}{}
 			<-closeChan
 			close(closeChan)
 		}

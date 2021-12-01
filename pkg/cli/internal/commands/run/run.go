@@ -93,7 +93,12 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	// defer cancel to whenever the TUI has been closed (via <ctrl-c>)
 	ctx, cancel := context.WithCancel(cmd.Context())
-	m := printer.NewMonitor(cancel, opts.Debug, progLocation)
+	cancelChan := make(chan struct{})
+	go func() {
+		<-cancelChan
+		cancel()
+	}()
+	m := printer.NewMonitor(cancelChan, opts.Debug, progLocation)
 	return runProg(ctx, progReader, opts.Debug, m)
 }
 
