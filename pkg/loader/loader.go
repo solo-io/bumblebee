@@ -15,8 +15,8 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
-	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/stats"
+	"github.com/solo-io/ebpf/pkg/tui"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -34,18 +34,18 @@ type Loader interface {
 type loader struct {
 	decoderFactory  decoder.DecoderFactory
 	metricsProvider stats.MetricsProvider
-	printMonitor    printer.Monitor
+	app             tui.App
 }
 
 func NewLoader(
 	decoderFactory decoder.DecoderFactory,
 	metricsProvider stats.MetricsProvider,
-	printMonitor printer.Monitor,
+	app tui.App,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
 		metricsProvider: metricsProvider,
-		printMonitor:    printMonitor,
+		app:             app,
 	}
 }
 
@@ -136,7 +136,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
 	pterm.Info.Println("Rendering TUI...")
 	// begin rendering the TUI
-	l.printMonitor.Start()
+	l.app.Start()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range maps {
@@ -187,8 +187,8 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
-	close(l.printMonitor.Entries)
-	l.printMonitor.CloseChan <- err
+	close(l.app.Entries)
+	l.app.CloseChan <- err
 	return err
 }
 
@@ -200,7 +200,7 @@ func (l *loader) startRingBuf(
 	name string,
 	keys []string,
 ) error {
-	l.printMonitor.NewRingBuf(name, keys)
+	l.app.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
 
@@ -236,9 +236,9 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		l.printMonitor.Entries <- printer.MapEntry{
+		l.app.Entries <- tui.MapEntry{
 			Name: name,
-			Entry: printer.KvPair{
+			Entry: tui.KvPair{
 				Key: stringLabels,
 			},
 		}
@@ -253,7 +253,7 @@ func (l *loader) startHashMap(
 	name string,
 	keys []string,
 ) error {
-	l.printMonitor.NewHashMap(name, keys)
+	l.app.NewHashMap(name, keys)
 	d := l.decoderFactory()
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -292,8 +292,8 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				thisKvPair := printer.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				l.printMonitor.Entries <- printer.MapEntry{
+				thisKvPair := tui.KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
+				l.app.Entries <- tui.MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
 				}

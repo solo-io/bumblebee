@@ -1,4 +1,4 @@
-package printer
+package tui
 
 import (
 	"fmt"
@@ -54,7 +54,7 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
-type Monitor struct {
+type App struct {
 	Entries   chan MapEntry
 	CloseChan chan error
 
@@ -63,7 +63,7 @@ type Monitor struct {
 	flex     *tview.Flex
 }
 
-func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Monitor {
+func NewApp(cancelChan chan<- struct{}, debug bool, progLocation string) App {
 	closeChan := make(chan error)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -111,17 +111,17 @@ func NewMonitor(cancelChan chan<- struct{}, debug bool, progLocation string) Mon
 
 	flex.AddItem(header, 9, 0, false)
 
-	m := Monitor{
+	a := App{
 		Entries:   make(chan MapEntry, 20),
 		tviewApp:  app,
 		flex:      flex,
 		CloseChan: closeChan,
 		debug:     debug,
 	}
-	return m
+	return a
 }
 
-func (m *Monitor) Start() {
+func (m *App) Start() {
 	go func() {
 		if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
 			panic(err)
@@ -132,7 +132,7 @@ func (m *Monitor) Start() {
 	go m.Watch()
 }
 
-func (m *Monitor) Watch() {
+func (m *App) Watch() {
 	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			m.renderHash(r)
@@ -145,7 +145,7 @@ func (m *Monitor) Watch() {
 	fmt.Println("no more entries, closing")
 }
 
-func (m *Monitor) renderRingBuf(incoming MapEntry) {
+func (m *App) renderRingBuf(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -174,7 +174,7 @@ func (m *Monitor) renderRingBuf(incoming MapEntry) {
 	}
 }
 
-func (m *Monitor) renderHash(incoming MapEntry) {
+func (m *App) renderHash(incoming MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
@@ -238,15 +238,15 @@ func (m *Monitor) renderHash(incoming MapEntry) {
 	}
 }
 
-func (m *Monitor) NewRingBuf(name string, keys []string) *tview.Table {
+func (m *App) NewRingBuf(name string, keys []string) *tview.Table {
 	return m.makeMapValue(name, keys, ebpf.RingBuf)
 }
 
-func (m *Monitor) NewHashMap(name string, keys []string) *tview.Table {
+func (m *App) NewHashMap(name string, keys []string) *tview.Table {
 	return m.makeMapValue(name, keys, ebpf.Hash)
 }
 
-func (m *Monitor) makeMapValue(name string, keys []string, mapType ebpf.MapType) *tview.Table {
+func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) *tview.Table {
 	// get a copy of keys, sort for consistent key/label ordering
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)
@@ -336,7 +336,7 @@ func fillInfoPanel(infoPanel *tview.Grid) {
 	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
 }
 
-func (m *Monitor) debugLog(text string) {
+func (m *App) debugLog(text string) {
 	if m.debug {
 		log.Print(text)
 	}

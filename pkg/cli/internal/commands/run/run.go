@@ -15,9 +15,9 @@ import (
 	"github.com/solo-io/ebpf/pkg/cli/internal/options"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/loader"
-	"github.com/solo-io/ebpf/pkg/printer"
 	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/solo-io/ebpf/pkg/stats"
+	"github.com/solo-io/ebpf/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -98,8 +98,8 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		<-cancelChan
 		cancel()
 	}()
-	m := printer.NewMonitor(cancelChan, opts.Debug, progLocation)
-	return runProg(ctx, progReader, opts.Debug, m)
+	app := tui.NewApp(cancelChan, opts.Debug, progLocation)
+	return runProg(ctx, progReader, opts.Debug, app)
 }
 
 func getProgram(
@@ -149,7 +149,7 @@ func getProgram(
 	return progReader, nil
 }
 
-func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.Monitor) error {
+func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, app tui.App) error {
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("could not raise memory limit: %v", err)
@@ -167,7 +167,7 @@ func runProg(ctx context.Context, progReader io.ReaderAt, debug bool, m printer.
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
 		promProvider,
-		m,
+		app,
 	)
 
 	err = progLoader.Load(ctx, progOptions)
