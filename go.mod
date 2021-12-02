@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/cilium/ebpf v0.7.0
+	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/onsi/ginkgo v1.16.5
@@ -12,6 +13,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.1
 	github.com/prometheus/client_golang v1.11.0
 	github.com/pterm/pterm v0.12.33
+	github.com/rivo/tview v0.0.0-20211109175620-badfa0f0b301
 	github.com/solo-io/go-utils v0.21.24
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
@@ -36,6 +38,7 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-github/v32 v32.0.0 // indirect
@@ -46,6 +49,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/k0kubun/pp v2.3.0+incompatible // indirect
 	github.com/klauspost/compress v1.11.13 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect

@@ -2,7 +2,6 @@ package loader
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/ebpf/pkg/decoder"
 	"github.com/solo-io/ebpf/pkg/stats"
@@ -24,12 +22,36 @@ import (
 type LoadOptions struct {
 	// Program bytes to load
 	EbpfProg io.ReaderAt
-	// Log all events, this can be very loud
-	Verbose bool
+	// Log to debug.log file
+	Debug   bool
+	Watcher MapWatcher
 }
 
 type Loader interface {
 	Load(ctx context.Context, opts *LoadOptions) error
+}
+
+type KvPair struct {
+	Key   map[string]string
+	Value string
+	Hash  uint64
+}
+
+type MapEntry struct {
+	Name  string
+	Entry KvPair
+}
+
+type MapWatcher interface {
+	NewRingBuf(name string, keys []string)
+	NewHashMap(name string, keys []string)
+	SendEntry(entry MapEntry)
+	PreWatchHandler()
+}
+
+type loader struct {
+	decoderFactory  decoder.DecoderFactory
+	metricsProvider stats.MetricsProvider
 }
 
 func NewLoader(
@@ -64,14 +86,10 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
 }
 
-type loader struct {
-	decoderFactory  decoder.DecoderFactory
-	metricsProvider stats.MetricsProvider
-}
-
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
+
 	// Generate the spec from out eBPF elf file
 	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
 	if err != nil {
@@ -127,9 +145,14 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	eg, ctx := errgroup.WithContext(ctx)
+	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
+}
 
-	for name, bpfMap := range spec.Maps {
+func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
+	opts.Watcher.PreWatchHandler()
+
+	eg, ctx := errgroup.WithContext(ctx)
+	for name, bpfMap := range maps {
 		name := name
 		bpfMap := bpfMap
 
@@ -144,17 +167,14 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			var increment stats.IncrementInstrument
 			// TODO: Support *btf.Union
 			structType := btfMapMap[name].Value.(*btf.Struct)
-			verbose := opts.Verbose
+			labelKeys := getLabelsForBtfStruct(structType)
 			if isCounterMap(bpfMap) {
-				labelKeys := getLabelsForBtfStruct(structType)
 				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
 			} else if isPrintMap(bpfMap) {
 				increment = &noopIncrement{}
-				verbose = true
 			}
 			eg.Go(func() error {
-				pterm.Info.Printfln("Starting watch for ringbuf (%s)", name)
-				return l.startRingBuf(ctx, structType, coll, increment, name, verbose)
+				return l.startRingBuf(ctx, structType, coll, increment, name, labelKeys, opts)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -165,14 +185,13 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			}
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap) {
-				pterm.Info.Printfln("Starting watch for hashmap with counter (%s)", name)
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
 			} else if isGaugeMap(bpfMap) {
-				pterm.Info.Printfln("Starting watch for hashmap with gauge (%s)", name)
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
 			}
 			eg.Go(func() error {
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, opts.Verbose)
+				// TODO: output type of instrument in UI?
+				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, labelKeys, opts)
 			})
 		default:
 			// TODO: Support more map types
@@ -180,7 +199,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		}
 	}
 
-	return eg.Wait()
+	err := eg.Wait()
+	return err
 }
 
 func (l *loader) startRingBuf(
@@ -189,8 +209,10 @@ func (l *loader) startRingBuf(
 	coll *ebpf.Collection,
 	incrementInstrument stats.IncrementInstrument,
 	name string,
-	verbose bool,
+	keys []string,
+	opts *LoadOptions,
 ) error {
+	opts.Watcher.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
 
@@ -205,9 +227,8 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
-
 		if err := rd.Close(); err != nil {
-			pterm.Warning.Printf("closing ringbuf reader: %s", err)
+			log.Printf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
 	}()
 
@@ -217,7 +238,7 @@ func (l *loader) startRingBuf(
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return nil
 			}
-			pterm.Warning.Printf("reading from reader: %s", err)
+			log.Printf("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
@@ -227,21 +248,12 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		if !verbose {
-			continue
-		}
-		printMap := map[string]interface{}{
-			"mapName": name,
-			"entry":   stringLabels,
-		}
-
-		byt, err := json.Marshal(printMap)
-		if err != nil {
-			pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-			continue
-		}
-		fmt.Printf("%s\n", byt)
-
+		opts.Watcher.SendEntry(MapEntry{
+			Name: name,
+			Entry: KvPair{
+				Key: stringLabels,
+			},
+		})
 	}
 }
 
@@ -251,24 +263,16 @@ func (l *loader) startHashMap(
 	liveMap *ebpf.Map,
 	instrument stats.SetInstrument,
 	name string,
-	verbose bool,
+	keys []string,
+	opts *LoadOptions,
 ) error {
-
-	// gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{})
-	// gauge.
-
-	var printHash uint64
-
+	opts.Watcher.NewHashMap(name, keys)
 	d := l.decoderFactory()
-	// Read loop reporting the total amount of times the kernel
-	// function was entered, once per second.
+
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-
-			var entries []kvPair
-
 			mapIter := liveMap.Iterate()
 			for {
 				// Use generic key,value so we can decode ourselves
@@ -283,18 +287,15 @@ func (l *loader) startHashMap(
 				}
 				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Key, key)
 				if err != nil {
-					fmt.Println("error decoding key")
-					return err
+					return fmt.Errorf("error decoding key: %w", err)
 				}
 
 				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
 				if err != nil {
-					fmt.Println("error decoding value")
-					return err
+					return fmt.Errorf("error decoding value: %w", err)
 				}
 
 				// TODO: Check this information at load time
-
 				if len(decodedValue) > 1 {
 					log.Fatal("only 1 value allowed")
 				}
@@ -304,33 +305,15 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
-				entries = append(entries, kvPair{Key: stringLabels, Value: fmt.Sprint(intVal)})
+				thisKvPair := KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
+				opts.Watcher.SendEntry(MapEntry{
+					Name:  name,
+					Entry: thisKvPair,
+				})
 			}
-
-			if len(entries) == 0 || !verbose {
-				continue
-			}
-
-			printMap := map[string]interface{}{
-				"mapName": name,
-				"entries": entries,
-			}
-
-			newPrintHash, _ := hashstructure.Hash(printMap, hashstructure.FormatV2, nil)
-			// Do not print if the data has not changed
-			if printHash == newPrintHash {
-				continue
-			}
-			printHash = newPrintHash
-
-			byt, err := json.Marshal(printMap)
-			if err != nil {
-				pterm.Debug.Printfln("error marshalling map data, this should never happen, %s", err)
-				continue
-			}
-			fmt.Printf("%s\n", byt)
 
 		case <-ctx.Done():
+			// fmt.Println("got done in hashmap loop, returning")
 			return nil
 		}
 	}
@@ -343,11 +326,6 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 		keyMap[k] = valAsStr
 	}
 	return keyMap
-}
-
-type kvPair struct {
-	Key   map[string]string `json:"key"`
-	Value string            `json:"value"`
 }
 
 func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {

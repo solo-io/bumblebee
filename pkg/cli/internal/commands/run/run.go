@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,6 +17,7 @@ import (
 	"github.com/solo-io/ebpf/pkg/loader"
 	"github.com/solo-io/ebpf/pkg/spec"
 	"github.com/solo-io/ebpf/pkg/stats"
+	"github.com/solo-io/ebpf/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -26,8 +28,10 @@ type runOptions struct {
 	Debug bool
 }
 
+var stopper chan os.Signal
+
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
-	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Output all user space map reads to the console for debugging purposes")
+	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -58,14 +62,52 @@ $ run localhost:5000/oras:ringbuf-demo
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
-	// gauranteed to be length 1
+	// Subscribe to signals for terminating the program.
+	// This is used until management of signals is passed to the TUI
+	stopper = make(chan os.Signal, 1)
+	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		for sig := range stopper {
+			if sig == os.Interrupt || sig == syscall.SIGTERM {
+				fmt.Println("got sigterm or interrupt")
+				os.Exit(0)
+			}
+		}
+	}()
+
+	if opts.Debug {
+		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+	}
+
+	// guaranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
 	if err != nil {
 		return err
 	}
 
-	return runProg(cmd.Context(), progReader, opts.Debug)
+	// Allow the current process to lock memory for eBPF resources.
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("could not raise memory limit: %v", err)
+	}
+	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
+	if err != nil {
+		return err
+	}
+
+	progLoader := loader.NewLoader(
+		decoder.NewDecoderFactory(),
+		promProvider,
+	)
+
+	app := tui.NewApp(opts.Debug, progLocation, progLoader)
+	return app.Run(cmd.Context(), progReader)
+
 }
 
 func getProgram(
@@ -113,36 +155,4 @@ func getProgram(
 	programSpinner.Success()
 
 	return progReader, nil
-}
-
-func runProg(ctx context.Context, progReader io.ReaderAt, debug bool) error {
-
-	ctx, cancel := context.WithCancel(ctx)
-
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-stopper
-		cancel()
-	}()
-	// Allow the current process to lock memory for eBPF resources.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("could not raise memory limit: %v", err)
-	}
-	progOptions := &loader.LoadOptions{
-		EbpfProg: progReader,
-		Verbose:  debug,
-	}
-
-	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
-	if err != nil {
-		return err
-	}
-
-	progLoader := loader.NewLoader(
-		decoder.NewDecoderFactory(),
-		promProvider,
-	)
-	return progLoader.Load(ctx, progOptions)
 }
