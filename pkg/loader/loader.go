@@ -101,8 +101,15 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	// TODO: Delete Hack if possible
 	for name, mapSpec := range spec.Maps {
+		if !isTrackedMap(mapSpec) {
+			continue
+		}
 		if mapSpec.Type == ebpf.RingBuf || mapSpec.Type == ebpf.PerfEventArray {
-			btfMapMap[name] = mapSpec.BTF
+			btfMap := mapSpec.BTF
+			if _, ok := btfMap.Value.(*btf.Struct); !ok {
+				return fmt.Errorf("the `value` member for map '%v' must be set to struct you will be submitting to the ringbuf/eventarray", name)
+			}
+			btfMapMap[name] = btfMap
 			mapSpec.BTF = nil
 			mapSpec.ValueSize = 0
 		}
@@ -160,6 +167,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
+	// TODO: break this functionality apart, need to handle deferred closes of all resources when solving
 	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
 }
 
@@ -180,7 +188,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 			fallthrough
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
-			// TODO: Support *btf.Union
+			// this assertion checked when initially populating the `btfMapMap`
 			structType := btfMapMap[name].Value.(*btf.Struct)
 			labelKeys := getLabelsForBtfStruct(structType)
 			if isCounterMap(bpfMap) {
@@ -346,6 +354,7 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
 	structKey, ok := mapSpec.BTF.Key.(*btf.Struct)
 	if !ok {
+		// TODO; move this check earlier
 		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.BTF.Value.String())
 	}
 

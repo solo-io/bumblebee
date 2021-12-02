@@ -49,7 +49,7 @@ var currentIndex int
 
 type App struct {
 	Entries   chan loader.MapEntry
-	CloseChan chan error
+	CloseChan chan struct{}
 
 	debug        bool
 	tviewApp     *tview.Application
@@ -67,18 +67,23 @@ func NewApp(debug bool, progLocation string, l loader.Loader) App {
 	return a
 }
 
-var preWatchChan = make(chan error)
+var preWatchChan = make(chan error, 1)
 
 func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	var errToReturn error
-	closeChan := make(chan error, 1)
+	closeChan := make(chan struct{}, 1)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
+			m.debugLog("captured ctrl-c")
 			cancel()
-			errToReturn = <-closeChan
+			// need to block here until the map watches from Load() are complete
+			// so that tview.App doesn't stop before they do, otherwise we get in a deadlock
+			// when Watch() attempts to Draw() to a stopped tview.App
+			<-closeChan
+			m.debugLog("received from closeChan")
 			close(closeChan)
 		}
 		return event
@@ -130,26 +135,38 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		Watcher:  m,
 	}
 	go func() {
-		err := m.loader.Load(ctx, progOptions)
+		errToReturn = m.loader.Load(ctx, progOptions)
+		m.debugLog(fmt.Sprintf("returned from Load() with err: %s", errToReturn))
 		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
 		// let's close the Entries chan so m.Watch(...) will return and we will no longer call Draw() on
 		// the tview.App
 		close(m.Entries)
-		m.CloseChan <- err
-		preWatchChan <- err
+		m.debugLog("closed entries")
+		// send to the closeChan to signal in the case the TUI was closed via CtrlC that Load()
+		// has returned and no new updates will be sent to the tview.App
+		m.CloseChan <- struct{}{}
+		// send to the preWatchChan in case Load() returned from an error in the Load/Link phase
+		// i.e. not the Watch phase, so we don't block when loader.PreWatchHandler() hasn't been called
+		preWatchChan <- errToReturn
+		// call Stop() on the tview.App to handle the case where Load() returned with an error
+		// safe to call this more than once, i.e. it's ok that CtrlC handler will also Stop() the tview.App
+		m.tviewApp.Stop()
+		m.debugLog("called stop")
 	}()
 	err := <-preWatchChan
+	m.debugLog(fmt.Sprintf("received from preWatchChan with err: %s", err))
 	if err != nil {
 		return err
 	}
 	pterm.Info.Println("Rendering TUI...")
+	m.debugLog("render tui")
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	go m.Watch()
 	// begin rendering the TUI
 	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
 		return err
 	}
-	m.debugLog("stopped app\n")
+	m.debugLog(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
 	return errToReturn
 }
 
@@ -158,6 +175,7 @@ func (a *App) PreWatchHandler() {
 }
 
 func (m *App) Watch() {
+	m.debugLog("beginning Watch() loop")
 	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			m.renderHash(r)
@@ -167,7 +185,7 @@ func (m *App) Watch() {
 		// update the screen if the UI is still running
 		m.tviewApp.Draw()
 	}
-	fmt.Println("no more entries, closing")
+	m.debugLog("no more entries, returning from Watch()")
 }
 
 func (m *App) renderRingBuf(incoming loader.MapEntry) {
