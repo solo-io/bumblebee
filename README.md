@@ -182,7 +182,7 @@ The following is a brief overview of the internal code structure
 ```
 # Development
 
-For non-linux users, we have a vagrant box available. Just run
+For non-linux users, we have a [vagrant](https://learn.hashicorp.com/tutorials/vagrant/getting-started-install) box available. Just run
 
 ```shell
 vagrant up
