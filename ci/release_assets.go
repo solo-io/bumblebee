@@ -7,7 +7,7 @@ import (
 func main() {
 	const buildDir = "_output"
 	const repoOwner = "solo-io"
-	const repoName = "eBPF"
+	const repoName = "bumblebee"
 
 	assets := []githubutils.ReleaseAssetSpec{
 		{
