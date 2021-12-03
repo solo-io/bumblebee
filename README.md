@@ -196,5 +196,5 @@ For fast iterations of go code / bpf programs, you can build with our build scri
 ```shell
 cd /source
 ./builder/build.sh ./examples/tcpconnect/tcpconnect.c tcpconnect.o
-go run -exec sudo ./ebpfctl/main.go run -d tcpconnect.o
+go run -exec sudo ./ebpfctl/main.go run tcpconnect.o
 ```

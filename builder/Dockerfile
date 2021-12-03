@@ -11,7 +11,7 @@ RUN apt-get install -y clang-13 lldb-13 lld-13 clangd-13 man-db
 RUN apt-get install -y bpftool libbpf-dev
 
 # non package installed default include directory
-# Note, you can run "make regen-vmlinux" to re-generte this file
+# Note, you can run "make regen-vmlinux" to re-generate this file
 ADD vmlinux.h /usr/local/include/
 
 # Ensure that solo helper types are available from workdir
