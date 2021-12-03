@@ -47,20 +47,27 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
+type AppOpts struct {
+	Debug    bool
+	Headless bool
+}
+
 type App struct {
 	Entries   chan loader.MapEntry
 	CloseChan chan struct{}
 
 	debug        bool
+	headless     bool
 	tviewApp     *tview.Application
 	flex         *tview.Flex
 	loader       loader.Loader
 	progLocation string
 }
 
-func NewApp(debug bool, progLocation string, l loader.Loader) App {
+func NewApp(opts *AppOpts, progLocation string, l loader.Loader) App {
 	a := App{
-		debug:        debug,
+		debug:        opts.Debug,
+		headless:     opts.Headless,
 		loader:       l,
 		progLocation: progLocation,
 	}
@@ -135,6 +142,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		Watcher:  m,
 	}
 	go func() {
+		m.debugLog("calling loader.Load()")
 		errToReturn = m.loader.Load(ctx, progOptions)
 		m.debugLog(fmt.Sprintf("returned from Load() with err: %s", errToReturn))
 		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
@@ -158,13 +166,20 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	if err != nil {
 		return err
 	}
-	pterm.Info.Println("Rendering TUI...")
-	m.debugLog("render tui")
 	// goroutine for updating the TUI data based on updates from loader watching maps
+	m.debugLog("starting Watch()")
 	go m.Watch()
-	// begin rendering the TUI
-	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
-		return err
+	if !m.headless {
+		pterm.Info.Println("Rendering TUI...")
+		m.debugLog("render tui")
+		// begin rendering the TUI
+		if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
+			return err
+		}
+	} else {
+		pterm.Info.Println("Starting headless loop (Ctrl-C to quit)...")
+		m.debugLog("headless mode, waiting for <-closeChan (or ctrl-c)")
+		<-closeChan
 	}
 	m.debugLog(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
 	return errToReturn
@@ -182,8 +197,10 @@ func (m *App) Watch() {
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
 			m.renderRingBuf(r)
 		}
-		// update the screen if the UI is still running
-		m.tviewApp.Draw()
+		if !m.headless {
+			// update the screen if the UI is still running
+			m.tviewApp.Draw()
+		}
 	}
 	m.debugLog("no more entries, returning from Watch()")
 }
@@ -317,12 +334,14 @@ func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
 
-	m.tviewApp.QueueUpdateDraw(func() {
-		m.flex.AddItem(table, 0, 1, false)
-		if i == 0 {
-			m.tviewApp.SetFocus(table)
-		}
-	})
+	if !m.headless {
+		m.tviewApp.QueueUpdateDraw(func() {
+			m.flex.AddItem(table, 0, 1, false)
+			if i == 0 {
+				m.tviewApp.SetFocus(table)
+			}
+		})
+	}
 }
 
 func nextTable(app *tview.Application) {
