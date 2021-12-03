@@ -158,8 +158,8 @@ func (d *decoder) handleArray(
 		}
 		slice[i] = val
 	}
-	mystr := string(slice[:])
-	return mystr, nil
+	str := string(slice[:])
+	return str, nil
 }
 
 func (d *decoder) handleFloat(
