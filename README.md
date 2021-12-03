@@ -191,7 +191,7 @@ vagrant ssh
 
 This folder will be mounted under "/source" in the vagrant VM.
 
-You can build with our build script:
+For fast iterations of go code / bpf programs, you can build with our build script, and run with go run as follows:
 
 ```shell
 cd /source

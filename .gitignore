@@ -15,10 +15,9 @@
 vendor/
 _output
 
-vmlinux.h
-
 # Staging ground for bpf programs
 bpf/
 
 # Ignore vscode
 .vscode/
+.vagrant/
