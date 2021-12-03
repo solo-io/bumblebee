@@ -1,4 +1,4 @@
-module github.com/solo-io/ebpf
+module github.com/solo-io/bumblebee
 
 go 1.17
 

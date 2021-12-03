@@ -9,7 +9,7 @@ elif [ -x "$(command -v python)" ]; then
 elif [ -x "$(command -v python2)" ]; then
   alias any_python='python2'    
 else
-  echo Python 2 or 3 is required to install ebpfctl
+  echo Python 2 or 3 is required to install bee
   exit 1
 fi
 
@@ -29,11 +29,11 @@ fi
 for ebpf_version in $EBPF_VERSIONS; do
 
 tmp=$(mktemp -d /tmp/ebpf.XXXXXX)
-filename="ebpfctl-${OS}-amd64"
-url="https://github.com/solo-io/ebpf/releases/download/${ebpf_version}/${filename}"
+filename="bee-${OS}-amd64"
+url="https://github.com/solo-io/bumblebee/releases/download/${ebpf_version}/${filename}"
 
 if curl -f ${url} >/dev/null 2>&1; then
-  echo "Attempting to download ebpfctl version ${ebpf_version}"
+  echo "Attempting to download bee version ${ebpf_version}"
 else
   continue
 fi
@@ -57,22 +57,22 @@ fi
 (
   cd "$HOME"
   mkdir -p ".ebpf/bin"
-  mv "${tmp}/${filename}" ".ebpf/bin/ebpfctl"
-  chmod +x ".ebpf/bin/ebpfctl"
+  mv "${tmp}/${filename}" ".ebpf/bin/bee"
+  chmod +x ".ebpf/bin/bee"
 )
 
 rm -r "$tmp"
 
-echo "ebpfctl was successfully installed 🎉"
+echo "bee was successfully installed 🎉"
 echo ""
 echo "Add the eBPF CLI to your path with:"
 echo "  export PATH=\$HOME/.ebpf/bin:\$PATH"
 echo ""
 echo "Now run:"
-echo "  ebpfctl init     # Initialize simple eBPF program to run with ebpfctl"
+echo "  bee init     # Initialize simple eBPF program to run with bee"
 echo "Please see visit the Gloo Mesh website for more info:  https://www.solo.io/products/ebpf/"
 exit 0
 done
 
-echo "No versions of ebpfctl found."
+echo "No versions of bee found."
 exit 1

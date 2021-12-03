@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/solo-io/ebpf/pkg/spec"
+	"github.com/solo-io/bumblebee/pkg/spec"
 	"oras.land/oras-go/pkg/content"
 )
 

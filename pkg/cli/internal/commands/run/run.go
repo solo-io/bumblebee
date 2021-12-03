@@ -12,12 +12,12 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pterm/pterm"
-	"github.com/solo-io/ebpf/pkg/cli/internal/options"
-	"github.com/solo-io/ebpf/pkg/decoder"
-	"github.com/solo-io/ebpf/pkg/loader"
-	"github.com/solo-io/ebpf/pkg/spec"
-	"github.com/solo-io/ebpf/pkg/stats"
-	"github.com/solo-io/ebpf/pkg/tui"
+	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
+	"github.com/solo-io/bumblebee/pkg/decoder"
+	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/spec"
+	"github.com/solo-io/bumblebee/pkg/stats"
+	"github.com/solo-io/bumblebee/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -42,7 +42,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		Use:   "run BPF_PROGRAM",
 		Short: "Run a BPF program file or OCI image.",
 		Long: `
-The ebpfctl run command takes a compiled BPF program as input, and runs it using
+The bee run command takes a compiled BPF program as input, and runs it using
 our generic loader. The supported formats are: file, and OCI image
 
 To run with a file pass it as the first ARG:
