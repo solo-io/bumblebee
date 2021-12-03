@@ -72,3 +72,5 @@ endif
 .PHONY: regen-vmlinux
 regen-vmlinux:
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > builder/vmlinux.h
+# if using vagrant, you can do this instead:
+# vagrant ssh -c "bpftool btf dump file /sys/kernel/btf/vmlinux format c" > builder/vmlinux.h
