@@ -30,7 +30,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       - name: Push Docker Container
-        run: cat /boot/config-$(uname -r) | grep CONFIG_DEBUG_INFO_BTF && sudo apt-get update -y && sudo apt-get -qq install linux-headers-$(uname -r) linux-tools-$(uname -r) linux-image-$(uname -r)-dbgsym && cat /usr/lib/debug/boot/vmlinux-$(uname -r) && make docker-push
+        run: make docker-push
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
   lint:
