@@ -16,6 +16,7 @@ Vagrant.configure("2") do |config|
       apt-get -qq install linux-headers-$(uname -r) linux-tools-$(uname -r) libbpf-dev
       # dev tools:
       apt-get -qq install -y golang docker.io make
+      usermod -aG docker vagrant
       # add headers:
       bpftool btf dump file /sys/kernel/btf/vmlinux format c > /usr/local/include/vmlinux.h
       cp /source/builder/solo_types.h /usr/local/include/
