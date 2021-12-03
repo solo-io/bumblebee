@@ -127,9 +127,39 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 
 	case *btf.Float:
 		return d.handleFloat(typedMember)
+	case *btf.Array:
+		return d.handleArray(typedMember)
 	default:
-		return nil, errors.New("only primitive types allowed")
+		return nil, fmt.Errorf("attempting to decode unsupported type, found: %s", typ.String())
 	}
+}
+
+func (d *decoder) handleArray(
+	typedMember *btf.Array,
+) (interface{}, error) {
+	typInt, ok := typedMember.Type.(*btf.Int)
+	if !ok {
+		return nil, errors.New("only arrays of type *btf.Int (e.g. chars) are supported")
+	}
+	if typInt.Name != "char" {
+		return nil, fmt.Errorf("only arrays with chars (i.e. strings) are supported, found '%s'", typInt.Name)
+	}
+	if typInt.Size != 1 {
+		return nil, fmt.Errorf("expected type size of 1 byte, found '%v'", typInt.Size)
+	}
+	length := int(typedMember.Nelems)
+	slice := make([]byte, length)
+	for i := 0; i < length; i++ {
+		buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typInt.Size])
+		d.offset += typInt.Size
+		var val byte
+		if err := binary.Read(buf, Endianess, &val); err != nil {
+			return nil, err
+		}
+		slice[i] = val
+	}
+	mystr := string(slice[:])
+	return mystr, nil
 }
 
 func (d *decoder) handleFloat(
