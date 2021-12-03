@@ -30,7 +30,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       - name: Push Docker Container
-        run: apt-get -qq install linux-headers-$(uname -r) linux-tools-$(uname -r) libbpf-dev && make docker-push
+        run: sudo apt-get -qq install linux-headers-$(uname -r) linux-tools-$(uname -r) libbpf-dev && make docker-push
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
   lint:
