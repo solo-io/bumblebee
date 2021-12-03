@@ -12,10 +12,10 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pterm/pterm"
-	"github.com/solo-io/ebpf/builder"
-	"github.com/solo-io/ebpf/pkg/cli/internal/options"
-	"github.com/solo-io/ebpf/pkg/internal/version"
-	"github.com/solo-io/ebpf/pkg/spec"
+	"github.com/solo-io/bumblebee/builder"
+	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
+	"github.com/solo-io/bumblebee/pkg/internal/version"
+	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
@@ -46,7 +46,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		Use:   "build INPUT_FILE REGISTRY_REF",
 		Short: "Build a BPF program, and save it to an OCI image representation.",
 		Long: `
-The ebpfctl build command has 2 main parts
+The bee build command has 2 main parts
 1. Compiling the BPF C program using clang.
 2. Saving the compiled program in the OCI format.
 

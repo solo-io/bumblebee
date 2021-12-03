@@ -11,12 +11,12 @@ func main() {
 
 	assets := []githubutils.ReleaseAssetSpec{
 		{
-			Name:       "ebpfctl-linux-amd64",
+			Name:       "bee-linux-amd64",
 			ParentPath: buildDir,
 			UploadSHA:  true,
 		},
 		{
-			Name:       "ebpfctl-linux-arm64",
+			Name:       "bee-linux-arm64",
 			ParentPath: buildDir,
 			UploadSHA:  true,
 		},

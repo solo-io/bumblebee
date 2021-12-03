@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/pterm/pterm"
-	"github.com/solo-io/ebpf/pkg/cli/internal/options"
-	"github.com/solo-io/ebpf/pkg/spec"
+	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
+	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/spf13/cobra"
 	"oras.land/oras-go/pkg/content"
 	"oras.land/oras-go/pkg/oras"

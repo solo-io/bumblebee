@@ -2,11 +2,11 @@
 
 ## Introduction
 
-Let's get started writing our first `eBPF` probe. This is super simple using the interactive `ebpfctl init` command. But first let's create a quick workspace directory using `mkdir ebpf-test && cd ebpf-test`.
+Let's get started writing our first `eBPF` probe. This is super simple using the interactive `bee init` command. But first let's create a quick workspace directory using `mkdir ebpf-test && cd ebpf-test`.
 
-Now let's run `ebpfctl init`!
+Now let's run `bee init`!
 
-## ebpfctl 
+## bee 
 
 The first option you will be confronted with is the language with which you will develop your probe. Currently only `C` is supported, but support for `Rust` is planned as well.
 ```bash
@@ -21,7 +21,7 @@ Next you will be asked for the type of global map you would like to use. Maps ar
   ▸ HashMap
 ```
 
-After deciding on a map type, you will be asked to decide on an output format. This step is the first that gets into the detail and magic of `ebpfctl`. Normally developing `eBPF` applications requires writing user space, and kernel space code. However, with `ebpfctl` you only need to develop the kernel space code, and then `ebpfctl` can automatically handle and output the data in your specified format. The 2 main output types available currently are: `stats`, and `print`. More information on these can be found in the [output formats](#Output-Formats) section below. We will be choosing `print` as a simple example.
+After deciding on a map type, you will be asked to decide on an output format. This step is the first that gets into the detail and magic of `bee`. Normally developing `eBPF` applications requires writing user space, and kernel space code. However, with `bee` you only need to develop the kernel space code, and then `bee` can automatically handle and output the data in your specified format. The 2 main output types available currently are: `stats`, and `print`. More information on these can be found in the [output formats](#Output-Formats) section below. We will be choosing `print` as a simple example.
 
 ```bash
 ? What type of output would you like from your map: 

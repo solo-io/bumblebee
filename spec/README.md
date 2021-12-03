@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The eBPF Image specification defines how to bundle eBPF kernel programs as container images. A compatible eBPF image consists of a eBPF binary file, and Architecture metadata. Currently, the cli in this repo `ebpfctl` is the only way to run these images, although the spec is intended to be generic and to provide a standard mechanism to manage the building and running of eBPF modules by any compatible loader.
+The eBPF Image specification defines how to bundle eBPF kernel programs as container images. A compatible eBPF image consists of a eBPF binary file, and Architecture metadata. Currently, the cli in this repo `bee` is the only way to run these images, although the spec is intended to be generic and to provide a standard mechanism to manage the building and running of eBPF modules by any compatible loader.
 
 ## Terminology:
 
@@ -34,11 +34,11 @@ The config layer consists of a JSON-formatted string, which currently contains n
 
 For the sake of simplicity, the specification only supports a single module per image.
 
-#### Running OCI Images with ebpfctl:
+#### Running OCI Images with bee:
 
-`ebpfctl` takes advantage of a newer linux kernel technology called BTF, so in order to run `eBPF` images, a BTF enabled kernel is required.
+`bee` takes advantage of a newer linux kernel technology called BTF, so in order to run `eBPF` images, a BTF enabled kernel is required.
 
-Once this has been verified, these images can be run using `ebpfctl run IMAGE_NAME`.
+Once this has been verified, these images can be run using `bee run IMAGE_NAME`.
 
 
 ### Format:
@@ -78,7 +78,7 @@ The following descriptors provide an example of the OCI Image descriptors for an
 ]
 ```
 
-You can use the `ebpfctl` tool to take new or existing module code and package it according to the eBPF OCI Spec.
+You can use the `bee` tool to take new or existing module code and package it according to the eBPF OCI Spec.
 
 ## Want more info?
 

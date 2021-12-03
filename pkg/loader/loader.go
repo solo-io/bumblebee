@@ -14,8 +14,8 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/pterm/pterm"
-	"github.com/solo-io/ebpf/pkg/decoder"
-	"github.com/solo-io/ebpf/pkg/stats"
+	"github.com/solo-io/bumblebee/pkg/decoder"
+	"github.com/solo-io/bumblebee/pkg/stats"
 	"golang.org/x/sync/errgroup"
 )
 

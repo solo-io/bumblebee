@@ -13,7 +13,7 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pterm/pterm"
 	"github.com/rivo/tview"
-	"github.com/solo-io/ebpf/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/loader"
 )
 
 const titleText = `[aqua]

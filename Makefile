@@ -2,7 +2,7 @@
 # Versioning
 #----------------------------------------------------------------------------------
 OUTDIR ?= _output
-HUB ?= "gcr.io/"
+HUB ?= "ghcr.io/solo-io"
 
 
 RELEASE := "true"
@@ -14,7 +14,7 @@ endif
 # This tag has the refs/tags prefix, which we need to remove here.
 export VERSION ?= $(shell echo $(TAGGED_VERSION) | sed -e "s/^refs\/tags\///" | cut -c 2-)
 
-LDFLAGS := "-X github.com/solo-io/ebpf/pkg/internal/version.Version=$(VERSION)"
+LDFLAGS := "-X github.com/solo-io/bumblebee/pkg/internal/version.Version=$(VERSION)"
 GCFLAGS := all="-N -l"
 
 SOURCES := $(shell find . -name "*.go" | grep -v test.go)
@@ -25,39 +25,39 @@ SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 
 docker-build:
 #   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
-#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)gloobpf/bpfbuilder:$(VERSION)`
-	docker build ./builder -f builder/Dockerfile -t $(HUB)gloobpf/bpfbuilder:$(VERSION)
+#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
+	docker build ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
 
-docker-push:
-	docker push gcr.io/gloobpf/bpfbuilder:$(VERSION) 
+docker-push: docker-build
+	docker push $(HUB)/bumblebee-builder:$(VERSION)
 
 #----------------------------------------------------------------------------------
 # CLI
 #----------------------------------------------------------------------------------
 
 
-$(OUTDIR)/ebpfctl-linux-amd64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
+$(OUTDIR)/bee-linux-amd64: $(SOURCES)
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ bee/main.go
 
-.PHONY: ebpfctl-linux-amd64
-ebpfctl-linux-amd64: $(OUTDIR)/ebpfctl-linux-amd64.sha256
-$(OUTDIR)/ebpfctl-linux-amd64.sha256: $(OUTDIR)/ebpfctl-linux-amd64
-	sha256sum $(OUTDIR)/ebpfctl-linux-amd64 > $@
+.PHONY: bee-linux-amd64
+bee-linux-amd64: $(OUTDIR)/bee-linux-amd64.sha256
+$(OUTDIR)/bee-linux-amd64.sha256: $(OUTDIR)/bee-linux-amd64
+	sha256sum $(OUTDIR)/bee-linux-amd64 > $@
 
-$(OUTDIR)/ebpfctl-linux-arm64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ ebpfctl/main.go
+$(OUTDIR)/bee-linux-arm64: $(SOURCES)
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ bee/main.go
 
-.PHONY: ebpfctl-linux-arm64
-ebpfctl-linux-arm64: $(OUTDIR)/ebpfctl-linux-arm64.sha256
-$(OUTDIR)/ebpfctl-linux-arm64.sha256: $(OUTDIR)/ebpfctl-linux-arm64
-	sha256sum $(OUTDIR)/ebpfctl-linux-arm64 > $@
+.PHONY: bee-linux-arm64
+bee-linux-arm64: $(OUTDIR)/bee-linux-arm64.sha256
+$(OUTDIR)/bee-linux-arm64.sha256: $(OUTDIR)/bee-linux-arm64
+	sha256sum $(OUTDIR)/bee-linux-arm64 > $@
 
 .PHONY: build-cli
-build-cli: ebpfctl-linux-amd64 ebpfctl-linux-arm64
+build-cli: bee-linux-amd64 bee-linux-arm64
 
 .PHONY: install-cli
 install-cli:
-	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ebpfctl/main.go
+	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) bee/main.go
 
 ##----------------------------------------------------------------------------------
 ## Release
