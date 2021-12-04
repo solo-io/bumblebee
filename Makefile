@@ -1,8 +1,8 @@
 #----------------------------------------------------------------------------------
 # Versioning
 #----------------------------------------------------------------------------------
-OUTDIR ?= _output
-HUB ?= "ghcr.io/solo-io"
+OUTDIR?=_output
+HUB?=ghcr.io/solo-io
 
 
 RELEASE := "true"
@@ -22,13 +22,15 @@ SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 #----------------------------------------------------------------------------------
 # Build Container
 #----------------------------------------------------------------------------------
-PUSH_CMD:=
+PUSH_CMD:=--load
+PLATFORMS?=linux/amd64
 docker-build:
 #   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
-#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
-	docker buildx build --platform linux/amd64,linux/arm64/v8 $(PUSH_CMD) ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
+#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
+	docker buildx build --platform $(PLATFORMS) $(PUSH_CMD) ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
 
 docker-push: PUSH_CMD=--push
+docker-push: PLATFORMS=linux/amd64,linux/arm64/v8
 docker-push: docker-build
 
 #----------------------------------------------------------------------------------
