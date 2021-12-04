@@ -86,6 +86,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		if event.Key() == tcell.KeyCtrlC {
 			m.debugLog("captured ctrl-c")
 			cancel()
+			m.debugLog("called cancel()")
 			// need to block here until the map watches from Load() are complete
 			// so that tview.App doesn't stop before they do, otherwise we get in a deadlock
 			// when Watch() attempts to Draw() to a stopped tview.App
@@ -199,7 +200,9 @@ func (m *App) Watch() {
 		}
 		if !m.headless {
 			// update the screen if the UI is still running
-			m.tviewApp.Draw()
+			// don't block here as we still want to process entries as they come in,
+			// let the tview.App handle the synchronization of updates
+			go m.tviewApp.QueueUpdateDraw(func() {})
 		}
 	}
 	m.debugLog("no more entries, returning from Watch()")

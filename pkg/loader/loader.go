@@ -223,6 +223,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
+	log.Println("after waitgroup")
 	return err
 }
 
@@ -250,15 +251,19 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
+		log.Println("in ringbuf watcher, got done...")
 		if err := rd.Close(); err != nil {
 			log.Printf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
+		log.Println("after reader.Close()")
 	}()
 
 	for {
 		record, err := rd.Read()
+		log.Println("read...")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
+				log.Println("ringbuf closed...")
 				return nil
 			}
 			log.Printf("error while reading from ringbuf '%s' reader: %s", name, err)
