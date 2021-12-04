@@ -134,6 +134,7 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 	}
 }
 
+// currently only supports strings represented as char arrays
 func (d *decoder) handleArray(
 	typedMember *btf.Array,
 ) (interface{}, error) {
@@ -158,7 +159,8 @@ func (d *decoder) handleArray(
 		}
 		slice[i] = val
 	}
-	str := string(slice[:])
+	n := bytes.IndexByte(slice, 0)
+	str := string(slice[:n])
 	return str, nil
 }
 
