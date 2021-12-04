@@ -160,6 +160,17 @@ go install github.com/solo-io/bumblebee/bee
 
 You can also navigate to the releases page [here](https://github.com/solo-io/bumblebee/releases/) for more versions/information.
 
+### A note on permissions
+
+Loading eBPF programs to the kernel (`bpf run` command) requires elevated privileges. 
+You can either run `bee` as root (with sudo), or add capabilities to the binary. To add capabilities, run the following command:
+
+```bash
+sudo setcap cap_sys_resource,cap_sys_admin,cap_bpf+eip $(which bee)
+```
+
+Adding capabilities is the preferred method, as if you run `bpf run` with `sudo`, it will not find local images when you run `bpf build` without sudo.
+
 ## Contributing
 
 Developing `eBPF` does not require a linux machine, however running the probes does. `eBPF` itself is a linux kernel technology, therefore any actual `BPF` programs must run in the linux kernel. We are working on an OSX development path, but it has not been completed as of yet.
@@ -184,7 +195,7 @@ The following is a brief overview of the internal code structure
 
 For non-linux users, we have a [vagrant](https://learn.hashicorp.com/tutorials/vagrant/getting-started-install) box available. Just run
 
-```shell
+```bash
 vagrant up
 vagrant ssh
 ```
@@ -193,7 +204,7 @@ This folder will be mounted under "/source" in the vagrant VM.
 
 For fast iterations of go code / bpf programs, you can build with our build script, and run with go run as follows:
 
-```shell
+```bash
 cd /source
 ./builder/build.sh ./examples/tcpconnect/tcpconnect.c tcpconnect.o
 go run -exec sudo ./ebpfctl/main.go run tcpconnect.o
