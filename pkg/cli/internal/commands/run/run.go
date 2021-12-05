@@ -25,15 +25,13 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	Debug    bool
-	Headless bool
+	Debug bool
 }
 
 var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
-	flags.BoolVarP(&opts.Headless, "headless", "z", false, "Do not render the TUI (primarily used for debugging")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -108,10 +106,10 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	)
 
 	appOpts := tui.AppOpts{
-		Debug:    opts.Debug,
-		Headless: opts.Headless,
+		Debug:        opts.Debug,
+		ProgLocation: progLocation,
 	}
-	app := tui.NewApp(&appOpts, progLocation, progLoader)
+	app := tui.NewApp(progLoader, &appOpts)
 	return app.Run(cmd.Context(), progReader)
 
 }

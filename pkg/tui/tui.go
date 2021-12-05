@@ -48,8 +48,8 @@ var mapMutex = sync.RWMutex{}
 var currentIndex int
 
 type AppOpts struct {
-	Debug    bool
-	Headless bool
+	Debug        bool
+	ProgLocation string
 }
 
 type App struct {
@@ -57,19 +57,17 @@ type App struct {
 	CloseChan chan struct{}
 
 	debug        bool
-	headless     bool
 	tviewApp     *tview.Application
 	flex         *tview.Flex
 	loader       loader.Loader
 	progLocation string
 }
 
-func NewApp(opts *AppOpts, progLocation string, l loader.Loader) App {
+func NewApp(l loader.Loader, opts *AppOpts) App {
 	a := App{
-		debug:        opts.Debug,
-		headless:     opts.Headless,
 		loader:       l,
-		progLocation: progLocation,
+		debug:        opts.Debug,
+		progLocation: opts.ProgLocation,
 	}
 	return a
 }
@@ -170,18 +168,14 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	m.debugLog("starting Watch()")
 	go m.Watch()
-	if !m.headless {
-		pterm.Info.Println("Rendering TUI...")
-		m.debugLog("render tui")
-		// begin rendering the TUI
-		if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
-			return err
-		}
-	} else {
-		pterm.Info.Println("Starting headless loop (Ctrl-C to quit)...")
-		m.debugLog("headless mode, waiting for <-closeChan (or ctrl-c)")
-		<-closeChan
+
+	pterm.Info.Println("Rendering TUI...")
+	m.debugLog("render tui")
+	// begin rendering the TUI
+	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
+		return err
 	}
+
 	m.debugLog(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
 	return errToReturn
 }
@@ -198,12 +192,10 @@ func (m *App) Watch() {
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
 			m.renderRingBuf(r)
 		}
-		if !m.headless {
-			// update the screen if the UI is still running
-			// don't block here as we still want to process entries as they come in,
-			// let the tview.App handle the synchronization of updates
-			go m.tviewApp.QueueUpdateDraw(func() {})
-		}
+		// update the screen if the UI is still running
+		// don't block here as we still want to process entries as they come in,
+		// let the tview.App handle the synchronization of updates
+		go m.tviewApp.QueueUpdateDraw(func() {})
 	}
 	m.debugLog("no more entries, returning from Watch()")
 }
@@ -337,14 +329,12 @@ func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
 
-	if !m.headless {
-		m.tviewApp.QueueUpdateDraw(func() {
-			m.flex.AddItem(table, 0, 1, false)
-			if i == 0 {
-				m.tviewApp.SetFocus(table)
-			}
-		})
-	}
+	m.tviewApp.QueueUpdateDraw(func() {
+		m.flex.AddItem(table, 0, 1, false)
+		if i == 0 {
+			m.tviewApp.SetFocus(table)
+		}
+	})
 }
 
 func nextTable(app *tview.Application) {
