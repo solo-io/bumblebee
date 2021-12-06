@@ -16,15 +16,14 @@ import (
 	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/stats"
+	"github.com/solo-io/go-utils/contextutils"
 	"golang.org/x/sync/errgroup"
 )
 
 type LoadOptions struct {
 	// Program bytes to load
 	EbpfProg io.ReaderAt
-	// Log to debug.log file
-	Debug   bool
-	Watcher MapWatcher
+	Watcher  MapWatcher
 }
 
 type Loader interface {
@@ -173,6 +172,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
 	opts.Watcher.PreWatchHandler()
+	logger := contextutils.LoggerFrom(ctx)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range maps {
@@ -184,8 +184,6 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 		}
 
 		switch bpfMap.Type {
-		case ebpf.PerfEventArray:
-			fallthrough
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
 			// this assertion checked when initially populating the `btfMapMap`
@@ -223,6 +221,7 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
+	logger.Info("after waitgroup")
 	return err
 }
 
@@ -238,6 +237,7 @@ func (l *loader) startRingBuf(
 	opts.Watcher.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
+	logger := contextutils.LoggerFrom(ctx)
 
 	// Open a ringbuf reader from userspace RINGBUF map described in the
 	// eBPF C program.
@@ -250,18 +250,22 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
+		logger.Info("in ringbuf watcher, got done...")
 		if err := rd.Close(); err != nil {
-			log.Printf("error while closing ringbuf '%s' reader: %s", name, err)
+			logger.Infof("error while closing ringbuf '%s' reader: %s", name, err)
 		}
+		logger.Info("after reader.Close()")
 	}()
 
 	for {
 		record, err := rd.Read()
+		logger.Info("read...")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
+				logger.Info("ringbuf closed...")
 				return nil
 			}
-			log.Printf("error while reading from ringbuf '%s' reader: %s", name, err)
+			logger.Infof("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)

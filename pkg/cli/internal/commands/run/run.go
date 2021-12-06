@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,8 +18,10 @@ import (
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/bumblebee/pkg/tui"
+	"github.com/solo-io/go-utils/contextutils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.uber.org/zap"
 )
 
 type runOptions struct {
@@ -76,15 +77,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		}
 	}()
 
-	if opts.debug {
-		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			log.Fatalf("error opening file: %v", err)
-		}
-		defer f.Close()
-		log.SetOutput(f)
-	}
-
 	// guaranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
@@ -106,9 +98,27 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		promProvider,
 	)
 
-	app := tui.NewApp(opts.debug, progLocation, progLoader)
-	return app.Run(cmd.Context(), progReader)
+	appOpts := tui.AppOpts{
+		ProgLocation: progLocation,
+	}
+	app := tui.NewApp(progLoader, &appOpts)
 
+	var sugaredLogger *zap.SugaredLogger
+	if opts.debug {
+		cfg := zap.NewDevelopmentConfig()
+		cfg.OutputPaths = []string{"debug.log"}
+		cfg.ErrorOutputPaths = []string{"debug.log"}
+		logger, err := cfg.Build()
+		if err != nil {
+			return fmt.Errorf("couldn't create zap logger: '%w'", err)
+		}
+		sugaredLogger = logger.Sugar()
+	} else {
+		sugaredLogger = zap.NewNop().Sugar()
+	}
+
+	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
+	return app.Run(ctx, progReader)
 }
 
 func getProgram(
