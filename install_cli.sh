@@ -66,11 +66,11 @@ rm -r "$tmp"
 echo "bee was successfully installed 🎉"
 echo ""
 echo "Add the bumblebee CLI to your path with:"
-echo "  export PATH=\$HOME/.ebpf/bin:\$PATH"
+echo "  export PATH=\$HOME/.bumblebee/bin:\$PATH"
 echo ""
 echo "Now run:"
 echo "  bee init     # Initialize simple eBPF program to run with bee"
-echo "Please see visit the bumblebee website for more info:  https://www.solo.io/products/bumblebee/"
+echo "Please see visit the bumblebee website for more info:  https://github.com:solo-io/bumblebee"
 exit 0
 done
 

@@ -207,5 +207,17 @@ For fast iterations of go code / bpf programs, you can build with our build scri
 ```bash
 cd /source
 ./builder/build.sh ./examples/tcpconnect/tcpconnect.c tcpconnect.o
-go run -exec sudo ./ebpfctl/main.go run tcpconnect.o
+go run -exec sudo ./bee/main.go run tcpconnect.o
+```
+
+To make a local docker image for the bee to use, you can run
+
+```bash
+make docker-local-build
+```
+
+or, if for podman:
+
+```bash
+make docker-local-build DOCKER=podman
 ```

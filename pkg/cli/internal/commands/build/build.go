@@ -170,9 +170,9 @@ func getPlatformInfo(ctx context.Context) *ocispec.Platform {
 		return nil
 	}
 	return &ocispec.Platform{
-		OS:           splitOut[0],
-		OSVersion:    splitOut[1],
-		Architecture: splitOut[2],
+		OS:           strings.TrimSpace(splitOut[0]),
+		OSVersion:    strings.TrimSpace(splitOut[1]),
+		Architecture: strings.TrimSpace(splitOut[2]), //remove newline
 	}
 }
 

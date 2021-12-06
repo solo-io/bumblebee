@@ -179,6 +179,9 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 	if (counterp) {
 		__sync_fetch_and_add(counterp, 1);
 	} else {
+		// we may miss N events, where N is number of CPUs. We may want to 
+		// fix this for prod, by adding another lookup/update calls here.
+		// we skipped these for brevity
 		counter = 1;
 		bpf_map_update_elem(&connection_count, &hash_key, &counter, BPF_NOEXIST);
 	}
@@ -252,7 +255,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 
 	// increment the counter for this address
 	hash_key.daddr = daddr;
-	counterp = bpf_map_lookup_or_try_init(&connection_count, &hash_key, &zero_counter);
+	counterp = bpf_map_lookup_elem(&connection_count, &hash_key);
 	if (counterp) {
 		__sync_fetch_and_add(counterp, 1);
 	} else {
@@ -271,11 +274,17 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 
 Use the `bee` tool to compile your program and store it as an OCI image:
 ```shell
-bee build probe.c yourregistry.io/my_probe:v1
+bee build probe.c my_probe:v1
 ```
 
 Note: The command above uses a `docker` build container to simplify building your code. If you use `podman` instead of docker, just add `--builder podman` to the command above.
 
+You can see all your local probes with the `list` command:
+```shell
+bee list
+Name                                        | OS      | OS Version             | Arch   
+my_probe:v1                                 | Linux   | 5.15.4-201.fc35.x86_64 | x86_64
+```
 
 ## Run it!
 
@@ -288,7 +297,7 @@ so it has the permissions it needs in the context of a regular user.
 
 To run, simply use this command:
 ```shell
-bee run yourregistry.io/my_probe:v1
+bee run my_probe:v1
 ```
 
 `bee` will by default open a terminal UI and display the events coming from your probe. If you don't see anything, try running some `curl` or `wget` commands from a different terminal!
@@ -301,11 +310,41 @@ It should look something like this:
 
 You can push and pull probes from any OCI compatible registry, allowing you to use probes others have written with just one line of shell script!
 
-TODO:
-expand on:
-- bee push k/foo:v1
-- bee pull k/foo:v1
-- show an example of bee run with out pre-pushed images.
+In fact, you can try running some of the programs we've already pushed right now!
+```
+bee run ghcr.io/solo-io/bumblebee/tcpconnect:0.0.3
+```
+
+This command automatically pulls the remote bpf program and runs it!
+
+You can also push images to an OCI compliant registry, and share them with the community! As for authentication, `bee` will automatically pick-up your docker authentication settings. You can also run `bee login` (this stores the credentials **unencrypted** in `~/.bumblebee/config.json`), or provide the credentials in the command line.
+
+To login to GHCR for example, run:
+```
+export GITHUB_USER=<You github user name>
+export GITHUB_TOKEN=<You github personal access token>
+echo $GITHUB_TOKEN | go run bee/main.go login -u $GITHUB_USER --password-stdin ghcr.io
+```
+
+If you don't have access to a registry, you can also start a local registry for testing purposes like so:
+```
+docker run --rm -p 5000:5000 registry:2
+```
+
+Once you have access to a registry, You can use `bee tag`, `bee push` and `bee pull` as you would with `docker`.
+
+For example, let's re-tag our image from above and push it:
+
+```
+bee tag my_probe:v1 localhost:5000/my_probe:v1
+bee push localhost:5000/my_probe:v1
+```
+Another example, that uses google container registry:
+
+```
+bee tag my_probe:v1 gcr.io/<YOUR PROJECT ID>/my_probe:v1
+bee push gcr.io/<YOUR PROJECT ID>/my_probe:v1
+```
 
 ## Summary
 

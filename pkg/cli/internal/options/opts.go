@@ -16,6 +16,7 @@ func NewGeneralOptions(flags *pflag.FlagSet) *GeneralOptions {
 type GeneralOptions struct {
 	Verbose       bool
 	OCIStorageDir string
+	ConfigDir     string
 
 	AuthOptions AuthOptions
 }
@@ -23,6 +24,7 @@ type GeneralOptions struct {
 func (opts *GeneralOptions) addToFlags(flags *pflag.FlagSet) {
 	flags.BoolVarP(&opts.Verbose, "verbose", "v", false, "verbose output")
 	flags.StringVar(&opts.OCIStorageDir, "storage", spec.EbpfImageDir, "Directory to store OCI images locally")
+	flags.StringVar(&opts.ConfigDir, "config-dir", spec.EbpfConfigDir, "Directory to bumblebee configuration")
 }
 
 type AuthOptions struct {
@@ -34,7 +36,7 @@ type AuthOptions struct {
 }
 
 func (opts *AuthOptions) addToFlags(flags *pflag.FlagSet) {
-	flags.StringArrayVarP(&opts.CredentialsFiles, "config", "c", nil, "path to auth config")
+	flags.StringArrayVarP(&opts.CredentialsFiles, "config", "c", nil, "path to auth configs")
 	flags.StringVarP(&opts.Username, "username", "u", "", "registry username")
 	flags.StringVarP(&opts.Password, "password", "p", "", "registry password")
 	flags.BoolVar(&opts.Insecure, "insecure", false, "allow connections to SSL registry without certs")

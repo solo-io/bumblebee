@@ -108,6 +108,7 @@ func (e *ebpfOCIClient) Push(
 		registry,
 		"",
 		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
+		oras.WithPullByBFS,
 	)
 	return err
 }

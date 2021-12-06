@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	EbpfConfigDir       = home() + "/.ebpf"
+	EbpfConfigDir       = home() + "/.bumblebee"
 	EbpfImageDir        = filepath.Join(EbpfConfigDir, "store")
 	EbpfCredentialsFile = filepath.Join(EbpfConfigDir, "credentials.json")
 )

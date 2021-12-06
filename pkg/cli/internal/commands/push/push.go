@@ -50,6 +50,7 @@ func push(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		remoteRegistry,
 		"",
 		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
+		oras.WithPullByBFS,
 	)
 	if err != nil {
 		pushSpinner.UpdateText(fmt.Sprintf("Failed to push image %s", ref))

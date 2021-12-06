@@ -21,6 +21,10 @@ require (
 	oras.land/oras-go v1.0.0
 )
 
-require github.com/pkg/errors v0.9.1
+require (
+	github.com/docker/cli v20.10.11+incompatible
+	github.com/docker/docker v20.10.11+incompatible
+	github.com/pkg/errors v0.9.1
+)
 
 replace github.com/cilium/ebpf => github.com/solo-io/cilium-ebpf v0.7.1-0.20211109175948-0418708068be

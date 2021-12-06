@@ -51,6 +51,7 @@ func pull(ctx context.Context, opts *options.GeneralOptions, ref string) error {
 		localRegistry,
 		"",
 		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
+		oras.WithPullByBFS,
 	)
 	if err != nil {
 		pullSpinner.UpdateText(fmt.Sprintf("Failed to pull image %s", ref))
