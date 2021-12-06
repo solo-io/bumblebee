@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"sync"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/pterm/pterm"
 	"github.com/rivo/tview"
 	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/logger"
 )
 
 const titleText = `[aqua]
@@ -48,7 +48,6 @@ var mapMutex = sync.RWMutex{}
 var currentIndex int
 
 type AppOpts struct {
-	Debug        bool
 	ProgLocation string
 }
 
@@ -56,7 +55,7 @@ type App struct {
 	Entries   chan loader.MapEntry
 	CloseChan chan struct{}
 
-	debug        bool
+	logger       logger.Logger
 	tviewApp     *tview.Application
 	flex         *tview.Flex
 	loader       loader.Loader
@@ -66,7 +65,6 @@ type App struct {
 func NewApp(l loader.Loader, opts *AppOpts) App {
 	a := App{
 		loader:       l,
-		debug:        opts.Debug,
 		progLocation: opts.ProgLocation,
 	}
 	return a
@@ -75,6 +73,8 @@ func NewApp(l loader.Loader, opts *AppOpts) App {
 var preWatchChan = make(chan error, 1)
 
 func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
+	logger := ctx.Value(logger.LoggerKey{}).(logger.Logger)
+	m.logger = logger
 	ctx, cancel := context.WithCancel(ctx)
 
 	var errToReturn error
@@ -82,14 +82,14 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
-			m.debugLog("captured ctrl-c")
+			logger.Print("captured ctrl-c")
 			cancel()
-			m.debugLog("called cancel()")
+			logger.Print("called cancel()")
 			// need to block here until the map watches from Load() are complete
 			// so that tview.App doesn't stop before they do, otherwise we get in a deadlock
 			// when Watch() attempts to Draw() to a stopped tview.App
 			<-closeChan
-			m.debugLog("received from closeChan")
+			logger.Print("received from closeChan")
 			close(closeChan)
 		}
 		return event
@@ -137,18 +137,17 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
-		Debug:    m.debug,
 		Watcher:  m,
 	}
 	go func() {
-		m.debugLog("calling loader.Load()")
+		logger.Print("calling loader.Load()")
 		errToReturn = m.loader.Load(ctx, progOptions)
-		m.debugLog(fmt.Sprintf("returned from Load() with err: %s", errToReturn))
+		logger.Print(fmt.Sprintf("returned from Load() with err: %s", errToReturn))
 		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
 		// let's close the Entries chan so m.Watch(...) will return and we will no longer call Draw() on
 		// the tview.App
 		close(m.Entries)
-		m.debugLog("closed entries")
+		logger.Print("closed entries")
 		// send to the closeChan to signal in the case the TUI was closed via CtrlC that Load()
 		// has returned and no new updates will be sent to the tview.App
 		m.CloseChan <- struct{}{}
@@ -158,25 +157,25 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		// call Stop() on the tview.App to handle the case where Load() returned with an error
 		// safe to call this more than once, i.e. it's ok that CtrlC handler will also Stop() the tview.App
 		m.tviewApp.Stop()
-		m.debugLog("called stop")
+		logger.Print("called stop")
 	}()
 	err := <-preWatchChan
-	m.debugLog(fmt.Sprintf("received from preWatchChan with err: %s", err))
+	logger.Print(fmt.Sprintf("received from preWatchChan with err: %s", err))
 	if err != nil {
 		return err
 	}
 	// goroutine for updating the TUI data based on updates from loader watching maps
-	m.debugLog("starting Watch()")
-	go m.Watch()
+	logger.Print("starting Watch()")
+	go m.watch()
 
 	pterm.Info.Println("Rendering TUI...")
-	m.debugLog("render tui")
+	logger.Print("render tui")
 	// begin rendering the TUI
 	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
 		return err
 	}
 
-	m.debugLog(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
+	logger.Print(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
 	return errToReturn
 }
 
@@ -184,8 +183,8 @@ func (a *App) PreWatchHandler() {
 	preWatchChan <- nil
 }
 
-func (m *App) Watch() {
-	m.debugLog("beginning Watch() loop")
+func (m *App) watch() {
+	m.logger.Print("beginning Watch() loop")
 	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			m.renderHash(r)
@@ -197,7 +196,7 @@ func (m *App) Watch() {
 		// let the tview.App handle the synchronization of updates
 		go m.tviewApp.QueueUpdateDraw(func() {})
 	}
-	m.debugLog("no more entries, returning from Watch()")
+	m.logger.Print("no more entries, returning from Watch()")
 }
 
 func (m *App) renderRingBuf(incoming loader.MapEntry) {
@@ -233,7 +232,7 @@ func (m *App) renderHash(incoming loader.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
-		m.debugLog(fmt.Sprintf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash))
+		m.logger.Print(fmt.Sprintf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash))
 		incoming.Entry.Hash = newHash
 		current.Entries = append(current.Entries, incoming.Entry)
 	} else {
@@ -242,22 +241,22 @@ func (m *App) renderHash(incoming loader.MapEntry) {
 		var found = false
 		for idx = range current.Entries {
 			if current.Entries[idx].Hash == incomingHash {
-				m.debugLog(fmt.Sprintf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash))
+				m.logger.Print(fmt.Sprintf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash))
 				found = true
 				break
 			}
 		}
 		if found {
 			if incoming.Entry.Value == current.Entries[idx].Value {
-				m.debugLog(fmt.Sprintf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value))
+				m.logger.Print(fmt.Sprintf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value))
 				return
 			}
-			m.debugLog(fmt.Sprintf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value))
+			m.logger.Print(fmt.Sprintf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value))
 			current.Entries[idx].Value = incoming.Entry.Value
 		} else {
 			newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
 			incoming.Entry.Hash = newHash
-			m.debugLog(fmt.Sprintf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash))
+			m.logger.Print(fmt.Sprintf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash))
 			current.Entries = append(current.Entries, incoming.Entry)
 		}
 	}
@@ -392,10 +391,4 @@ func fillInfoPanel(infoPanel *tview.Grid) {
 	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
 	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
-}
-
-func (m *App) debugLog(text string) {
-	if m.debug {
-		log.Print(text)
-	}
 }

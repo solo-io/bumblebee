@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +14,7 @@ import (
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/logger"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/bumblebee/pkg/tui"
@@ -25,13 +25,13 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	Debug bool
+	debug bool
 }
 
 var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
-	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
+	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -75,15 +75,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		}
 	}()
 
-	if opts.Debug {
-		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			log.Fatalf("error opening file: %v", err)
-		}
-		defer f.Close()
-		log.SetOutput(f)
-	}
-
 	// guaranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
@@ -106,11 +97,13 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	)
 
 	appOpts := tui.AppOpts{
-		Debug:        opts.Debug,
 		ProgLocation: progLocation,
 	}
 	app := tui.NewApp(progLoader, &appOpts)
-	return app.Run(cmd.Context(), progReader)
+
+	ctx, cleanupFunc := logger.CreateContextWithLogger(cmd.Context(), opts.debug)
+	defer cleanupFunc()
+	return app.Run(ctx, progReader)
 
 }
 
