@@ -25,13 +25,13 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	Debug bool
+	debug bool
 }
 
 var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
-	flags.BoolVarP(&opts.Debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
+	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -75,7 +75,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		}
 	}()
 
-	if opts.Debug {
+	if opts.debug {
 		f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			log.Fatalf("error opening file: %v", err)
@@ -105,7 +105,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		promProvider,
 	)
 
-	app := tui.NewApp(opts.Debug, progLocation, progLoader)
+	app := tui.NewApp(opts.debug, progLocation, progLoader)
 	return app.Run(cmd.Context(), progReader)
 
 }
