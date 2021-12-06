@@ -59,7 +59,7 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 
 .PHONY: install-cli
 install-cli:
-	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) bee/main.go
+	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
 
 ##----------------------------------------------------------------------------------
 ## Release

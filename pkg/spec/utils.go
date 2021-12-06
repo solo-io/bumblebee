@@ -35,9 +35,9 @@ func TryFromLocal(
 
 	_, err = oras.Copy(
 		ctx,
-		localRegistry,
-		ref,
 		remoteRegistry,
+		ref,
+		localRegistry,
 		"",
 		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
 	)
