@@ -115,7 +115,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	return app.Run(ctx, progReader)
-
 }
 
 func getProgram(

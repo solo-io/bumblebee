@@ -252,7 +252,7 @@ func (l *loader) startRingBuf(
 		<-ctx.Done()
 		logger.Info("in ringbuf watcher, got done...")
 		if err := rd.Close(); err != nil {
-			logger.Info(fmt.Sprintf("error while closing ringbuf '%s' reader: %s", name, err))
+			logger.Infof("error while closing ringbuf '%s' reader: %s", name, err)
 		}
 		logger.Info("after reader.Close()")
 	}()
@@ -265,7 +265,7 @@ func (l *loader) startRingBuf(
 				logger.Info("ringbuf closed...")
 				return nil
 			}
-			logger.Info(fmt.Sprintf("error while reading from ringbuf '%s' reader: %s", name, err))
+			logger.Infof("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
