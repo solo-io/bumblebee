@@ -122,7 +122,7 @@ This defines a kprobe that will be attached to `tcp_v4_connect`. This is not dif
 
 ## Write Some Code
 
-Fill in the event struct:
+Fill in the event struct, and add fields to log the destination address and process id that attempts to make a connection:
 ```C
 struct event_t {
 	ipv4_addr daddr;
@@ -176,8 +176,12 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 	// increment the counter for this address
 	hash_key.daddr = daddr;
 	counterp = bpf_map_lookup_elem(&connection_count, &hash_key);
-	counter = counterp ? *counterp + 1 : 1;
-	bpf_map_update_elem(&connection_count, &hash_key, &counter, 0);
+	if (counterp) {
+		__sync_fetch_and_add(counterp, 1);
+	} else {
+		counter = 1;
+		bpf_map_update_elem(&connection_count, &hash_key, &counter, BPF_NOEXIST);
+	}
 
 	return 0;
 }
@@ -248,9 +252,16 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 
 	// increment the counter for this address
 	hash_key.daddr = daddr;
-	counterp = bpf_map_lookup_elem(&connection_count, &hash_key);
-	counter = counterp ? *counterp + 1 : 1;
-	bpf_map_update_elem(&connection_count, &hash_key, &counter, 0);
+	counterp = bpf_map_lookup_or_try_init(&connection_count, &hash_key, &zero_counter);
+	if (counterp) {
+		__sync_fetch_and_add(counterp, 1);
+	} else {
+		// we may miss N events, where N is number of CPUs. We may want to 
+		// fix this for prod, by adding another lookup/update calls here.
+		// we skipped these for brevity
+		counter = 1;
+		bpf_map_update_elem(&connection_count, &hash_key, &counter, BPF_NOEXIST);
+	}
 
 	return 0;
 }
@@ -298,5 +309,5 @@ expand on:
 
 ## Summary
 
-We've just gone over how `bee` can help you hardness eBPF's power to enable observability - whether on your own, or using a pre-made probe create by the community.
+We've just gone over how `bee` can help you harness eBPF's power to enable observability - whether on your own, or using a pre-made probe create by the community.
 With `bee` we tried to help you gain the benefits of eBPF while minimizing the learning curve and boilerplate code. We would love to hear your feedback!

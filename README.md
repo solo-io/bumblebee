@@ -162,14 +162,14 @@ You can also navigate to the releases page [here](https://github.com/solo-io/bum
 
 ### A note on permissions
 
-Loading eBPF programs to the kernel (`bpf run` command) requires elevated privileges. 
+Loading eBPF programs to the kernel (`bee run` command) requires elevated privileges. 
 You can either run `bee` as root (with sudo), or add capabilities to the binary. To add capabilities, run the following command:
 
 ```bash
 sudo setcap cap_sys_resource,cap_sys_admin,cap_bpf+eip $(which bee)
 ```
 
-Adding capabilities is the preferred method, as if you run `bpf run` with `sudo`, it will not find local images when you run `bpf build` without sudo.
+Adding capabilities is the preferred method, as if you run `bee run` with `sudo`, it will not find local images when you run `bee build` without sudo.
 
 ## Contributing
 
