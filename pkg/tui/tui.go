@@ -14,7 +14,6 @@ import (
 	"github.com/rivo/tview"
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/go-utils/contextutils"
-	"go.uber.org/zap"
 )
 
 const titleText = `[aqua]
@@ -56,7 +55,6 @@ type App struct {
 	Entries   chan loader.MapEntry
 	CloseChan chan struct{}
 
-	logger       *zap.SugaredLogger
 	tviewApp     *tview.Application
 	flex         *tview.Flex
 	loader       loader.Loader
@@ -75,7 +73,6 @@ var preWatchChan = make(chan error, 1)
 
 func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger := contextutils.LoggerFrom(ctx)
-	m.logger = logger
 	ctx, cancel := context.WithCancel(ctx)
 
 	var errToReturn error
@@ -143,7 +140,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	go func() {
 		logger.Info("calling loader.Load()")
 		errToReturn = m.loader.Load(ctx, progOptions)
-		logger.Info(fmt.Sprintf("returned from Load() with err: %s", errToReturn))
+		logger.Infof("returned from Load() with err: %s", errToReturn)
 		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
 		// let's close the Entries chan so m.Watch(...) will return and we will no longer call Draw() on
 		// the tview.App
@@ -161,13 +158,13 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		logger.Info("called stop")
 	}()
 	err := <-preWatchChan
-	logger.Info(fmt.Sprintf("received from preWatchChan with err: %s", err))
+	logger.Infof("received from preWatchChan with err: %s", err)
 	if err != nil {
 		return err
 	}
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	logger.Info("starting Watch()")
-	go m.watch()
+	go m.watch(ctx)
 
 	pterm.Info.Println("Rendering TUI...")
 	logger.Info("render tui")
@@ -176,7 +173,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		return err
 	}
 
-	logger.Info(fmt.Sprintf("stopped app, errToReturn: %s", errToReturn))
+	logger.Infof("stopped app, errToReturn: %s", errToReturn)
 	return errToReturn
 }
 
@@ -184,23 +181,24 @@ func (a *App) PreWatchHandler() {
 	preWatchChan <- nil
 }
 
-func (m *App) watch() {
-	m.logger.Info("beginning Watch() loop")
+func (m *App) watch(ctx context.Context) {
+	logger := contextutils.LoggerFrom(ctx)
+	logger.Info("beginning Watch() loop")
 	for r := range m.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
-			m.renderHash(r)
+			m.renderHash(ctx, r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
-			m.renderRingBuf(r)
+			m.renderRingBuf(ctx, r)
 		}
 		// update the screen if the UI is still running
 		// don't block here as we still want to process entries as they come in,
 		// let the tview.App handle the synchronization of updates
 		go m.tviewApp.QueueUpdateDraw(func() {})
 	}
-	m.logger.Info("no more entries, returning from Watch()")
+	logger.Info("no more entries, returning from Watch()")
 }
 
-func (m *App) renderRingBuf(incoming loader.MapEntry) {
+func (m *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -229,11 +227,12 @@ func (m *App) renderRingBuf(incoming loader.MapEntry) {
 	}
 }
 
-func (m *App) renderHash(incoming loader.MapEntry) {
+func (m *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
+	logger := contextutils.LoggerFrom(ctx)
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
 		newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
-		m.logger.Info(fmt.Sprintf("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash))
+		logger.Infof("empty list, no entries for %v, generated new hash: %v\n", incoming.Entry.Key, newHash)
 		incoming.Entry.Hash = newHash
 		current.Entries = append(current.Entries, incoming.Entry)
 	} else {
@@ -242,22 +241,22 @@ func (m *App) renderHash(incoming loader.MapEntry) {
 		var found = false
 		for idx = range current.Entries {
 			if current.Entries[idx].Hash == incomingHash {
-				m.logger.Info(fmt.Sprintf("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash))
+				logger.Infof("found existing entry for %v at index '%v' with hash: %v\n", incoming.Entry.Key, idx, incomingHash)
 				found = true
 				break
 			}
 		}
 		if found {
 			if incoming.Entry.Value == current.Entries[idx].Value {
-				m.logger.Info(fmt.Sprintf("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value))
+				logger.Infof("for key %v, current value '%v' at index '%v' matches incoming val '%v', continuing...\n", incoming.Entry.Key, current.Entries[idx].Value, idx, incoming.Entry.Value)
 				return
 			}
-			m.logger.Info(fmt.Sprintf("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value))
+			logger.Infof("for existing entry for %v at index '%v' updating val to: %v\n", incoming.Entry.Key, idx, incoming.Entry.Value)
 			current.Entries[idx].Value = incoming.Entry.Value
 		} else {
 			newHash, _ := hashstructure.Hash(incoming.Entry.Key, hashstructure.FormatV2, nil)
 			incoming.Entry.Hash = newHash
-			m.logger.Info(fmt.Sprintf("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash))
+			logger.Infof("since no existing entry for %v, appending with hash: %v\n", incoming.Entry.Key, newHash)
 			current.Entries = append(current.Entries, incoming.Entry)
 		}
 	}
