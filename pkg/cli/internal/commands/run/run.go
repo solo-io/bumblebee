@@ -14,12 +14,13 @@ import (
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
-	"github.com/solo-io/bumblebee/pkg/logger"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/bumblebee/pkg/tui"
+	"github.com/solo-io/go-utils/contextutils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.uber.org/zap"
 )
 
 type runOptions struct {
@@ -101,8 +102,18 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	app := tui.NewApp(progLoader, &appOpts)
 
-	ctx, cleanupFunc := logger.CreateContextWithLogger(cmd.Context(), opts.debug)
-	defer cleanupFunc()
+	var sugaredLogger *zap.SugaredLogger
+	if opts.debug {
+		cfg := zap.NewDevelopmentConfig()
+		cfg.OutputPaths = []string{"debug.log"}
+		cfg.ErrorOutputPaths = []string{"debug.log"}
+		logger, _ := cfg.Build()
+		sugaredLogger = logger.Sugar()
+	} else {
+		sugaredLogger = zap.NewNop().Sugar()
+	}
+
+	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	return app.Run(ctx, progReader)
 
 }
