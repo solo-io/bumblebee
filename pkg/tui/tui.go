@@ -72,7 +72,7 @@ func NewApp(l loader.Loader, opts *AppOpts) App {
 
 var preWatchChan = make(chan error, 1)
 
-func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
+func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger := contextutils.LoggerFrom(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -115,7 +115,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	fillInfoPanel(infoPanel)
 
 	fetchText := tview.NewTextView().SetDynamicColors(true)
-	fmt.Fprintf(fetchText, "Program location: [aqua]%s", m.progLocation)
+	fmt.Fprintf(fetchText, "Program location: [aqua]%s", a.progLocation)
 	infoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
 
 	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
@@ -129,33 +129,33 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 9, 0, false)
-	m.Entries = make(chan loader.MapEntry, 20)
-	m.tviewApp = app
-	m.flex = flex
-	m.CloseChan = closeChan
+	a.Entries = make(chan loader.MapEntry, 20)
+	a.tviewApp = app
+	a.flex = flex
+	a.CloseChan = closeChan
 
 	progOptions := &loader.LoadOptions{
 		EbpfProg: progReader,
-		Watcher:  m,
+		Watcher:  a,
 	}
 	go func() {
 		logger.Info("calling loader.Load()")
-		errToReturn = m.loader.Load(ctx, progOptions)
+		errToReturn = a.loader.Load(ctx, progOptions)
 		logger.Infof("returned from Load() with err: %s", errToReturn)
 		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
-		// let's close the Entries chan so m.Watch(...) will return and we will no longer call Draw() on
+		// let's close the Entries chan so a.Watch(...) will return and we will no longer call Draw() on
 		// the tview.App
-		close(m.Entries)
+		close(a.Entries)
 		logger.Info("closed entries")
 		// send to the closeChan to signal in the case the TUI was closed via CtrlC that Load()
 		// has returned and no new updates will be sent to the tview.App
-		m.CloseChan <- struct{}{}
+		a.CloseChan <- struct{}{}
 		// send to the preWatchChan in case Load() returned from an error in the Load/Link phase
 		// i.e. not the Watch phase, so we don't block when loader.PreWatchHandler() hasn't been called
 		preWatchChan <- errToReturn
 		// call Stop() on the tview.App to handle the case where Load() returned with an error
 		// safe to call this more than once, i.e. it's ok that CtrlC handler will also Stop() the tview.App
-		m.tviewApp.Stop()
+		a.tviewApp.Stop()
 		logger.Info("called stop")
 	}()
 	err := <-preWatchChan
@@ -165,12 +165,12 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	}
 	// goroutine for updating the TUI data based on updates from loader watching maps
 	logger.Info("starting Watch()")
-	go m.watch(ctx)
+	go a.watch(ctx)
 
 	pterm.Info.Println("Rendering TUI...")
 	logger.Info("render tui")
 	// begin rendering the TUI
-	if err := m.tviewApp.SetRoot(m.flex, true).Run(); err != nil {
+	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
 		return err
 	}
 
@@ -182,24 +182,24 @@ func (a *App) PreWatchHandler() {
 	preWatchChan <- nil
 }
 
-func (m *App) watch(ctx context.Context) {
+func (a *App) watch(ctx context.Context) {
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Info("beginning Watch() loop")
-	for r := range m.Entries {
+	for r := range a.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
-			m.renderHash(ctx, r)
+			a.renderHash(ctx, r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
-			m.renderRingBuf(ctx, r)
+			a.renderRingBuf(ctx, r)
 		}
 		// update the screen if the UI is still running
 		// don't block here as we still want to process entries as they come in,
 		// let the tview.App handle the synchronization of updates
-		go m.tviewApp.QueueUpdateDraw(func() {})
+		go a.tviewApp.QueueUpdateDraw(func() {})
 	}
 	logger.Info("no more entries, returning from Watch()")
 }
 
-func (m *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
+func (a *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -228,7 +228,7 @@ func (m *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
 	}
 }
 
-func (m *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
+func (a *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
 	logger := contextutils.LoggerFrom(ctx)
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
@@ -293,19 +293,19 @@ func (m *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
 	}
 }
 
-func (m *App) NewRingBuf(name string, keys []string) {
-	m.makeMapValue(name, keys, ebpf.RingBuf)
+func (a *App) NewRingBuf(name string, keys []string) {
+	a.makeMapValue(name, keys, ebpf.RingBuf)
 }
 
-func (m *App) NewHashMap(name string, keys []string) {
-	m.makeMapValue(name, keys, ebpf.Hash)
+func (a *App) NewHashMap(name string, keys []string) {
+	a.makeMapValue(name, keys, ebpf.Hash)
 }
 
-func (m *App) SendEntry(entry loader.MapEntry) {
-	m.Entries <- entry
+func (a *App) SendEntry(entry loader.MapEntry) {
+	a.Entries <- entry
 }
 
-func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
+func (a *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	// get a copy of keys, sort for consistent key/label ordering
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)
@@ -329,10 +329,10 @@ func (m *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	mapOfMaps[name] = entry
 	mapMutex.Unlock()
 
-	m.tviewApp.QueueUpdateDraw(func() {
-		m.flex.AddItem(table, 0, 1, false)
+	a.tviewApp.QueueUpdateDraw(func() {
+		a.flex.AddItem(table, 0, 1, false)
 		if i == 0 {
-			m.tviewApp.SetFocus(table)
+			a.tviewApp.SetFocus(table)
 		}
 	})
 }
