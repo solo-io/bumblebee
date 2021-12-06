@@ -213,11 +213,11 @@ go run -exec sudo ./bee/main.go run tcpconnect.o
 To make a local docker image for the bee to use, you can run
 
 ```bash
-make docker-local-build
+make docker-build
 ```
 
 or, if for podman:
 
 ```bash
-make docker-local-build DOCKER=podman
+make docker-build DOCKER=podman
 ```
