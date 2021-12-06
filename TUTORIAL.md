@@ -1,7 +1,7 @@
 # Tutorial
 
 ## Prerequisites
-Most of this tutorial can be run on linux or mac (with docker for desktop). The "run" part requires linux. To get a linux environment you can use our vagrant VM.
+Most of this tutorial can be run on linux or mac (with docker for desktop). The "run" part requires linux. To get a linux environment you can use our [vagrant VM](README.md#Development).
 
 ## Introduction
 
