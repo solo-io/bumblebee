@@ -2,15 +2,11 @@ package tag
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 
-	"github.com/pterm/pterm"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/spf13/cobra"
 	"oras.land/oras-go/pkg/content"
-	"oras.land/oras-go/pkg/oras"
 )
 
 type tagOptions struct {
@@ -27,7 +23,6 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return tag(cmd.Context(), tagOpts.general, args[0], args[1])
 		},
-		Hidden: true, // TODO: unhide this when it works, currently moves, not copies
 	}
 
 	return cmd
@@ -49,34 +44,18 @@ func tag(
 		return err
 	}
 
-	reader, err := localRegistry.Fetch(ctx, desc)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	byt, _ := ioutil.ReadAll(reader)
-
-	memoryRegister := content.NewMemory()
-	if err := memoryRegister.StoreManifest(targetRef, desc, byt); err != nil {
-		return err
+	if desc.Annotations != nil {
+		annotations := desc.Annotations
+		// note: we have to copy the map, so we don't mess with the original descriptor map
+		desc.Annotations = make(map[string]string)
+		for k, v := range annotations {
+			if k != ocispec.AnnotationRefName {
+				desc.Annotations[k] = v
+			}
+		}
 	}
 
-	tagSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Tagging image %s as %s", sourceRef, targetRef))
-	_, err = oras.Copy(
-		ctx,
-		memoryRegister,
-		targetRef,
-		localRegistry,
-		targetRef,
-		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
-	)
-	if err != nil {
-		tagSpinner.UpdateText(fmt.Sprintf("Failed to tag image %s", sourceRef))
-		tagSpinner.Fail()
-		return err
-	}
-	tagSpinner.Success()
-	return nil
-
+	localRegistry.AddReference(targetRef, desc)
+	err = localRegistry.SaveIndex()
+	return err
 }

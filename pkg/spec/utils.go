@@ -22,10 +22,11 @@ func TryFromLocal(
 	if err != nil {
 		return nil, err
 	}
-
-	// If we find the image locally, return it
-	if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
-		return prog, nil
+	if _, _, err := localRegistry.Resolve(ctx, ref); err == nil {
+		// If we find the image locally, return it
+		if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
+			return prog, nil
+		}
 	}
 
 	remoteRegistry, err := content.NewRegistry(auth)
@@ -40,6 +41,7 @@ func TryFromLocal(
 		localRegistry,
 		"",
 		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
+		oras.WithPullByBFS,
 	)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/pkg/errors"
 	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
@@ -147,6 +148,14 @@ func getProgram(
 		if err != nil {
 			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
+			if err, ok := err.(interface {
+				StackTrace() errors.StackTrace
+			}); ok {
+				for _, f := range err.StackTrace() {
+					fmt.Printf("%+s:%d\n", f, f)
+				}
+			}
+
 			return nil, err
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)

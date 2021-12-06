@@ -29,6 +29,13 @@ docker-build:
 #   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
 	docker buildx build --platform $(PLATFORMS) $(PUSH_CMD) ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
 
+DOCKER := docker
+
+docker-local-build:
+#   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
+#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
+	$(DOCKER) build --platform $(PLATFORMS) ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
+
 docker-push: PUSH_CMD=--push
 docker-push: PLATFORMS=linux/amd64,linux/arm64/v8
 docker-push: docker-build
@@ -74,5 +81,3 @@ endif
 .PHONY: regen-vmlinux
 regen-vmlinux:
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > builder/vmlinux.h
-# if using vagrant, you can do this instead:
-# vagrant ssh -c "bpftool btf dump file /sys/kernel/btf/vmlinux format c" > builder/vmlinux.h
