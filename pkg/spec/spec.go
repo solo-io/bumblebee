@@ -152,7 +152,7 @@ func (e *ebpfOCIClient) Pull(
 
 	var manifest ocispec.Manifest
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		return nil, fmt.Errorf("could not unmarshal manifest bytes: %v", err)
+		return nil, fmt.Errorf("could not unmarshal manifest bytes: %w", err)
 	}
 
 	return &EbpfPackage{
