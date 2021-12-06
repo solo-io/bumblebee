@@ -11,7 +11,7 @@ env:
 jobs:
   release-assets:
     name: Github Release Assets
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.4.0
@@ -31,10 +31,11 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
       - name: Upload Assets
-        run: ls && make upload-github-release-assets
+        run: make upload-github-release-assets
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
+
   build-and-push-image:
     runs-on: ubuntu-latest
     permissions:
@@ -45,9 +46,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@master
+        with:
+          platforms: all
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@master
+
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.PUSH_TOKEN }}
+      - name: Push Docker Container
+        run: make docker-push
+        env:
+          TAGGED_VERSION: ${{ github.event.release.tag_name }}

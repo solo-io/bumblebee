@@ -1,8 +1,8 @@
 #----------------------------------------------------------------------------------
 # Versioning
 #----------------------------------------------------------------------------------
-OUTDIR ?= _output
-HUB ?= "ghcr.io/solo-io"
+OUTDIR?=_output
+HUB?=ghcr.io/solo-io
 
 
 RELEASE := "true"
@@ -22,14 +22,16 @@ SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 #----------------------------------------------------------------------------------
 # Build Container
 #----------------------------------------------------------------------------------
-
+PUSH_CMD:=--load
+PLATFORMS?=linux/amd64
 docker-build:
 #   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
-#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
-	docker build ./builder -f builder/Dockerfile -t $(HUB)/bumblebee-builder:$(VERSION)
+#   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
+	docker buildx build --platform $(PLATFORMS) $(PUSH_CMD) ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
 
+docker-push: PUSH_CMD=--push
+docker-push: PLATFORMS=linux/amd64,linux/arm64/v8
 docker-push: docker-build
-	docker push $(HUB)/bumblebee-builder:$(VERSION)
 
 #----------------------------------------------------------------------------------
 # CLI
@@ -57,7 +59,7 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 
 .PHONY: install-cli
 install-cli:
-	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) bee/main.go
+	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
 
 ##----------------------------------------------------------------------------------
 ## Release
@@ -68,3 +70,9 @@ upload-github-release-assets: build-cli
 ifeq ($(RELEASE),"true")
 	go run ci/release_assets.go
 endif
+
+.PHONY: regen-vmlinux
+regen-vmlinux:
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c > builder/vmlinux.h
+# if using vagrant, you can do this instead:
+# vagrant ssh -c "bpftool btf dump file /sys/kernel/btf/vmlinux format c" > builder/vmlinux.h

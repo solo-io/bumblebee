@@ -45,7 +45,7 @@ The final thing worth noting about the `RingBuffer` is it's event based nature. 
 
 Like `RingBuffer` above, `HashMap` is a generic map type to store data, with some key differences. The `HashMap` does not function as a queue, but rather as a traditional map, with both keys and values, which retains it's data until manually removed.
 
-In addition, `HashMap` supports section keywords to enable special [output formats](#Output-Formats). The valid keywords for this type of map are: `.print`,  `.counter`, and `.gauge`.
+In addition, `HashMap` supports section keywords to enable special [output formats](#Output-Formats). The valid keywords for this type of map are: `.print`, `.counter`, and `.gauge`.
 
 
 #### Programs
@@ -179,4 +179,22 @@ The following is a brief overview of the internal code structure
 ├── examples # Variety of example eBPF programs to be run with bee
 ├── pkg # Primary code directory
 └── spec # Contains information related to eBPF OCI Spec
+```
+# Development
+
+For non-linux users, we have a [vagrant](https://learn.hashicorp.com/tutorials/vagrant/getting-started-install) box available. Just run
+
+```shell
+vagrant up
+vagrant ssh
+```
+
+This folder will be mounted under "/source" in the vagrant VM.
+
+For fast iterations of go code / bpf programs, you can build with our build script, and run with go run as follows:
+
+```shell
+cd /source
+./builder/build.sh ./examples/tcpconnect/tcpconnect.c tcpconnect.o
+go run -exec sudo ./ebpfctl/main.go run tcpconnect.o
 ```

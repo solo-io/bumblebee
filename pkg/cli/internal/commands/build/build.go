@@ -31,7 +31,7 @@ type buildOptions struct {
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
-	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("gcr.io/gloobpf/bpfbuilder:%s", version.Version), "Build image to use when compiling BPF program")
+	flags.StringVarP(&opts.BuildImage, "build-image", "i", fmt.Sprintf("ghcr.io/solo-io/bumblebee/builder:%s", version.Version), "Build image to use when compiling BPF program")
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")

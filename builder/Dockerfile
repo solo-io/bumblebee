@@ -1,5 +1,7 @@
 FROM debian:bullseye
 
+LABEL org.opencontainers.image.source https://github.com/solo-io/bumblebee
+
 RUN apt-get update && \
     apt-get -y install lsb-release wget software-properties-common gnupg file git make
 
@@ -11,7 +13,8 @@ RUN apt-get install -y clang-13 lldb-13 lld-13 clangd-13 man-db
 RUN apt-get install -y bpftool libbpf-dev
 
 # non package installed default include directory
-RUN bpftool btf dump file /sys/kernel/btf/vmlinux format c > /usr/local/include/vmlinux.h
+# Note, you can run "make regen-vmlinux" to re-generate this file
+ADD vmlinux.h /usr/local/include/
 
 # Ensure that solo helper types are available from workdir
 ADD solo_types.h /usr/local/include/
