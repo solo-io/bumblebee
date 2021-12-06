@@ -107,7 +107,10 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		cfg := zap.NewDevelopmentConfig()
 		cfg.OutputPaths = []string{"debug.log"}
 		cfg.ErrorOutputPaths = []string{"debug.log"}
-		logger, _ := cfg.Build()
+		logger, err := cfg.Build()
+		if err != nil {
+			return fmt.Errorf("couldn't create zap logger: '%w'", err)
+		}
 		sugaredLogger = logger.Sugar()
 	} else {
 		sugaredLogger = zap.NewNop().Sugar()
