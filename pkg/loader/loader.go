@@ -184,8 +184,6 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 		}
 
 		switch bpfMap.Type {
-		case ebpf.PerfEventArray:
-			fallthrough
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
 			// this assertion checked when initially populating the `btfMapMap`
