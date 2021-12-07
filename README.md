@@ -1,7 +1,6 @@
 <h1 align="center">BumbleBee</h1>
 
-<h4 align="center">A platform for automating unikernel & MicroVM compilation and deployment</h4>
-<BR>
+BumbleBee helps to build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
 
 ### Documentation
 - **Installation**
@@ -14,7 +13,6 @@
 	- [Contributing](docs/contributing.md)
 
 ---
-
 ## Getting Started
 
 The first step to get started is to install `bee` using one of the [installation](#Installation) techniques listed below.
@@ -48,3 +46,11 @@ sudo setcap cap_sys_resource,cap_sys_admin,cap_bpf+eip $(which bee)
 ```
 
 Adding capabilities is the preferred method, as if you run `bee run` with `sudo`, it will not find local images when you run `bee build` without sudo.
+
+### License
+
+Apache 2
+
+### Thanks
+
+This project would not be possible without the valuable open-source work of projects in the eBPF community. Specifically, we would like to thank the [eBPF go](https://github.com/cilium/ebpf/) library and [libbpf-tools](https://github.com/iovisor/bcc/tree/master/libbpf-tools/).
