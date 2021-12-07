@@ -80,7 +80,7 @@ func (m *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	closeChan := make(chan struct{}, 1)
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlC {
+		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
 			logger.Info("captured ctrl-c")
 			cancel()
 			logger.Info("called cancel()")

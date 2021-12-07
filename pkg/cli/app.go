@@ -13,15 +13,14 @@ import (
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/push"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/run"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/tag"
+	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/version"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/internal/version"
 	"github.com/spf13/cobra"
 )
 
 func Bee() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "bee",
-		Version: version.Version,
+		Use: "bee",
 	}
 	opts := options.NewGeneralOptions(cmd.PersistentFlags())
 
@@ -47,6 +46,7 @@ func Bee() *cobra.Command {
 		tag.Command(opts),
 		describe.Command(opts),
 		login.Command(opts),
+		version.Command(opts),
 	)
 	return cmd
 }
