@@ -9,9 +9,6 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// this is adapted from oras binary login:
-// https://github.com/oras-project/oras/blob/master/cmd/oras/login.go
-
 type versionOptions struct {
 	general *options.GeneralOptions
 }
