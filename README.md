@@ -1,5 +1,7 @@
 <h1 align="center">BumbleBee</h1>
 
+BumbleBee helps to build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
+
 ### Documentation
 - **Installation**
   - [Install Bee](#Installation)
@@ -11,9 +13,6 @@
 	- [Contributing](docs/contributing.md)
 
 ---
-
-BumbleBee helps build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
-
 ## Getting Started
 
 The first step to get started is to install `bee` using one of the [installation](#Installation) techniques listed below.
