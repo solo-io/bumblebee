@@ -3,6 +3,8 @@
 #----------------------------------------------------------------------------------
 OUTDIR?=_output
 HUB?=ghcr.io/solo-io
+REPO_NAME?=bumblebee
+EXAMPLES_DIR?=examples
 
 
 RELEASE := "true"
@@ -19,6 +21,11 @@ GCFLAGS := all="-N -l"
 
 SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 
+.PHONY: clean
+clean:
+	rm -f $(EXAMPLES_DIR)/**/*.o
+	rm -rf $(OUTDIR)
+
 #----------------------------------------------------------------------------------
 # Build Container
 #----------------------------------------------------------------------------------
@@ -34,6 +41,23 @@ docker-push: PUSH_CMD=--push
 docker-push: DOCKER=docker buildx
 docker-push: PLATFORMS=linux/amd64,linux/arm64/v8
 docker-push: docker-build
+
+#----------------------------------------------------------------------------------
+# Examples
+#----------------------------------------------------------------------------------
+
+.PHONY: activeconn
+activeconn: $(EXAMPLES_DIR)/activeconn
+.PHONY: tcpconnect
+tcpconnect: $(EXAMPLES_DIR)/tcpconnect
+
+
+$(EXAMPLES_DIR)/%:
+	$(OUTDIR)/bee-linux-amd64 build $@/$*.c $(HUB)/$(REPO_NAME)/$*:$(VERSION)
+	$(OUTDIR)/bee-linux-amd64 push $(HUB)/$(REPO_NAME)/$*:$(VERSION)
+
+.PHONY: release-examples
+release-examples: activeconn tcpconnect
 
 #----------------------------------------------------------------------------------
 # CLI

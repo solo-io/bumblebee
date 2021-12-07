@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
 
-  build-and-push-image:
+  push-builder-images:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,5 +62,48 @@ jobs:
           password: ${{ secrets.PUSH_TOKEN }}
       - name: Push Docker Container
         run: make docker-push
+        env:
+          TAGGED_VERSION: ${{ github.event.release.tag_name }}
+
+  push-example-programs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.17.3
+      - name: Setup Cache
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PUSH_TOKEN }}
+
+      - name: Build builder container
+        run: make docker-build
+        env:
+          TAGGED_VERSION: ${{ github.event.release.tag_name }}
+
+      - name: Build CLI
+        run: make bee-linux-amd64
+        env:
+          TAGGED_VERSION: ${{ github.event.release.tag_name }}
+
+      - name: Push example images
+        run: make release-examples -B
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
