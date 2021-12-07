@@ -3,18 +3,6 @@
 <h4 align="center">A platform for automating unikernel & MicroVM compilation and deployment</h4>
 <BR>
 
-
-
-## Getting Started
-
-The first step to get started is to install `bee` using one of the [installation](#Installation) techniques listed below.
-
-`bee` is a tool which allows for easier development and running of `eBPF` programs. Specifically we allow users to run their `eBPF` probes without running any user space code. We accomplish this using a set of conventions, and a 
-
-Once `bee` has been installed we can go ahead an initialize our first `eBPF` probe! To do this let's head over to our [tutorial](docs/getting_started.md).
-
----
-
 ### Documentation
 - **Installation**
   - [Install Bee](#Installation)
@@ -26,6 +14,12 @@ Once `bee` has been installed we can go ahead an initialize our first `eBPF` pro
 	- [Contributing](docs/contributing.md)
 
 ---
+
+## Getting Started
+
+The first step to get started is to install `bee` using one of the [installation](#Installation) techniques listed below.
+
+Once `bee` has been installed we can go ahead an initialize our first `eBPF` probe! To do this let's head over to our [tutorial](docs/getting_started.md).
 
 ## Installation
 
