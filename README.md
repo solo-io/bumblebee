@@ -12,7 +12,7 @@
 
 ---
 
-BumbleBee helps build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components automatically exposing your data as metrics or logs.
+BumbleBee helps build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
 
 ## Getting Started
 
