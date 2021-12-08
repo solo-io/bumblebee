@@ -20,14 +20,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type LoadOptions struct {
+type ParsedELF struct {
 	Spec        *ebpf.CollectionSpec
 	WatchedMaps map[string]WatchedMap
-	Watcher     MapWatcher
+}
+
+type LoadOptions struct {
+	ParsedELF *ParsedELF
+	Watcher   MapWatcher
 }
 
 type Loader interface {
-	Parse(ctx context.Context, reader io.ReaderAt) (*LoadOptions, error)
+	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
@@ -97,7 +101,7 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
 }
 
-func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*LoadOptions, error) {
+func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF, error) {
 	spec, err := ebpf.LoadCollectionSpecFromReader(progReader)
 	if err != nil {
 		return nil, err
@@ -146,7 +150,7 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*LoadOption
 		watchedMaps[name] = watchedMap
 	}
 
-	loadOptions := LoadOptions{
+	loadOptions := ParsedELF{
 		Spec:        spec,
 		WatchedMaps: watchedMaps,
 	}
@@ -157,7 +161,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
 	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
 
-	spec := opts.Spec
+	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
@@ -210,7 +214,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	return l.watchMaps(ctx, opts.WatchedMaps, coll, opts.Watcher)
+	return l.watchMaps(ctx, opts.ParsedELF.WatchedMaps, coll, opts.Watcher)
 }
 
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {

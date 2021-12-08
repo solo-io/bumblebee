@@ -102,13 +102,13 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		promProvider,
 	)
 
-	loadOptions, err := progLoader.Parse(cmd.Context(), progReader)
+	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
 	// TODO: add filter to UI
-	filter, err := buildFilter(opts.filter, loadOptions.WatchedMaps)
+	filter, err := buildFilter(opts.filter, parsedELF.WatchedMaps)
 	if err != nil {
 		return fmt.Errorf("could not build filter %w", err)
 	}
@@ -116,7 +116,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	appOpts := tui.AppOpts{
 		Loader:       progLoader,
 		ProgLocation: progLocation,
-		LoadOptions:  *loadOptions,
+		ParsedELF:    parsedELF,
 		Filter:       filter,
 	}
 	app := tui.NewApp(&appOpts)

@@ -59,7 +59,7 @@ type AppOpts struct {
 	Loader       loader.Loader
 	ProgLocation string
 	Filter       *Filter
-	LoadOptions  loader.LoadOptions
+	ParsedELF    *loader.ParsedELF
 }
 
 type App struct {
@@ -71,7 +71,7 @@ type App struct {
 	loader       loader.Loader
 	progLocation string
 	filter       *Filter
-	loadOptions  loader.LoadOptions
+	parsedELF    *loader.ParsedELF
 }
 
 func NewApp(opts *AppOpts) App {
@@ -79,7 +79,7 @@ func NewApp(opts *AppOpts) App {
 		loader:       opts.Loader,
 		progLocation: opts.ProgLocation,
 		filter:       opts.Filter,
-		loadOptions:  opts.LoadOptions,
+		parsedELF:    opts.ParsedELF,
 	}
 	return a
 }
@@ -148,8 +148,10 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	a.flex = flex
 	a.CloseChan = closeChan
 
-	loaderOptions := a.loadOptions
-	loaderOptions.Watcher = a
+	loaderOptions := loader.LoadOptions{
+		ParsedELF: a.parsedELF,
+		Watcher:   a,
+	}
 
 	go func() {
 		logger.Info("calling loader.Load()")
