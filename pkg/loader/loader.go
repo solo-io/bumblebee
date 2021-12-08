@@ -231,7 +231,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 			if isCounterMap(bpfMap.mapSpec) {
 				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
 			} else if isPrintMap(bpfMap.mapSpec) {
-				increment = &noopIncrement{}
+				increment = &noop{}
 			}
 			eg.Go(func() error {
 				watcher.NewRingBuf(name, bpfMap.Labels)
@@ -246,6 +246,8 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
 			} else if isGaugeMap(bpfMap.mapSpec) {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
+			} else {
+				instrument = &noop{}
 			}
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
@@ -406,10 +408,17 @@ func getLabelsForBtfStruct(structKey *btf.Struct) []string {
 	return keys
 }
 
-type noopIncrement struct{}
+type noop struct{}
 
-func (n *noopIncrement) Increment(
+func (n *noop) Increment(
 	ctx context.Context,
 	decodedKey map[string]string,
+) {
+}
+
+func (n *noop) Set(
+	ctx context.Context,
+	val int64,
+	labels map[string]string,
 ) {
 }
