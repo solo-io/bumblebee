@@ -1,3 +1,4 @@
+// Based on: https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnect.c
 #include "vmlinux.h"
 #include "solo_types.h"
 #include "bpf/bpf_helpers.h"
