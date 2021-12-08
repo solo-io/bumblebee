@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -27,13 +28,15 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	debug bool
+	debug  bool
+	filter []string
 }
 
 var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
+	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, "Filter to apply to output from maps, uses format: `map_name,key_name,regex`")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -86,8 +89,9 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("could not raise memory limit: %v", err)
+		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
+
 	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
 	if err != nil {
 		return err
@@ -98,10 +102,24 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		promProvider,
 	)
 
-	appOpts := tui.AppOpts{
-		ProgLocation: progLocation,
+	loadOptions, err := progLoader.Parse(cmd.Context(), progReader)
+	if err != nil {
+		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
-	app := tui.NewApp(progLoader, &appOpts)
+
+	// TODO: add filter to UI
+	filter, err := buildFilter(opts.filter, loadOptions.WatchedMaps)
+	if err != nil {
+		return fmt.Errorf("could not build filter %w", err)
+	}
+
+	appOpts := tui.AppOpts{
+		Loader:       progLoader,
+		ProgLocation: progLocation,
+		LoadOptions:  *loadOptions,
+		Filter:       filter,
+	}
+	app := tui.NewApp(&appOpts)
 
 	var sugaredLogger *zap.SugaredLogger
 	if opts.debug {
@@ -119,6 +137,39 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	return app.Run(ctx, progReader)
+}
+
+func buildFilter(filterString []string, watchedMaps map[string]loader.WatchedMap) (*tui.Filter, error) {
+	if len(filterString) == 0 {
+		return nil, nil
+	}
+	if len(filterString) != 3 {
+		return nil, fmt.Errorf("filter syntax error, should have 3 fields, found %v", len(filterString))
+	}
+
+	mapName := filterString[0]
+	labelName := filterString[1]
+
+	if _, ok := watchedMaps[mapName]; !ok {
+		return nil, fmt.Errorf("didnt find map '%v'", mapName)
+	}
+	var foundKeyName bool
+	for _, v := range watchedMaps[mapName].Labels {
+		if v == labelName {
+			foundKeyName = true
+		}
+	}
+	if !foundKeyName {
+		return nil, fmt.Errorf("didnt find key val '%v'", labelName)
+	}
+
+	regex := regexp.MustCompile(filterString[2])
+	filter := &tui.Filter{
+		MapName:  mapName,
+		KeyField: labelName,
+		Regex:    regex,
+	}
+	return filter, nil
 }
 
 func getProgram(
