@@ -54,7 +54,7 @@ type MapValue struct {
 type AppOpts struct {
 	Loader       loader.Loader
 	ProgLocation string
-	Filter       *Filter
+	Filter       map[string]Filter
 	ParsedELF    *loader.ParsedELF
 }
 
@@ -66,7 +66,7 @@ type App struct {
 	flex         *tview.Flex
 	loader       loader.Loader
 	progLocation string
-	filter       *Filter
+	filter       map[string]Filter
 	parsedELF    *loader.ParsedELF
 }
 
