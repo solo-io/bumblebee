@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"regexp"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -108,7 +107,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	// TODO: add filter to UI
-	filter, err := buildFilter(opts.filter, parsedELF.WatchedMaps)
+	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
 	if err != nil {
 		return fmt.Errorf("could not build filter %w", err)
 	}
@@ -137,39 +136,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	return app.Run(ctx, progReader)
-}
-
-func buildFilter(filterString []string, watchedMaps map[string]loader.WatchedMap) (*tui.Filter, error) {
-	if len(filterString) == 0 {
-		return nil, nil
-	}
-	if len(filterString) != 3 {
-		return nil, fmt.Errorf("filter syntax error, should have 3 fields, found %v", len(filterString))
-	}
-
-	mapName := filterString[0]
-	labelName := filterString[1]
-
-	if _, ok := watchedMaps[mapName]; !ok {
-		return nil, fmt.Errorf("didnt find map '%v'", mapName)
-	}
-	var foundKeyName bool
-	for _, v := range watchedMaps[mapName].Labels {
-		if v == labelName {
-			foundKeyName = true
-		}
-	}
-	if !foundKeyName {
-		return nil, fmt.Errorf("didnt find key val '%v'", labelName)
-	}
-
-	regex := regexp.MustCompile(filterString[2])
-	filter := &tui.Filter{
-		MapName:  mapName,
-		KeyField: labelName,
-		Regex:    regex,
-	}
-	return filter, nil
 }
 
 func getProgram(

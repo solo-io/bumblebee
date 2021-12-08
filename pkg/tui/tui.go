@@ -51,10 +51,6 @@ type MapValue struct {
 	Keys    []string
 }
 
-var mapOfMaps = make(map[string]MapValue)
-var mapMutex = sync.RWMutex{}
-var currentIndex int
-
 type AppOpts struct {
 	Loader       loader.Loader
 	ProgLocation string
@@ -84,6 +80,9 @@ func NewApp(opts *AppOpts) App {
 	return a
 }
 
+var mapOfMaps = make(map[string]MapValue)
+var mapMutex = sync.RWMutex{}
+var currentIndex int
 var preWatchChan = make(chan error, 1)
 
 func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
@@ -322,26 +321,6 @@ func (a *App) SendEntry(entry loader.MapEntry) {
 	if a.filterMatch(entry) {
 		a.Entries <- entry
 	}
-}
-
-func (a *App) filterMatch(entry loader.MapEntry) bool {
-	if a.filter == nil {
-		// no filter, allow entry
-		return true
-	}
-	if entry.Name != a.filter.MapName {
-		// we have a filter, but this entry is for a different map
-		// TODO: support multiple filters, for multiple maps
-		return true
-	}
-	for k, v := range entry.Entry.Key {
-		if k == a.filter.KeyField {
-			if a.filter.Regex.MatchString(v) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (a *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
