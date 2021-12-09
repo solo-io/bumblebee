@@ -19,7 +19,7 @@ const (
 )
 
 type BinaryDecoder interface {
-	// DecodeBinaryStruct takes in a btf struct spec, and translates
+	// DecodeBinaryStruct takes in a raw btf type, and translates
 	// raw binary data into a map[string]interface{} of that format.
 	// If the incoming type is not a struct, it will return map[""]<type>
 	DecodeBtfBinary(

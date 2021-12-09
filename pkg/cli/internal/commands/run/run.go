@@ -27,13 +27,18 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	debug bool
+	debug  bool
+	filter []string
 }
+
+const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
+	"You can define a filter per map, if more than one defined, the last defined filter will take precedence"
 
 var stopper chan os.Signal
 
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
+	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -48,10 +53,17 @@ The bee run command takes a compiled BPF program as input, and runs it using
 our generic loader. The supported formats are: file, and OCI image
 
 To run with a file pass it as the first ARG:
-$ run bpf-program.o
+$ bee run bpf-program.o
 
 To run with a OCI image pass it as the first ARG:
-$ run localhost:5000/oras:ringbuf-demo
+$ bee run localhost:5000/oras:ringbuf-demo
+
+To run with a filter on the output in the TUI, use the --filter (or -f) flag:
+$ bee run --filter="events,comm,node" ghcr.io/solo-io/bumblebee/opensnoop:0.0.7
+$ bee run -f="events,comm,node" ghcr.io/solo-io/bumblebee/opensnoop:0.0.7
+
+To run with multiple filters, use the --filter (or -f) flag multiple times:
+$ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/solo-io/bumblebee/tcpconnect:0.0.7
 `,
 		Args: cobra.ExactArgs(1), // Filename or image
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,8 +98,9 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("could not raise memory limit: %v", err)
+		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
+
 	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
 	if err != nil {
 		return err
@@ -98,10 +111,24 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		promProvider,
 	)
 
-	appOpts := tui.AppOpts{
-		ProgLocation: progLocation,
+	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
+	if err != nil {
+		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
-	app := tui.NewApp(progLoader, &appOpts)
+
+	// TODO: add filter to UI
+	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
+	if err != nil {
+		return fmt.Errorf("could not build filter %w", err)
+	}
+
+	appOpts := tui.AppOpts{
+		Loader:       progLoader,
+		ProgLocation: progLocation,
+		ParsedELF:    parsedELF,
+		Filter:       filter,
+	}
+	app := tui.NewApp(&appOpts)
 
 	var sugaredLogger *zap.SugaredLogger
 	if opts.debug {

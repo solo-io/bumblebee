@@ -20,13 +20,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type ParsedELF struct {
+	Spec        *ebpf.CollectionSpec
+	WatchedMaps map[string]WatchedMap
+}
+
 type LoadOptions struct {
-	// Program bytes to load
-	EbpfProg io.ReaderAt
-	Watcher  MapWatcher
+	ParsedELF *ParsedELF
+	Watcher   MapWatcher
 }
 
 type Loader interface {
+	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
@@ -46,6 +51,17 @@ type MapWatcher interface {
 	NewHashMap(name string, keys []string)
 	SendEntry(entry MapEntry)
 	PreWatchHandler()
+}
+
+type WatchedMap struct {
+	Name   string
+	Labels []string
+
+	btf     *btf.Map
+	mapType ebpf.MapType
+	mapSpec *ebpf.MapSpec
+
+	valueStruct *btf.Struct
 }
 
 type loader struct {
@@ -85,35 +101,67 @@ func isTrackedMap(spec *ebpf.MapSpec) bool {
 	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
 }
 
-func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
-
-	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
-
-	// Generate the spec from out eBPF elf file
-	spec, err := ebpf.LoadCollectionSpecFromReader(opts.EbpfProg)
+func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF, error) {
+	spec, err := ebpf.LoadCollectionSpecFromReader(progReader)
 	if err != nil {
-		loaderProgress.Fail()
-		return err
+		return nil, err
 	}
 
-	btfMapMap := make(map[string]*btf.Map)
-
-	// TODO: Delete Hack if possible
+	watchedMaps := make(map[string]WatchedMap)
 	for name, mapSpec := range spec.Maps {
 		if !isTrackedMap(mapSpec) {
 			continue
 		}
-		if mapSpec.Type == ebpf.RingBuf || mapSpec.Type == ebpf.PerfEventArray {
-			btfMap := mapSpec.BTF
-			if _, ok := btfMap.Value.(*btf.Struct); !ok {
-				return fmt.Errorf("the `value` member for map '%v' must be set to struct you will be submitting to the ringbuf/eventarray", name)
+
+		watchedMap := WatchedMap{
+			Name:    name,
+			btf:     mapSpec.BTF,
+			mapType: mapSpec.Type,
+			mapSpec: mapSpec,
+		}
+
+		// TODO: Delete Hack if possible
+		if watchedMap.mapType == ebpf.RingBuf || watchedMap.mapType == ebpf.PerfEventArray {
+			if _, ok := mapSpec.BTF.Value.(*btf.Struct); !ok {
+				return nil, fmt.Errorf("the `value` member for map '%v' must be set to struct you will be submitting to the ringbuf/eventarray", name)
 			}
-			btfMapMap[name] = btfMap
 			mapSpec.BTF = nil
 			mapSpec.ValueSize = 0
 		}
+
+		switch mapSpec.Type {
+		case ebpf.RingBuf:
+			structType := watchedMap.btf.Value.(*btf.Struct)
+			watchedMap.valueStruct = structType
+			labelKeys := getLabelsForBtfStruct(structType)
+
+			watchedMap.Labels = labelKeys
+		case ebpf.Hash:
+			labelKeys, err := getLabelsForHashMapKey(mapSpec)
+			if err != nil {
+				return nil, err
+			}
+
+			watchedMap.Labels = labelKeys
+		default:
+			return nil, errors.New("unsupported map type")
+		}
+
+		watchedMaps[name] = watchedMap
 	}
 
+	loadOptions := ParsedELF{
+		Spec:        spec,
+		WatchedMaps: watchedMaps,
+	}
+	return &loadOptions, nil
+}
+
+func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
+	// TODO: add invariant checks on opts
+	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
+
+	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
@@ -166,53 +214,45 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	}
 	linkerProgress.Success()
 
-	// TODO: break this functionality apart, need to handle deferred closes of all resources when solving
-	return l.watchMaps(ctx, spec.Maps, btfMapMap, coll, opts)
+	return l.watchMaps(ctx, opts.ParsedELF.WatchedMaps, coll, opts.Watcher)
 }
 
-func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, btfMapMap map[string]*btf.Map, coll *ebpf.Collection, opts *LoadOptions) error {
-	opts.Watcher.PreWatchHandler()
-	logger := contextutils.LoggerFrom(ctx)
+func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
+	watcher.PreWatchHandler()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	for name, bpfMap := range maps {
+	for name, bpfMap := range watchedMaps {
 		name := name
 		bpfMap := bpfMap
 
-		if !isTrackedMap(bpfMap) {
-			continue
-		}
-
-		switch bpfMap.Type {
+		switch bpfMap.mapType {
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
-			// this assertion checked when initially populating the `btfMapMap`
-			structType := btfMapMap[name].Value.(*btf.Struct)
-			labelKeys := getLabelsForBtfStruct(structType)
-			if isCounterMap(bpfMap) {
-				increment = l.metricsProvider.NewIncrementCounter(name, labelKeys)
-			} else if isPrintMap(bpfMap) {
-				increment = &noopIncrement{}
+			if isCounterMap(bpfMap.mapSpec) {
+				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
+			} else if isPrintMap(bpfMap.mapSpec) {
+				increment = &noop{}
 			}
 			eg.Go(func() error {
-				return l.startRingBuf(ctx, structType, coll, increment, name, labelKeys, opts)
+				watcher.NewRingBuf(name, bpfMap.Labels)
+				return l.startRingBuf(ctx, bpfMap.valueStruct, coll.Maps[name], increment, name, watcher)
 			})
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
-			labelKeys, err := getLabelsForHashMapKey(bpfMap)
-			if err != nil {
-				return err
-			}
+			labelKeys := bpfMap.Labels
 			var instrument stats.SetInstrument
-			if isCounterMap(bpfMap) {
+			if isCounterMap(bpfMap.mapSpec) {
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
-			} else if isGaugeMap(bpfMap) {
+			} else if isGaugeMap(bpfMap.mapSpec) {
 				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
+			} else {
+				instrument = &noop{}
 			}
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
-				return l.startHashMap(ctx, bpfMap, coll.Maps[name], instrument, name, labelKeys, opts)
+				watcher.NewHashMap(name, labelKeys)
+				return l.startHashMap(ctx, bpfMap.mapSpec, coll.Maps[name], instrument, name, watcher)
 			})
 		default:
 			// TODO: Support more map types
@@ -221,27 +261,25 @@ func (l *loader) watchMaps(ctx context.Context, maps map[string]*ebpf.MapSpec, b
 	}
 
 	err := eg.Wait()
-	logger.Info("after waitgroup")
+	contextutils.LoggerFrom(ctx).Info("after waitgroup")
 	return err
 }
 
 func (l *loader) startRingBuf(
 	ctx context.Context,
 	valueStruct *btf.Struct,
-	coll *ebpf.Collection,
+	liveMap *ebpf.Map,
 	incrementInstrument stats.IncrementInstrument,
 	name string,
-	keys []string,
-	opts *LoadOptions,
+	watcher MapWatcher,
 ) error {
-	opts.Watcher.NewRingBuf(name, keys)
 	// Initialize decoder
 	d := l.decoderFactory()
 	logger := contextutils.LoggerFrom(ctx)
 
 	// Open a ringbuf reader from userspace RINGBUF map described in the
 	// eBPF C program.
-	rd, err := ringbuf.NewReader(coll.Maps[name])
+	rd, err := ringbuf.NewReader(liveMap)
 	if err != nil {
 		return fmt.Errorf("opening ringbuf reader: %v", err)
 	}
@@ -275,7 +313,7 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		opts.Watcher.SendEntry(MapEntry{
+		watcher.SendEntry(MapEntry{
 			Name: name,
 			Entry: KvPair{
 				Key: stringLabels,
@@ -290,10 +328,8 @@ func (l *loader) startHashMap(
 	liveMap *ebpf.Map,
 	instrument stats.SetInstrument,
 	name string,
-	keys []string,
-	opts *LoadOptions,
+	watcher MapWatcher,
 ) error {
-	opts.Watcher.NewHashMap(name, keys)
 	d := l.decoderFactory()
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -333,7 +369,7 @@ func (l *loader) startHashMap(
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
 				thisKvPair := KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				opts.Watcher.SendEntry(MapEntry{
+				watcher.SendEntry(MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
 				})
@@ -358,7 +394,6 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
 	structKey, ok := mapSpec.BTF.Key.(*btf.Struct)
 	if !ok {
-		// TODO; move this check earlier
 		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.BTF.Value.String())
 	}
 
@@ -373,10 +408,17 @@ func getLabelsForBtfStruct(structKey *btf.Struct) []string {
 	return keys
 }
 
-type noopIncrement struct{}
+type noop struct{}
 
-func (n *noopIncrement) Increment(
+func (n *noop) Increment(
 	ctx context.Context,
 	decodedKey map[string]string,
+) {
+}
+
+func (n *noop) Set(
+	ctx context.Context,
+	val int64,
+	labels map[string]string,
 ) {
 }

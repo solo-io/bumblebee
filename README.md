@@ -17,7 +17,15 @@ BumbleBee helps to build, run and distribute eBPF programs using OCI images. It 
 
 The first step to get started is to install `bee` using one of the [installation](#Installation) techniques listed below.
 
-Once `bee` has been installed we can go ahead an initialize our first `eBPF` probe! To do this let's head over to our [tutorial](docs/getting_started.md).
+Once `bee` has been installed we can go ahead an initialize our first `eBPF` probe! To do this you just need to run one command! (no seriously that's it.)
+*Note*: This will only work on linux. If you don't have access to a linux machine, [Vagrant](https://learn.hashicorp.com/tutorials/vagrant/getting-started-install) will work as well!
+
+```bash
+sudo bee run ghcr.io/solo-io/bumblebee/tcpconnect:$(bee version)
+```
+To see data populated simply run `curl httpbin.org` in another window.
+
+Now that you have run your first example program, you can go ahead and write your own with our [tutorial](docs/getting_started.md).
 
 ## Installation
 
