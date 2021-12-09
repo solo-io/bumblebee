@@ -71,7 +71,7 @@ Logging may be the simplest output format of our `eBPF` probes, but it is also i
 
 ##### RingBuffer
 
-The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](#TUTORIAL.md) for more in depth steps.
+The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
 
 
 When looking at the program itself, we can see that the struct being passed into the `RingBuffer` has the following structure. Keep this in mind when looking at the log line below.
@@ -91,7 +91,7 @@ The data in contained is not particularly interesting, but rather the formatting
 
 ##### HashMap
 
-The source for this example can be found in `./examples/tcpconnect/tcpconnect.c`. Detailed steps on building and running are omitted here, please see our [tutorial](#TUTORIAL.md) for more in depth steps.
+The source for this example can be found in `./examples/tcpconnect/tcpconnect.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
 
 When looking at the program itself, we can see that the struct being passed into the `HashMap` has the following structure. Keep this in mind when looking at the log line below.
 ```C
