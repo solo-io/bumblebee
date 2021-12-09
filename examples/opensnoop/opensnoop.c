@@ -55,7 +55,7 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 {
 	u64 id = bpf_get_current_pid_tgid();
 	/* use kernel terminology here for tgid/pid: */
-	u32 tgid = id >> 32;
+	// u32 tgid = id >> 32;
 	u32 pid = id;
 
 	/* store arg info for later lookup */
