@@ -7,7 +7,7 @@
 1. The maps which allow the user space and kernel space programs to share data.
 2. The functions which can be attached to kernel probes and tracepoints.
 
-For more detailed examples of these, please see our [tutorial](#TUTORIAL.md). This section will discuss the additional features and conventions we have added on top of this workflow.
+For more detailed examples of these, please see our [tutorial](getting_started.md). This section will discuss the additional features and conventions we have added on top of this workflow.
 
 #### Maps
 
