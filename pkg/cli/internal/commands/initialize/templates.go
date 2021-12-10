@@ -24,7 +24,12 @@ var supportedLanguages = []string{
 const (
 	ringBuf = "RingBuffer"
 	hashMap = "HashMap"
+
+	network    = "Network"
+	fileSystem = "File system"
 )
+
+var supportedProgramTypes = []string{network, fileSystem}
 
 var supportedMapTypes = []string{ringBuf, hashMap}
 var mapTypeToTemplateData = map[string]*templateData{
@@ -65,6 +70,51 @@ var mapOutputTypeToTemplateData = map[string]string{
 	outputGauge:   ".gauge",
 }
 
+const openAtStruct = `// This struct represents the data we will gather from the tracepoint to send to our ring buffer map
+// The 'bee' runner will watch for entries to our ring buffer and print them out for us
+struct event {
+	// In this example, we have a single field, the filename being opened
+	char fname[255];
+};`
+
+const openAtMap = `struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 1 << 24);
+	// Define the type of struct that will be submitted to the ringbuf
+	// This allows the bee runner to dynamically read and output the data from the ringbuf
+	__type(value, struct event);
+} events SEC(".maps.print");`
+
+const openAtBody = `// Attach our bpf program to the tracepoint for the openat() syscall
+SEC("tracepoint/syscalls/sys_enter_openat")
+int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
+{
+	// initialize the event struct which we will send the the ring buffer
+	struct event event = {};
+
+	// use a bpf helper function to read a string containing the filename 
+	// the filename comes from the tracepoint we are attaching to
+	bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ctx->args[1]);
+
+	// create a pointer which will be used to access memory in the ring buffer
+	struct event *ring_val;
+
+	// use another bpf helper to reserve memory for our event in the ring buffer
+	// our pointer will now point to the correct location we should write our event to
+	ring_val = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
+	if (!ring_val) {
+		return 0;
+	}
+	
+	// copy our event into the ring buffer
+	memcpy(ring_val, &event, sizeof(struct event));
+
+	// submit the event to the ring buffer
+	bpf_ringbuf_submit(ring_val, 0);
+
+	return 0;
+}`
+
 const ringbufMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -75,7 +125,10 @@ const ringbufStruct = `struct event_t {
 	// 2. Add rinbuf struct data here.
 } __attribute__((packed));`
 
-const ringbufBody = `// Init event pointer
+const ringbufBody = `SEC("kprobe/tcp_v4_connect")
+int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
+{
+	// Init event pointer
 	struct event_t *event;
 
 	// Reserve a spot in the ringbuffer for our event
@@ -88,7 +141,10 @@ const ringbufBody = `// Init event pointer
 	// For example:
 	// event->pid = bpf_get_current_pid_tgid();
 
-	bpf_ringbuf_submit(event, 0);`
+	bpf_ringbuf_submit(event, 0);
+	
+	return 0;
+}`
 
 const hashMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
@@ -104,7 +160,10 @@ const hashKeyStruct = `struct dimensions_t {
 	u32 pid;
 } __attribute__((packed));`
 
-const hashMapBody = `	// initialize our struct which will be the key in the hash map
+const hashMapBody = `SEC("kprobe/tcp_v4_connect")
+int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
+{
+	// initialize our struct which will be the key in the hash map
 	struct dimensions_t key;
 	// initialize variable used to track PID of process calling tcp_v4_connect
 	u32 pid;
@@ -130,7 +189,11 @@ const hashMapBody = `	// initialize our struct which will be the key in the hash
 		counter = *counterp + 1;
 	}
 	// update our map with the new value of the counter
-	bpf_map_update_elem(&values, &key, &counter, 0);`
+	bpf_map_update_elem(&values, &key, &counter, 0);
+	
+	
+	return 0;
+}`
 
 const fileTemplate = `#include "vmlinux.h"
 #include "bpf/bpf_helpers.h"
@@ -148,11 +211,5 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // More info and map types can be found here: https://www.man7.org/linux/man-pages/man2/bpf.2.html
 {{ .RenderedMap }}
 
-SEC("kprobe/tcp_v4_connect")
-int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
-{
 {{ .FunctionBody }}
-
-	return 0;
-}
 `
