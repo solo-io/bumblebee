@@ -1,5 +1,5 @@
 <h1 align="center">
-    <img src="logo.svg" alt="Bumblebee" width="75%" height="75%">
+    <img src="logo.svg" alt="Bumblebee" width="60%" height="60%">
 </h1>
 
 BumbleBee helps to build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
