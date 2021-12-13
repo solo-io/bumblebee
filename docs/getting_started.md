@@ -362,6 +362,13 @@ bee push ghcr.io/$GITHUB_USER/my_probe:v1
 Error: unexpected status: 403 Forbidden
 ```
 
+Note: If you attempt to push to DockerHub, it will fail as expected. This is because DockerHub doesn't accept any other images than Docker images.
+
+```
+bee push docker.io/$USER/my_probe:v1
+  ERROR   Failed to push image docker.io/$USER/my_probe:v1
+```
+
 ## Summary
 
 We've just gone over how `bee` can help you harness eBPF's power to enable observability - whether on your own, or using a pre-made probe create by the community.
