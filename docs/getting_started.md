@@ -24,7 +24,7 @@ Next you will be asked for the type of global map you would like to use. Maps ar
   ▸ HashMap
 ```
 
-After deciding on a map type, you will be asked to decide on an output format. This step is the first that gets into the detail and magic of `bee`. Normally developing `eBPF` applications requires writing user space, and kernel space code. However, with `bee` you only need to develop the kernel space code, and then `bee` can automatically handle and output the data in your specified format. The 2 main output types available currently are: `stats`, and `print`. More information on these can be found in the [output formats](#Output-Formats) section below. We will be choosing `print` as a simple example.
+After deciding on a map type, you will be asked to decide on an output format. This step is the first that gets into the detail and magic of `bee`. Normally developing `eBPF` applications requires writing user space, and kernel space code. However, with `bee` you only need to develop the kernel space code, and then `bee` can automatically handle and output the data in your specified format. The 2 main output types available currently are: `stats`, and `print`. More information on these can be found in the [output formats](concepts.md#Output-Formats) section below. We will be choosing `print` as a simple example.
 
 ```bash
 ? What type of output would you like from your map: 
@@ -104,7 +104,7 @@ struct {
 ```
 
 This defines a BPF map of type ring-buffer. A ring-buffer map is commonly used to stream events from 
-kernel space to user space. The kernel eBPF probe writes to the wring buffer, and a user-mode program can asynchronously read events from the buffer.
+kernel space to user space. The kernel eBPF probe writes to the ring buffer, and a user-mode program can asynchronously read events from the buffer.
 
 Note the section the map is in: `.maps.print` - this has special meaning in `bee` - it instructs it to display this map as a stream of events (think logs and not metrics).
 
@@ -319,11 +319,17 @@ This command automatically pulls the remote bpf program and runs it!
 
 You can also push images to an OCI compliant registry, and share them with the community! As for authentication, `bee` will automatically pick-up your docker authentication settings. You can also run `bee login` (this stores the credentials **unencrypted** in `~/.bumblebee/config.json`), or provide the credentials in the command line.
 
-To login to GHCR for example, run:
+To login to [GitHub Container Registry (GHCR)](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for example, run:
 ```
 export GITHUB_USER=<You github user name>
 export GITHUB_TOKEN=<You github personal access token>
-echo $GITHUB_TOKEN | go run bee/main.go login -u $GITHUB_USER --password-stdin ghcr.io
+echo $GITHUB_TOKEN | bee login -u $GITHUB_USER --password-stdin ghcr.io
+```
+
+Then you can tag and push your image to your GHCR registry:
+```
+bee tag my_probe:v1 ghcr.io/$GITHUB_USER/my_probe:v1
+bee push ghcr.io/$GITHUB_USER/my_probe:v1
 ```
 
 If you don't have access to a registry, you can also start a local registry for testing purposes like so:
@@ -344,6 +350,16 @@ Another example, that uses google container registry:
 ```
 bee tag my_probe:v1 gcr.io/<YOUR PROJECT ID>/my_probe:v1
 bee push gcr.io/<YOUR PROJECT ID>/my_probe:v1
+```
+
+### Troubleshooting
+
+If you get a `403` error code when using `bee push` to push the image to your registry, check if you have permission to push.  The error below indicated the token only has read access to the registry but not write access. You'll need to generate a new `GITHUB_TOKEN` with proper access to fix it.
+
+```
+bee push ghcr.io/$GITHUB_USER/my_probe:v1
+  ERROR   Failed to push image ghcr.io/$GITHUB_USER/my_probe:v1
+Error: unexpected status: 403 Forbidden
 ```
 
 ## Summary
