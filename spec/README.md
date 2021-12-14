@@ -8,7 +8,7 @@ The eBPF Image specification defines how to bundle eBPF kernel programs as conta
 
 | Term                               | Definition                                       |
 |------------------------------------|--------------------------------------------------|
-| eBPF Module                        | The distributable, loadable, and executable unit of code in WebAssembly. 
+| eBPF Module                        | The distributable, loadable, and executable unit of code that can run as sandbox programs in Linux Kernel. 
 | eBPF Image Specification           | The specification for storing eBPF modules as container images.
 
 
@@ -17,20 +17,20 @@ The eBPF Image specification defines how to bundle eBPF kernel programs as conta
 
 - [Description](#description)
     - [Layers](#layers)
-    - [Running OCI Images with Envoy](#running-oci-images-with-envoy)
+    - [Running OCI Images with bee](#running-oci-images-with-bee)
 - [Format](#format)
 
 ### Description:
 
 #### Overview:
 
-Most of the data necessary to running a BTF enabled eBPF program, are contained within the binary iteslf, so forunately not much other information needs to be stored alongside it.
+Most of the data necessary to running a BTF enabled eBPF program, are contained within the binary iteslf, so fortunately not much other information needs to be stored alongside it.
 
 #### Layers:
 
 The content layer always consists of the eBPF module binary. 
 
-The config layer consists of a JSON-formatted string, which currently contains no information, but is available for configuration later should the need arise 
+The config layer consists of a JSON-formatted string, which currently contains no information, but is available for configuration later should the need arise. 
 
 For the sake of simplicity, the specification only supports a single module per image.
 
@@ -43,7 +43,7 @@ Once this has been verified, these images can be run using `bee run IMAGE_NAME`.
 
 ### Format:
 
-The WASM OCI Artifact Spec consists of two layers bundled together:
+The eBPF OCI Artifact Spec consists of two layers bundled together:
 - A layer specifying configuration for the target runtime
 - A layer containing the compiled eBPF module itself
 
@@ -56,7 +56,7 @@ Each layer is associated with its own Media Type, which is stored in the OCI Des
 
 #### Example:
 
-The following descriptors provide an example of the OCI Image descriptors for an Envoy WASM Filter stored according to the specification:
+The following descriptors provide an example of the OCI Image descriptors for an eBPF module stored according to the specification:
 ```
 [
   {
@@ -82,5 +82,7 @@ You can use the `bee` tool to take new or existing module code and package it ac
 
 ## Want more info?
 
-[eBPF]: https://ebpf.io/
-[OCI Artifact]: https://github.com/opencontainers/artifacts
+Refer to the resources below to learn more about:
+
+- [eBPF](https://ebpf.io/)
+- [OCI Artifact](https://github.com/opencontainers/artifacts)
