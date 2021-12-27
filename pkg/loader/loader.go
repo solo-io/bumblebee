@@ -13,7 +13,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/go-utils/contextutils"
@@ -67,15 +66,18 @@ type WatchedMap struct {
 type loader struct {
 	decoderFactory  decoder.DecoderFactory
 	metricsProvider stats.MetricsProvider
+	printerFactory  PrinterFactory
 }
 
 func NewLoader(
 	decoderFactory decoder.DecoderFactory,
 	metricsProvider stats.MetricsProvider,
+	printerFactory PrinterFactory,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
 		metricsProvider: metricsProvider,
+		printerFactory:  printerFactory,
 	}
 }
 
@@ -159,7 +161,8 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
-	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
+	loaderProgress, _ := l.printerFactory.NewPrinter()
+	loaderProgress.Start("Loading BPF program and maps into Kernel")
 
 	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
@@ -171,7 +174,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	defer coll.Close()
 	loaderProgress.Success()
 
-	linkerProgress, _ := pterm.DefaultSpinner.Start("Linking BPF functions to associated probe/tracepoint")
+	linkerProgress, _ := l.printerFactory.NewPrinter()
+	linkerProgress.Start("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {

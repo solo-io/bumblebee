@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
-	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -29,6 +28,7 @@ type runOptions struct {
 
 	debug  bool
 	filter []string
+	notty  bool
 }
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
@@ -39,6 +39,7 @@ var stopper chan os.Signal
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
+	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -89,9 +90,15 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		}
 	}()
 
+	var printerFactory loader.PrinterFactory
+	printerFactory = loader.PTermFactory{}
+	if opts.notty {
+		printerFactory = loader.LogFactory{}
+	}
+
 	// guaranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
+	progReader, err := getProgram(cmd.Context(), opts.general, progLocation, printerFactory)
 	if err != nil {
 		return err
 	}
@@ -109,6 +116,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
 		promProvider,
+		printerFactory,
 	)
 
 	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
@@ -123,10 +131,11 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	appOpts := tui.AppOpts{
-		Loader:       progLoader,
-		ProgLocation: progLocation,
-		ParsedELF:    parsedELF,
-		Filter:       filter,
+		Loader:         progLoader,
+		ProgLocation:   progLocation,
+		ParsedELF:      parsedELF,
+		Filter:         filter,
+		PrinterFactory: printerFactory,
 	}
 	app := tui.NewApp(&appOpts)
 
@@ -152,17 +161,16 @@ func getProgram(
 	ctx context.Context,
 	opts *options.GeneralOptions,
 	progLocation string,
+	printerFactory loader.PrinterFactory,
 ) (io.ReaderAt, error) {
 
 	var (
-		progReader     io.ReaderAt
-		programSpinner *pterm.SpinnerPrinter
+		progReader io.ReaderAt
 	)
+	programSpinner, _ := printerFactory.NewPrinter()
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from registry: %s", progLocation),
-		)
+		programSpinner.Start(fmt.Sprintf("Fetching program from registry: %s", progLocation))
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -173,7 +181,6 @@ func getProgram(
 			opts.AuthOptions.ToRegistryOptions(),
 		)
 		if err != nil {
-			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
 			if err, ok := err.(interface {
 				StackTrace() errors.StackTrace
@@ -187,13 +194,10 @@ func getProgram(
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from file: %s", progLocation),
-		)
+		programSpinner.Start(fmt.Sprintf("Fetching program from file: %s", progLocation))
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
-			programSpinner.UpdateText("Failed to open BPF file")
 			programSpinner.Fail()
 			return nil, err
 		}

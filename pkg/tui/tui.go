@@ -11,7 +11,6 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
-	"github.com/pterm/pterm"
 	"github.com/rivo/tview"
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/go-utils/contextutils"
@@ -47,30 +46,33 @@ type MapValue struct {
 }
 
 type AppOpts struct {
-	Loader       loader.Loader
-	ProgLocation string
-	Filter       map[string]Filter
-	ParsedELF    *loader.ParsedELF
+	Loader         loader.Loader
+	ProgLocation   string
+	Filter         map[string]Filter
+	ParsedELF      *loader.ParsedELF
+	PrinterFactory loader.PrinterFactory
 }
 
 type App struct {
 	Entries   chan loader.MapEntry
 	CloseChan chan struct{}
 
-	tviewApp     *tview.Application
-	flex         *tview.Flex
-	loader       loader.Loader
-	progLocation string
-	filter       map[string]Filter
-	parsedELF    *loader.ParsedELF
+	tviewApp       *tview.Application
+	flex           *tview.Flex
+	loader         loader.Loader
+	progLocation   string
+	filter         map[string]Filter
+	parsedELF      *loader.ParsedELF
+	printerFactory loader.PrinterFactory
 }
 
 func NewApp(opts *AppOpts) App {
 	a := App{
-		loader:       opts.Loader,
-		progLocation: opts.ProgLocation,
-		filter:       opts.Filter,
-		parsedELF:    opts.ParsedELF,
+		loader:         opts.Loader,
+		progLocation:   opts.ProgLocation,
+		filter:         opts.Filter,
+		parsedELF:      opts.ParsedELF,
+		printerFactory: opts.PrinterFactory,
 	}
 	return a
 }
@@ -179,7 +181,10 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger.Info("starting Watch()")
 	go a.watch(ctx)
 
-	pterm.Info.Println("Rendering TUI...")
+	if a.printerFactory != nil {
+		printer, _ := a.printerFactory.NewPrinter()
+		printer.Start("Rendering TUI...")
+	}
 	logger.Info("render tui")
 	// begin rendering the TUI
 	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
