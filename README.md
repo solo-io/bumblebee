@@ -27,6 +27,13 @@ sudo bee run ghcr.io/solo-io/bumblebee/tcpconnect:$(bee version)
 ```
 To see data populated simply run `curl httpbin.org` in another window.
 
+*Note*: If you installed `bee` via the install script you may see an issue with the `bee` command not being available when run with `sudo`.
+See the [note on permissions](#a-note-on-permissions) for more info, but to quickly get started you can use the following command as an alternative:
+
+```bash
+sudo env "PATH=$PATH" bee run ghcr.io/solo-io/bumblebee/tcpconnect:$(bee version)
+```
+
 Now that you have run your first example program, you can go ahead and write your own with our [tutorial](docs/getting_started.md).
 
 ## Installation
