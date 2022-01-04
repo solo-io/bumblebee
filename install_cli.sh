@@ -26,7 +26,7 @@ else
   exit 1
 fi
 
-for BUMBLEBEE_version in $BUMBLEBEE_VERSIONS; do
+for bumblebee_version in $BUMBLEBEE_VERSIONS; do
 
 tmp=$(mktemp -d /tmp/ebpf.XXXXXX)
 filename="bee-${OS}-amd64"
