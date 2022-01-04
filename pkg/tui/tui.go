@@ -17,7 +17,7 @@ import (
 	"github.com/solo-io/go-utils/contextutils"
 )
 
-const titleText = `[aqua]
+const titleText = `[aqua] __                                                   
 /\ \                                                  
 \ \ \____     __     __                               
  \ \ '__'\  /'__'\ /'__'\                      // \   
@@ -25,16 +25,11 @@ const titleText = `[aqua]
    \ \_,__/\ \____\ \____\   ''-.._.-''-.._.. -(||)(')
     \/___/  \/____/\/____/                     '''    
 
-                              					 [aquamarine](powered by solo.io) `
+                                  [aquamarine](powered by solo.io)`
 
-const helpText = `
-
-[chartreuse]<ctrl-n>   [white]Select next table
+const helpText = `[chartreuse]<ctrl-n>   [white]Select next table
 [chartreuse]<ctrl-p>   [white]Select previous table
-[chartreuse]<ctrl-c>   [white]Quit
-
-
-`
+[chartreuse]<ctrl-c>   [white]Quit`
 
 type Filter struct {
 	MapName  string
@@ -124,24 +119,25 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 		SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
 	fmt.Fprint(title, titleText)
 
-	infoPanel := tview.NewGrid().SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0).SetColumns(0)
-	fillInfoPanel(infoPanel)
-
 	fetchText := tview.NewTextView().SetDynamicColors(true)
 	fmt.Fprintf(fetchText, "Program location: [aqua]%s", a.progLocation)
-	infoPanel.AddItem(fetchText, 2, 0, 1, 1, 0, 0, false)
 
 	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
 	fmt.Fprint(help, helpText)
 
-	rightMenu := tview.NewFlex().SetDirection(tview.FlexColumn)
-	rightMenu.AddItem(infoPanel, 0, 1, false)
+	rightMenu := tview.NewFlex().SetDirection(tview.FlexRow)
+	fetchMenu := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(fetchText, 0, 1, false).
+		AddItem(tview.NewBox(), 0, 1, false)
+	fetchMenu.SetBackgroundColor(tcell.ColorBlack)
+	rightMenu.AddItem(fetchMenu, 0, 1, false)
 	rightMenu.AddItem(help, 0, 1, false)
 
 	header.AddItem(title, 0, 0, 1, 1, 0, 0, false)
 	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
-	flex.AddItem(header, 9, 0, false)
+	flex.AddItem(header, 10, 0, false)
 	a.Entries = make(chan loader.MapEntry, 20)
 	a.tviewApp = app
 	a.flex = flex
@@ -391,23 +387,4 @@ func prevTable(app *tview.Application) {
 		}
 	}
 	mapMutex.RUnlock()
-}
-
-func fillInfoPanel(infoPanel *tview.Grid) {
-	empty0 := tview.NewBox()
-	empty1 := tview.NewBox()
-	empty3 := tview.NewBox()
-	empty4 := tview.NewBox()
-	empty5 := tview.NewBox()
-	empty6 := tview.NewBox()
-	empty7 := tview.NewBox()
-	empty8 := tview.NewBox()
-	infoPanel.AddItem(empty0, 0, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty1, 1, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty3, 3, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty4, 4, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty5, 5, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty6, 6, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty7, 7, 0, 1, 1, 0, 0, false)
-	infoPanel.AddItem(empty8, 8, 0, 1, 1, 0, 0, false)
 }
