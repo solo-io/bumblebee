@@ -122,7 +122,7 @@ const ringbufMapTmpl = `struct {
 } events SEC(".maps{{.OutputType}}");`
 
 const ringbufStruct = `struct event_t {
-	// 2. Add rinbuf struct data here.
+	// 2. Add ringbuf struct data here.
 } __attribute__((packed));`
 
 const ringbufBody = `SEC("kprobe/tcp_v4_connect")
