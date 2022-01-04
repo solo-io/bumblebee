@@ -11,13 +11,13 @@ Also worh noting , `bee` does not currently support Arm architectures (coming so
 The following is a brief overview of the internal code structure
 
 ```.
-├── builder # Dockerfile and scripts related to our eBPF build container
-├── ci # Scripts and helpers for CI
-├── docs # Docs and other useful information for interacting with bumblebee
-├── bee # main.go file for bee, majority of code is in pkg
-├── examples # Variety of example eBPF programs to be run with bee
-├── pkg # Primary code directory
-└── spec # Contains information related to eBPF OCI Spec
+├── builder     ## Dockerfile and scripts related to our eBPF build container
+├── ci          ## Scripts and helpers for CI
+├── docs        ## Docs and other useful information for interacting with bumblebee
+├── bee         ## main.go file for bee, majority of code is in pkg
+├── examples    ## Variety of example eBPF programs to be run with bee
+├── pkg         ## Primary code directory
+└── spec        ## Contains information related to eBPF OCI Spec
 ```
 ## Development
 

@@ -16,15 +16,36 @@ The first option you will be confronted with is the language with which you will
 ? What language do you wish to use for the filter: 
   ▸ C
 ```
+
+Now that we have selected the language to use, we will be prompted to select the type of program you want to create.
+As eBPF enables you to write programs that can hook into essentially any kernel functionality, there are several "types" of programs you can create.
+`bee` currently has two starting points: network or file-system based programs.
+Network programs will be focused on hooking into various functions in the kernel networking stack while file-system programs hook into file operations, such as `open()` calls.
+For this tutorial, let's select "Network".
+```
+? What type of program to initialize: 
+  ▸ Network
+    File system
+```
+
 Next you will be asked for the type of global map you would like to use. Maps are the instrument through which `eBPF` user space, and kernel space programs are able to communicate with each other. More detailed information on these maps, as well as the different types of maps which are available can be found in the `eBPF maps` section of the `BPF` [linux documentation](https://man7.org/linux/man-pages/man2/bpf.2.html). For the sake of this demo we will arbitrarily decide on `RingBuffer`.
 
 ```bash
 ? What type of map should we initialize: 
-    RingBuffer
-  ▸ HashMap
+  ▸ RingBuffer
+    HashMap
 ```
 
-After deciding on a map type, you will be asked to decide on an output format. This step is the first that gets into the detail and magic of `bee`. Normally developing `eBPF` applications requires writing user space, and kernel space code. However, with `bee` you only need to develop the kernel space code, and then `bee` can automatically handle and output the data in your specified format. The 2 main output types available currently are: `stats`, and `print`. More information on these can be found in the [output formats](concepts.md#Output-Formats) section below. We will be choosing `print` as a simple example.
+After deciding on a map type, you will be asked to decide on an output format.
+This step is the first that gets into the detail and magic of `bee`.
+Normally developing `eBPF` applications requires writing user space and kernel space code.
+However, with `bee` you only need to develop the kernel space code, and then `bee` can automatically handle and output the data from your eBPF maps.
+Additionally, `bee` can emit metrics from the data being received by your eBPF maps.
+Depending on your use-case, you can simply output the data in your map as text, which corresponds to the `print` output type.
+However, if you would like to generate metrics from the data, you can select a metric type.
+Currently, `counter` and `gauge` type metrics are supported.
+More information on these can be found in the [output formats](concepts.md#Output-Formats) section below.
+We will be choosing `print` for now, which again will only output map data as text and not emit any metrics.
 
 ```bash
 ? What type of output would you like from your map: 
@@ -48,7 +69,7 @@ The output file `probe.c` should now have the following content:
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct event_t {
-	// 2. Add rinbuf struct data here.
+	// 2. Add ringbuf struct data here.
 } __attribute__((packed));
 
 // This is the definition for the global map which both our
@@ -64,7 +85,7 @@ struct {
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 {
-// Init event pointer
+	// Init event pointer
 	struct event_t *event;
 
 	// Reserve a spot in the ringbuffer for our event
@@ -122,7 +143,8 @@ This defines a kprobe that will be attached to `tcp_v4_connect`. This is not dif
 
 ## Write Some Code
 
-Fill in the event struct, and add fields to log the destination address and process id that attempts to make a connection:
+The event struct `event_t` defines the data that is streamed to our ring-buffer map. 
+Let's populate the event struct with some useful data by adding fields to log the destination address and process id that attempts to make a connection:
 ```C
 struct event_t {
 	ipv4_addr daddr;
@@ -130,7 +152,14 @@ struct event_t {
 } __attribute__((packed));
 ```
 
-Also, let's add another map, that defines the number of total connections per address. Add the following struct before the probe:
+At this point, our program would be able to send an event for each connection being established on the system.
+However, with only a stream of data it may be difficult to see trends, such as how many connections are being made to specific hosts.
+
+Let's also solve for this challenge by tracking connection counts in addition to simply streaming each connection.
+To do this, we will need to add another eBPF map in addition to the ring-buffer which was initialized for us.
+This new map will be a hash map and will keep track of the total number of connections to a given address.
+Add the following struct and map definition before the probe:
+
 
 ```C
 struct dimensions_t {
@@ -145,9 +174,9 @@ struct {
 } connection_count SEC(".maps.counter");
 ```
 
-Note the `ipv4_addr` type. It is defined in `solo_types.h`. While it is simply defined to be a `u32`, this type definition is a hint to `bee` to format this field as an IPv4 address.
+Note the `ipv4_addr` type. This type is defined in `solo_types.h`. While it is simply defined to be a `u32`, this type definition is a hint to `bee` to format this field as an IPv4 address.
 
-Now, let's define the probes code:
+Now, let's define the code for our probe:
 
 ```C
 SEC("kprobe/tcp_v4_connect")
@@ -189,6 +218,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 	return 0;
 }
 ```
+
 <details>
 <summary>
 See full source code here
@@ -270,6 +300,8 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 }
 ```
 </details>
+
+
 ## Build it!
 
 Use the `bee` tool to compile your program and store it as an OCI image:
@@ -312,7 +344,7 @@ You can push and pull probes from any OCI compatible registry, allowing you to u
 
 In fact, you can try running some of the programs we've already pushed right now!
 ```
-bee run ghcr.io/solo-io/bumblebee/tcpconnect:0.0.3
+bee run ghcr.io/solo-io/bumblebee/tcpconnect:$(bee version)
 ```
 
 This command automatically pulls the remote bpf program and runs it!
@@ -371,5 +403,5 @@ bee push docker.io/$USER/my_probe:v1
 
 ## Summary
 
-We've just gone over how `bee` can help you harness eBPF's power to enable observability - whether on your own, or using a pre-made probe create by the community.
-With `bee` we tried to help you gain the benefits of eBPF while minimizing the learning curve and boilerplate code. We would love to hear your feedback!
+We've just gone over how `bee` can help you harness eBPF's power -- whether on your own or by using pre-made probes created by the community.
+With `bee` we are trying to help you gain the benefits of eBPF while minimizing the learning curve and boilerplate code. We would love to hear your feedback!
