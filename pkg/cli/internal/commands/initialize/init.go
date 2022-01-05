@@ -20,13 +20,13 @@ type InitOptions struct {
 }
 
 func addToFlags(flags *pflag.FlagSet, opts *InitOptions) {
-	flags.StringVarP(&opts.Language, "languague", "l", "", "Language to use for the bpf program")
+	flags.StringVarP(&opts.Language, "language", "l", "", "Language to use for the bpf program")
 	flags.StringVarP(&opts.MapType, "map", "m", "", "Map type to initialize")
 	flags.StringVarP(&opts.FilePath, "file", "f", "", "File to create skeleton in")
 	flags.StringVarP(&opts.OutputType, "output-type", "o", "", "The output type for your map")
-	flags.StringVar(&opts.OutputType, "program-type", "", "The type of program to create (e.g. network, file-system)")
-
+	flags.StringVar(&opts.ProgramType, "program-type", "", "The type of program to create (e.g. network, file-system)")
 }
+
 func Command() *cobra.Command {
 	opts := &InitOptions{}
 
@@ -53,13 +53,14 @@ func initialize(opts *InitOptions) error {
 	}
 
 	programType := opts.ProgramType
-	var mapTemplate *templateData
 	if programType == "" {
 		programType, err = selectProgramType()
 		if err != nil {
 			return err
 		}
 	}
+
+	var mapTemplate *templateData
 	if programType == network {
 		mapTemplate, err = handleNetworkProgram(opts)
 		if err != nil {
