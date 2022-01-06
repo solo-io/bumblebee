@@ -66,10 +66,16 @@ Adding capabilities is the preferred method, as if you run `bee run` with `sudo`
 
 ### Uninstall
 
-You can uninstall `bee` by removing the directory:
+If you installed `bee` via the install script, you can uninstall `bee` by removing the directory:
 
 ```bash
 rm -rf $HOME/.bumblebee/
+```
+
+If you built `bee` using as root or via sudo, remove the following directory:
+
+```bash
+rm -rf /root/.bumblebee
 ```
 
 ### License
