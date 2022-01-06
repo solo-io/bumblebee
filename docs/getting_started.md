@@ -1,7 +1,7 @@
 # Tutorial
 
 ## Prerequisites
-Most of this tutorial can be run on linux or mac (with docker for desktop). The "run" part requires linux. To get a linux environment you can use our [vagrant VM](contributing.md#Development).
+Most of this tutorial can be run on Linux or macOS (with docker for desktop). The "run" part requires Linux. To get a Linux environment you can use our [vagrant VM](contributing.md#Development).
 
 ## Introduction
 
@@ -28,7 +28,7 @@ For this tutorial, let's select "Network".
     File system
 ```
 
-Next you will be asked for the type of global map you would like to use. Maps are the instrument through which `eBPF` user space, and kernel space programs are able to communicate with each other. More detailed information on these maps, as well as the different types of maps which are available can be found in the `eBPF maps` section of the `BPF` [linux documentation](https://man7.org/linux/man-pages/man2/bpf.2.html). For the sake of this demo we will arbitrarily decide on `RingBuffer`.
+Next you will be asked for the type of global map you would like to use. Maps are the instrument through which `eBPF` user space, and kernel space programs are able to communicate with each other. More detailed information on these maps, as well as the different types of maps which are available can be found in the `eBPF maps` section of the `BPF` [Linux documentation](https://man7.org/linux/man-pages/man2/bpf.2.html). For the sake of this demo we will arbitrarily decide on `RingBuffer`.
 
 ```bash
 ? What type of map should we initialize: 
