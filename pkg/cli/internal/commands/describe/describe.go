@@ -32,7 +32,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 }
 
 func describe(cmd *cobra.Command, args []string, opts *describeOptions) error {
-	// gauranteed to be length 1
+	// guaranteed to be length 1
 	ref := args[0]
 	client := spec.NewEbpfOCICLient()
 	prog, err := spec.TryFromLocal(

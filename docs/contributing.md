@@ -1,10 +1,10 @@
 # Contributing
 
-Developing `eBPF` does not require a linux machine, however running the probes does. `eBPF` itself is a linux kernel technology, therefore any actual `BPF` programs must run in the linux kernel. We are working on an OSX development path, but it has not been completed as of yet.
+Developing `eBPF` does not require a Linux machine, however running the probes does. `eBPF` itself is a Linux kernel technology, therefore any actual `BPF` programs must run in the Linux kernel. We are working on an OSX development path, but it has not been completed as of yet.
 
-We recommend doing `eBPF` development on a linux machine. Do not fret however if you don't have a native Linux desktop, neither do we. Using `vscode` and GCP allows for a seamless near native development experience. See the following [article](https://safwene-benaich.medium.com/developing-on-remote-vm-via-vscode-using-google-clouds-iap-6b6549f9270c) for more detail. The article details the steps on a Windows machine, but they should be nearly identical on a Mac. 
+We recommend doing `eBPF` development on a Linux machine. Do not fret however if you don't have a native Linux desktop, neither do we. Using `vscode` and GCP allows for a seamless near native development experience. See the following [article](https://safwene-benaich.medium.com/developing-on-remote-vm-via-vscode-using-google-clouds-iap-6b6549f9270c) for more detail. The article details the steps on a Windows machine, but they should be nearly identical on a macOS. 
 
-Also worh noting , `bee` does not currently support Arm architectures (coming soon). However, the above development trick should alleviate that issue in the short-term.
+Also worth noting , `bee` does not currently support ARM architectures (coming soon). However, the above development trick should alleviate that issue in the short-term.
 
 ## Repo Structure
 
@@ -19,6 +19,7 @@ The following is a brief overview of the internal code structure
 ├── pkg         ## Primary code directory
 └── spec        ## Contains information related to eBPF OCI Spec
 ```
+
 ## Development
 
 For non-Linux users, we have a [Vagrant](https://learn.hashicorp.com/tutorials/vagrant/getting-started-install) box available for you to easily get started with a Linux environment. 

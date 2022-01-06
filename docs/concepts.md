@@ -11,7 +11,7 @@ For more detailed examples of these, please see our [tutorial](getting_started.m
 
 #### Maps
 
-As the `bee` runner is primarily targeted at observability, much of the user space functionality of the tool is centered around the maps. The extension of the maps allows our user space runner to interpret and process the data from these maps in a generic way. The 2 main types of maps which are supported at this time are `RingBuffer` and `HashMap`. There is some overlap in the functionality of the two within our runner, but also some important differences.
+As the `bee` runner is primarily targeted at observability, much of the user space functionality of the tool is centered around the maps. The extension of the maps allows our user space runner to interpret and process the data from these maps in a generic way. The two main types of maps which are supported at this time are `RingBuffer` and `HashMap`. There is some overlap in the functionality of the two within our runner, but also some important differences.
 
 **Important Note:** Currently all structs used in maps which are meant to be processed by our user space runner cannot be nested. This may be added in the future for the logging/eventing, but not for metrics.
 
@@ -83,7 +83,7 @@ struct event_t {
 } __attribute__((packed));
 ```
 
-After running the program, I simply run `curl httpbin.org` in a seperate terminal and the following log line appeared.
+After running the program, I simply run `curl httpbin.org` in a separate terminal and the following log line appeared.
 ```json
 {"entry":{"pid":"1478616", "uid":"1003","uptime":"359h58m30.242761006s"},"mapName":"events"}
 ```
@@ -101,7 +101,7 @@ struct dimensions_t {
 } __attribute__((packed));
 ```
 
-After running the program, I simply run `curl httpbin.org` a few times in a seperate terminal and the following log line appeared.
+After running the program, I simply run `curl httpbin.org` a few times in a separate terminal and the following log line appeared.
 ```json
 {"entries":[{"key":{"daddr":"18.232.227.86","saddr":"10.128.0.79"},"value":"2"},{"key":{"daddr":"34.192.79.103","saddr":"10.128.0.79"},"value":"5"}],"mapName":"sockets_ext"}
 ```
@@ -115,7 +115,7 @@ Potentially even more powerful than the logging features of the `bee` runner are
 
 Currently there are 2 ways to use a gauge with `bee`. One with a `HashMap` and one with a `RingBuffer`.
 
-An example of the both the `RingBuffer` counter and `HashMap` counter exist in the `examples/tcpconnect` folder. The program tracks the number of TCP connections using both map types to illustrate their use. We do not recommend saving the same value two seperate ways.
+An example of the both the `RingBuffer` counter and `HashMap` counter exist in the `examples/tcpconnect` folder. The program tracks the number of TCP connections using both map types to illustrate their use. We do not recommend saving the same value two separate ways.
 
 After starting the program, and curling httpbin a few times we can, we can get the metrics from `curl localhost:9091/metrics | grep events`
 ```
