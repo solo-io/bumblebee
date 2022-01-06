@@ -12,6 +12,7 @@ import (
 func Command(opts *options.GeneralOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "list",
+		Short: "List saved OCI image.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return list(cmd.Context(), opts)
 		},
