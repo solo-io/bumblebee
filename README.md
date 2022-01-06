@@ -72,7 +72,7 @@ If you installed `bee` via the install script, you can uninstall `bee` by removi
 rm -rf $HOME/.bumblebee/
 ```
 
-If you built `bee` using as root or via sudo, remove the following directory:
+If you built `bee` as root or via sudo, remove the following directory:
 
 ```bash
 rm -rf /root/.bumblebee
