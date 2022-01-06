@@ -22,7 +22,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use: "version",
-		Short: "Display the bee Version Information.",
+		Short: "Display bee Version Information.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", version.Version)
 			return nil
