@@ -102,12 +102,12 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 	if opts.Local {
 		buildSpinner, _ = pterm.DefaultSpinner.Start("Compiling BPF program locally")
 		if err := buildLocal(ctx, inputFile, outputFile); err != nil {
-			buildSpinner.UpdateText("Failed to compile BPF program")
+			buildSpinner.UpdateText("Failed to compile BPF program locally")
 			buildSpinner.Fail()
 			return err
 		}
 	} else {
-		buildSpinner, _ = pterm.DefaultSpinner.Start("Compiling BPF program locally")
+		buildSpinner, _ = pterm.DefaultSpinner.Start("Compiling BPF program")
 		if err := buildDocker(ctx, opts, inputFile, outputFile); err != nil {
 			buildSpinner.UpdateText("Failed to compile BPF program")
 			buildSpinner.Fail()
@@ -226,6 +226,5 @@ func buildLocal(ctx context.Context, inputFile, outputFile string) error {
 		fmt.Printf("%s\n", out)
 		return err
 	}
-	fmt.Printf("Successfully compiled \"%s\" and wrote it to \"%s\"\n", inputFile, outputFile)
 	return nil
 }
