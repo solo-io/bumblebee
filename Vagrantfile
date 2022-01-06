@@ -1,6 +1,9 @@
 
 Vagrant.configure("2") do |config|
+    # amd64
     config.vm.box = "generic/ubuntu2110"
+    # arm64
+    # config.vm.box = "nickschuetz/ubuntu-21.10-arm64"
     config.vm.define :impish
     config.vm.hostname = "impish"
     config.vm.synced_folder ".", "/source"
@@ -8,9 +11,7 @@ Vagrant.configure("2") do |config|
       # install llvm:
       export DEBIAN_FRONTEND=noninteractive
       export LLVM_VERSION=13
-      wget https://apt.llvm.org/llvm.sh
-      bash ./llvm.sh "$LLVM_VERSION"
-      rm ./llvm.sh
+      curl -sL https://apt.llvm.org/llvm.sh "$LLVM_VERSION" | bash
       apt-get -qq update
       # bpf related deps:
       apt-get -qq install linux-headers-$(uname -r) linux-tools-$(uname -r) libbpf-dev
