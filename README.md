@@ -64,6 +64,20 @@ sudo setcap cap_sys_resource,cap_sys_admin,cap_bpf+eip $(which bee)
 
 Adding capabilities is the preferred method, as if you run `bee run` with `sudo`, it will not find local images when you run `bee build` without sudo.
 
+### Uninstall
+
+If you installed `bee` via the install script, you can uninstall `bee` by removing the directory:
+
+```bash
+rm -rf $HOME/.bumblebee/
+```
+
+If you used `bee` as root or via sudo, remove the following directory:
+
+```bash
+rm -rf /root/.bumblebee
+```
+
 ### License
 
 Apache 2
