@@ -70,7 +70,7 @@ echo "  export PATH=\$HOME/.bumblebee/bin:\$PATH"
 echo ""
 echo "Now run:"
 echo "  bee init     # Initialize simple eBPF program to run with bee"
-echo "Please see visit the bumblebee website for more info:  https://github.com:solo-io/bumblebee"
+echo "Please see visit the bumblebee website for more info:  https://github.com/solo-io/bumblebee"
 exit 0
 done
 
