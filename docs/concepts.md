@@ -52,7 +52,7 @@ These special conventions and keywords come in the form of additional kernel cod
 
 Maps in `BPF` programs are defined using the `SEC(".maps")` keyword. When running using the `bee` runner, extra suffixes can be added to describe how this data should be handled. These can be roughly broken down into 2 behaviors, metrics and logging. Metrics turns the data into prometheus metrics which can be consumed by any standard prometheus deployments. And logging which emits structured json logs with the provided data, and can be consumed by any structured logging applications.
 
-The second convention we have added is a set of `typedef`s which describe to our runner how the underlying type is meant to be processesd after it leaves the kernel. These are stored in a file called `solo_types.h` and are made available automatically when building with `bee`. Some examples include:
+The second convention we have added is a set of `typedef`s which describe to our runner how the underlying type is meant to be processed after it leaves the kernel. These are stored in a file called `solo_types.h` and are made available automatically when building with `bee`. Some examples include:
 ```C
 // A basic ipv4 address represented as a u32
 typedef u32 ipv4_addr;
