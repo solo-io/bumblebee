@@ -1,0 +1,46 @@
+name: Bug Report
+description: Create a report to help us improve
+labels: ["Type: Bug"]
+body:
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of Bumblebee are you using? (output of `bee version`)
+    validations:
+      required: true
+  - type: input
+    id: linux-version
+    attributes:
+      label: Linux Version
+      description: If eBPF related, what version of the Linux kernel are you using? (output of `uname -r`)
+  - type: textarea
+    id: describe-bug
+    attributes:
+      label: Describe the bug
+      placeholder: Add a clear and concise description of what the bug is
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce-steps
+    attributes:
+      label: Steps to reproduce the bug
+      placeholder: |
+        1. bee build '...'
+        1. bee run '....'
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      placeholder: When I performed x, I expected y to happen
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      placeholder: |
+        Additional information specific to this issue

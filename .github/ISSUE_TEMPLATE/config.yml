@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Talk with us on Slack
+    url: https://solo-io.slack.com/app_redirect?channel=C02TEN3MV3J
+    about: For a fast response, consider asking your question on the Solo slack.
+  - name: Bumblebee Documentation
+    url: https://github.com/solo-io/bumblebee/tree/main/docs
+    about: Check out the Bumblebee docs for helpful information.
