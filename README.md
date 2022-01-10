@@ -47,8 +47,10 @@ curl -sL https://run.solo.io/bee/install | sh
 
 ### Using go
 ```bash
-# This will install directly to the configured GOBIN
-go install github.com/solo-io/bumblebee/bee
+git clone git@github.com:solo-io/bumblebee.git
+cd bumblebee
+# install to GOBIN (defaults to ~/go/bin/), can be used as `bee` if GOBIN is on your PATH
+go install ./bee
 ```
 
 #### Other options
