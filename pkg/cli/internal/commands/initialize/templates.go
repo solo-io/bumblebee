@@ -26,7 +26,7 @@ const (
 	hashMap = "HashMap"
 
 	network    = "Network"
-	fileSystem = "File system"
+	fileSystem = "FileSystem"
 )
 
 var supportedProgramTypes = []string{network, fileSystem}

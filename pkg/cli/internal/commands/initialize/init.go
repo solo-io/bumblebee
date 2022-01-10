@@ -2,6 +2,8 @@ package initialize // Can't name init because it's a hardcoded const in golang
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"text/template"
 
@@ -50,6 +52,11 @@ func initialize(opts *InitOptions) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		err = validateLanguage(opts.Language)
+		if err != nil {
+			return err
+		}
 	}
 
 	programType := opts.ProgramType
@@ -59,19 +66,23 @@ func initialize(opts *InitOptions) error {
 			return err
 		}
 	}
-
 	var mapTemplate *templateData
 	if programType == network {
 		mapTemplate, err = handleNetworkProgram(opts)
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if programType == fileSystem {
+		if opts.MapType != "" || opts.OutputType != "" {
+			return errors.New("initializing a file system type program with custom map types or output type is not currently supported. Please remove overrides for map type and output type to continue")
+		}
 		mapTemplate = &templateData{
 			StructData:   openAtStruct,
 			FunctionBody: openAtBody,
 			RenderedMap:  openAtMap,
 		}
+	} else {
+		return fmt.Errorf("%s is not a valid program type", programType)
 	}
 
 	tmpl := template.Must(template.New("c-file-template").Parse(fileTemplate))
@@ -111,6 +122,11 @@ func handleNetworkProgram(opts *InitOptions) (*templateData, error) {
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		err = validateMapType(mapType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	mapTemplate := mapTypeToTemplateData[mapType]
@@ -121,7 +137,13 @@ func handleNetworkProgram(opts *InitOptions) (*templateData, error) {
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		err = validateOutputType(outputType)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	mapTemplate.MapData.OutputType = mapOutputTypeToTemplateData[outputType]
 
 	mapTmpl := template.Must(template.New("map-tmpl").Parse(mapTemplate.MapData.MapTemplate))
@@ -142,6 +164,13 @@ func selectLanguage() (string, error) {
 	)
 }
 
+func validateLanguage(lang string) error {
+	if contains(lang, supportedLanguages) {
+		return nil
+	}
+	return fmt.Errorf("%s is not a valid language type", lang)
+}
+
 func selectProgramType() (string, error) {
 	return selectValue(
 		"What type of program to initialize",
@@ -158,12 +187,26 @@ func selectMapType() (string, error) {
 	)
 }
 
+func validateMapType(typ string) error {
+	if contains(typ, supportedMapTypes) {
+		return nil
+	}
+	return fmt.Errorf("%s is not a valid map type", typ)
+}
+
 func selectOutputType() (string, error) {
 	return selectValue(
 		"What type of output would you like from your map",
 		"Selected Output Type:",
 		supportedOutputTypes,
 	)
+}
+
+func validateOutputType(typ string) error {
+	if contains(typ, supportedOutputTypes) {
+		return nil
+	}
+	return fmt.Errorf("%s is not a valid output type", typ)
 }
 
 func selectValue(question, success string, options interface{}) (string, error) {
@@ -200,4 +243,13 @@ func getFileLocation() (string, error) {
 	}
 	return prompt.Run()
 
+}
+
+func contains(s string, slice []string) bool {
+	for _, v := range slice {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
