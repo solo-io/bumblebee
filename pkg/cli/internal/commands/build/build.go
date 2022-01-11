@@ -23,7 +23,7 @@ import (
 	"oras.land/oras-go/pkg/oras"
 )
 
-//go:embed Dockerfile
+//go:embed Dockerfile-uber
 var uberDockerfile []byte
 
 type buildOptions struct {
@@ -171,27 +171,41 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 		return nil
 	}
 
-	dir, _ := os.MkdirTemp("", "bee_oci_store")
-	tmpStore := dir + "/store"
+	uberImageSpinner, _ := pterm.DefaultSpinner.Start("Building uber image")
+	tmpDir, _ := os.MkdirTemp("", "bee_oci_store")
+	tmpStore := tmpDir + "/store"
 	err = os.Mkdir(tmpStore, 0755)
 	if err != nil {
+		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to create temp dir: %s", tmpStore))
+		uberImageSpinner.Fail()
 		return err
 	}
-	fmt.Println("Temp dir name:", dir)
-	fmt.Println("Temp store:", tmpStore)
-	// defer os.RemoveAll(dir)
+	if opts.general.Verbose {
+		fmt.Println("Temp dir name:", tmpDir)
+		fmt.Println("Temp store:", tmpStore)
+	}
+	defer os.RemoveAll(tmpDir)
 
-	tempReg, _ := content.NewOCI(tmpStore)
+	tempReg, err := content.NewOCI(tmpStore)
+	if err != nil {
+		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to initialize temp OCI registry in: %s", tmpStore))
+		uberImageSpinner.Fail()
+		return err
+	}
 	_, err = oras.Copy(ctx, reg, registryRef, tempReg, "",
 		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
 		oras.WithPullByBFS)
 	if err != nil {
+		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to copy image from '%s' to '%s'", opts.general.OCIStorageDir, tmpStore))
+		uberImageSpinner.Fail()
 		return err
 	}
 
-	dockerfile := dir + "/Dockerfile"
+	dockerfile := tmpDir + "/Dockerfile"
 	err = os.WriteFile(dockerfile, uberDockerfile, 0755)
 	if err != nil {
+		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to write: %s'", dockerfile))
+		uberImageSpinner.Fail()
 		return err
 	}
 
@@ -199,11 +213,15 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 	if uberImage == "" {
 		uberImage = fmt.Sprintf("bee-%s:latest", registryRef)
 	}
-	err = buildUber(ctx, opts, registryRef, opts.BeeImage, opts.BeeTag, dir, uberImage)
+	err = buildUber(ctx, opts, registryRef, opts.BeeImage, opts.BeeTag, tmpDir, uberImage)
 	if err != nil {
+		uberImageSpinner.UpdateText("Docker build of uber image failed'")
+		uberImageSpinner.Fail()
 		return err
 	}
 
+	uberImageSpinner.UpdateText(fmt.Sprintf("Uber image built and tagged at %s", uberImage))
+	uberImageSpinner.Success()
 	return nil
 }
 
@@ -245,9 +263,12 @@ func buildUber(
 	}
 	dockerCmd := exec.CommandContext(ctx, opts.Builder, dockerArgs...)
 	byt, err := dockerCmd.CombinedOutput()
-	fmt.Printf("%s\n", byt)
 	if err != nil {
+		fmt.Printf("%s\n", byt)
 		return err
+	}
+	if opts.general.Verbose {
+		fmt.Printf("%s\n", byt)
 	}
 	return nil
 }

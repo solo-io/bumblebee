@@ -1,11 +1,8 @@
 FROM alpine:3.14
 
 # installs public root certs
-# needed to establish trust with third party sources
 RUN apk upgrade --update-cache \
     && apk add ca-certificates \
     && rm -rf /var/cache/apk/*
 
 ADD bee-linux-amd64 .
-
-#ENTRYPOINT ["./bee-linux-amd64"]
