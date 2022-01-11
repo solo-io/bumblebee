@@ -88,10 +88,10 @@ install-cli:
 	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
 
 BEE_DIR := bee
-$(OUTDIR)/Dockerfile: $(BEE_DIR)/Dockerfile
+$(OUTDIR)/Dockerfile-bee: $(BEE_DIR)/Dockerfile-bee
 	cp $< $@
-build-cli-docker: build-cli $(OUTDIR)/Dockerfile
-	docker build $(OUTDIR) -f $(OUTDIR)/Dockerfile -t $(HUB)/bumblebee/bee:$(VERSION)
+build-cli-docker: build-cli $(OUTDIR)/Dockerfile-bee
+	docker build $(OUTDIR) -f $(OUTDIR)/Dockerfile-bee -t $(HUB)/bumblebee/bee:$(VERSION)
 
 ##----------------------------------------------------------------------------------
 ## Release

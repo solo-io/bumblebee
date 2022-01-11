@@ -1,8 +1,11 @@
-ARG BEE_VERSION=0.0.9
+ARG BEE_IMAGE=ghcr.io/solo-io/bumblebee/bee
+ARG BEE_TAG=latest
 
-FROM ghcr.io/solo-io/bumblebee/bee:$BEE_VERSION
+FROM $BEE_IMAGE:$BEE_TAG
 
 USER root
 COPY ./store /root/.bumblebee/store/
 
-CMD ["run", "tcpconnect"]
+ARG BPF_IMAGE
+ENV BPF_IMAGE=$BPF_IMAGE
+CMD ./bee-linux-amd64 run ${BPF_IMAGE}

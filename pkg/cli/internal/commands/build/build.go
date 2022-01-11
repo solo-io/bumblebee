@@ -31,7 +31,11 @@ type buildOptions struct {
 	Builder    string
 	OutputFile string
 	Local      bool
-	Uber       bool
+
+	Uber      bool
+	BeeImage  string
+	BeeTag    string
+	UberImage string
 
 	general *options.GeneralOptions
 }
@@ -42,7 +46,9 @@ func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
 	flags.BoolVar(&opts.Uber, "uber", false, "Build an 'uber' docker image that contains the `bee` runner and the BPF program")
-
+	flags.StringVar(&opts.BeeImage, "bee-image", "ghcr.io/solo-io/bumblebee/bee", "Docker image to use a base image when building an 'uber' image")
+	flags.StringVar(&opts.BeeTag, "bee-tag", version.Version, "Tag of docker image for base image when building an 'uber' image")
+	flags.StringVar(&opts.UberImage, "uber-image", "", "Image and tag of the 'uber' image to build. Defaults to 'bee-<$REGISTRY_REF>:latest")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -189,6 +195,15 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 		return err
 	}
 
+	uberImage := opts.UberImage
+	if uberImage == "" {
+		uberImage = fmt.Sprintf("bee-%s:latest", registryRef)
+	}
+	err = buildUber(ctx, opts, registryRef, opts.BeeImage, opts.BeeTag, dir, uberImage)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -209,6 +224,32 @@ func getPlatformInfo(ctx context.Context) *ocispec.Platform {
 		OSVersion:    strings.TrimSpace(splitOut[1]),
 		Architecture: strings.TrimSpace(splitOut[2]), //remove newline
 	}
+}
+
+func buildUber(
+	ctx context.Context,
+	opts *buildOptions,
+	ociImage, beeImage, beeTag, tmpDir, uberTag string,
+) error {
+	dockerArgs := []string{
+		"build",
+		"--build-arg",
+		fmt.Sprintf("BPF_IMAGE=%s", ociImage),
+		"--build-arg",
+		fmt.Sprintf("BEE_IMAGE=%s", beeImage),
+		"--build-arg",
+		fmt.Sprintf("BEE_TAG=%s", beeTag),
+		tmpDir,
+		"-t",
+		uberTag,
+	}
+	dockerCmd := exec.CommandContext(ctx, opts.Builder, dockerArgs...)
+	byt, err := dockerCmd.CombinedOutput()
+	fmt.Printf("%s\n", byt)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func buildDocker(
