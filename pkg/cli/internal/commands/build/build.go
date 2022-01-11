@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,13 +20,18 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
+	"oras.land/oras-go/pkg/oras"
 )
+
+//go:embed Dockerfile
+var uberDockerfile []byte
 
 type buildOptions struct {
 	BuildImage string
 	Builder    string
 	OutputFile string
 	Local      bool
+	Uber       bool
 
 	general *options.GeneralOptions
 }
@@ -35,6 +41,7 @@ func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
+	flags.BoolVar(&opts.Uber, "uber", false, "Build an 'uber' docker image that contains the `bee` runner and the BPF program")
 
 }
 
@@ -153,6 +160,34 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 
 	registrySpinner.UpdateText(fmt.Sprintf("Saved BPF OCI image to %s", registryRef))
 	registrySpinner.Success()
+
+	if !opts.Uber {
+		return nil
+	}
+
+	dir, _ := os.MkdirTemp("", "bee_oci_store")
+	tmpStore := dir + "/store"
+	err = os.Mkdir(tmpStore, 0755)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Temp dir name:", dir)
+	fmt.Println("Temp store:", tmpStore)
+	// defer os.RemoveAll(dir)
+
+	tempReg, _ := content.NewOCI(tmpStore)
+	_, err = oras.Copy(ctx, reg, registryRef, tempReg, "",
+		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
+		oras.WithPullByBFS)
+	if err != nil {
+		return err
+	}
+
+	dockerfile := dir + "/Dockerfile"
+	err = os.WriteFile(dockerfile, uberDockerfile, 0755)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

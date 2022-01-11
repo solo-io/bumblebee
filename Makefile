@@ -87,6 +87,12 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 install-cli:
 	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
 
+BEE_DIR := bee
+$(OUTDIR)/Dockerfile: $(BEE_DIR)/Dockerfile
+	cp $< $@
+build-cli-docker: build-cli $(OUTDIR)/Dockerfile
+	docker build $(OUTDIR) -f $(OUTDIR)/Dockerfile -t $(HUB)/bumblebee/bee:$(VERSION)
+
 ##----------------------------------------------------------------------------------
 ## Release
 ##----------------------------------------------------------------------------------

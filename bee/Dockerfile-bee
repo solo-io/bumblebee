@@ -1,0 +1,5 @@
+FROM debian:bullseye
+
+ADD bee-linux-amd64 .
+
+ENTRYPOINT ["./bee-linux-amd64"]
