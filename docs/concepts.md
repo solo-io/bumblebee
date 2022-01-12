@@ -121,7 +121,7 @@ struct {
 
 As above, we can see that the `struct dimensions_t` type is being used, this time as the `key` type for our `HashMap`.
 When running the program, we can see the entries get updated as connections are created:
-```json
+```
 daddr         saddr          value
 1.1.1.1       10.128.0.119   1
 ```
