@@ -66,45 +66,69 @@ These types can be used in the structs which populate our maps to instruct the r
 
 ### Logging
 
-Logging may be the simplest output format of our `eBPF` probes, but it is also incredibly powerful for both observability and debugging. Logging in our system comes in two main forms. Event based, and timer based. These two types of loggings are used based on the underlying map type which is being logged. When logging a `RingBuffer` each event is handled/logged individually, and therefore it will only be printed once. However, when using a `HashMap` the data has a longer life, and therefore the printing will happen each time there is an update. Let's look at a couple of quick examples to demonstrate this.
+Logging may be the simplest output format of our `eBPF` probes, but it is also incredibly powerful for both observability and debugging.
+Logging in our system comes in two main forms: event based and timer based.
+The type of logging used is based on the underlying map type.
+When logging a `RingBuffer` each event is handled/logged individually as it is received and therefore it will only be printed once.
+However, when using a `HashMap`, the data is polled on an interval. Therefore, the logging will happen on each interval and only when there is a change in the values of the map from the previous interval.
 
-#### RingBuffer
-
-The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
-
-
-When looking at the program itself, we can see that the struct being passed into the `RingBuffer` has the following structure. Keep this in mind when looking at the log line below.
-```C
-struct event_t {
-	u32 pid;
-	u32 uid;
-	duration uptime;
-} __attribute__((packed));
-```
-
-After running the program, I simply run `curl httpbin.org` in a separate terminal and the following log line appeared.
-```json
-{"entry":{"pid":"1478616", "uid":"1003","uptime":"359h58m30.242761006s"},"mapName":"events"}
-```
-The data in contained is not particularly interesting, but rather the formatting and structure. We have printed the map name this data came from, as well as all the data contains. Notice that the uptime of the system is also printed as a human readable duration, because the `typedef duration` was used in the source struct!
-
-#### HashMap
-
-The source for this example can be found in `./examples/tcpconnect/tcpconnect.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
-
-When looking at the program itself, we can see that the struct being passed into the `HashMap` has the following structure. Keep this in mind when looking at the log line below.
+When using `bee` to run your BPF programs, the TUI that is rendered by default will automatically handle the printing of the data in maps that follow the naming conventions.
+In other words, printing/logging of data is handled for metric output types automatically.
+We have a TCP-based example that demonstrates both map types which will explore more in depth.
+You can find the source in our examples folder here: [`/examples/tcpconnect/tcpconnect.c`](/examples/tcpconnect/tcpconnect.c).
+Both map types below use the following `struct` to define the shape of data being processed by our maps:
 ```C
 struct dimensions_t {
 	ipv4_addr saddr;
 	ipv4_addr daddr;
 } __attribute__((packed));
 ```
+This struct contains two IPv4 addresses, a source and destination IP.
 
-After running the program, I simply run `curl httpbin.org` a few times in a separate terminal and the following log line appeared.
-```json
-{"entries":[{"key":{"daddr":"18.232.227.86","saddr":"10.128.0.79"},"value":"2"},{"key":{"daddr":"34.192.79.103","saddr":"10.128.0.79"},"value":"5"}],"mapName":"sockets_ext"}
+#### RingBuffer
+
+Looking at the `RingBuffer` map in our `tcpconnect` program:
+```C
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 1 << 24);
+	__type(value, struct dimensions_t);
+} events_ring SEC(".maps.counter");
+``` 
+We can see that the `struct dimensions_t` type is being passed into the `RingBuffer`.
+So as TCP connections are established, the source and destination IP of these connections will be sent as events into this `RingBuffer`. Also note the `.maps.counter` section name.
+This tells `bee` to "watch" this map and log the data (in addition to emitting counter metrics, which will explore more in a later section).
+
+When running the program, as new TCP connections happen (by e.g. making a `curl 1.1.1.1` request in a separate terminal) we can see the TUI log the data:
 ```
-This one differs slightly from the `RingBuffer` example above in a couple important ways. First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer. Secondly, there are multiple key/value pairs, rather than a single value. Each key/value pair represents in this case an upstream/downstream address pair, and the number of connections. Also worth noting that the data described using the `typedef ipv4_addr` gets formatted as the underlying IP type by the printer.
+daddr		saddr
+1.1.1.1		10.128.0.119
+```
+The data in contained is not particularly interesting, but rather the formatting and structure.
+As the connection was created and data sent to our map, we will dynamically get the data printed to our screen in the correct format!
+
+#### HashMap
+
+Looking at the `RingBuffer` map in our `tcpconnect` program:
+```C
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, struct dimensions_t);
+	__type(value, u64);
+} events_hash SEC(".maps.counter");
+```
+
+As above, we can see that the `struct dimensions_t` type is being used, this time as the `key` type for our `HashMap`.
+When running the program, we can see the entries get updated as connections are created:
+```json
+daddr			saddr			value
+1.1.1.1 		10.128.0.119	1
+```
+This one differs slightly from the `RingBuffer` example above in a couple important ways.
+First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer.
+Secondly, the values in the key (`daddr` and `saddr`) are printed in addition to the `value`, which represents the total count of connections for this given source/destination pair.
+As these values change, or new source/destination pairs are introduced, the value will update and new rows will be printed accordingly.
 
 ### Metrics
 
