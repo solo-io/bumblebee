@@ -1,7 +1,6 @@
 # Concepts
 
-
-### BPF conventions
+## BPF conventions
 
 `BPF` programs are typically made up of 2 main parts:
 1. The maps which allow the user space and kernel space programs to share data.
@@ -9,13 +8,13 @@
 
 For more detailed examples of these, please see our [tutorial](getting_started.md). This section will discuss the additional features and conventions we have added on top of this workflow.
 
-#### Maps
+### Maps
 
 As the `bee` runner is primarily targeted at observability, much of the user space functionality of the tool is centered around the maps. The extension of the maps allows our user space runner to interpret and process the data from these maps in a generic way. The two main types of maps which are supported at this time are `RingBuffer` and `HashMap`. There is some overlap in the functionality of the two within our runner, but also some important differences.
 
 **Important Note:** Currently all structs used in maps which are meant to be processed by our user space runner cannot be nested. This may be added in the future for the logging/eventing, but not for metrics.
 
-##### RingBuffer
+#### RingBuffer
 
 `RingBuffer` is a generic map type which traditionally allows for temporary storage of many arbitrary data types. This allows the kernel or user space program to feed data into them, which can be read out in order from the other. In the case of `bee` the direction will be `kernel -> user`. In order to be able to generically handle this data however, we have imposed a restriction that only one type of data may be stored in the RingBuffer. This may change in the future.
 
@@ -32,19 +31,19 @@ The other aspect of the above program worth noting is the section name: `SEC(".m
 
 The final thing worth noting about the `RingBuffer` is it's event based nature. Each object is handled only once, and then never read from again. This differs from the `HashMap`, which will be discussed in greater detail below.
 
-##### HashMap
+#### HashMap
 
 Like `RingBuffer` above, `HashMap` is a generic map type to store data, with some key differences. The `HashMap` does not function as a queue, but rather as a traditional map, with both keys and values, which retains it's data until manually removed.
 
 In addition, `HashMap` supports section keywords to enable special [output formats](#Output-Formats). The valid keywords for this type of map are: `.print`, `.counter`, and `.gauge`.
 
 
-#### Programs
+### Programs
 
 Nothing specific has been added on top of the BPF programs/functions themselves at this time.
 
 
-### Output Formats
+## Output Formats
 
 Part of what makes `bee` so special, as mentioned above, is that it allows us to write `eBPF` probes with 0 user space code. In fact it allows for easy translation of kernel data and events into metrics and logging. As mentioned above this is accomplished through the use of special conventions and keywords. Before reading this section, we recommend reading the [conventions](#BPF-conventions) above for a brief overview.
 
@@ -65,11 +64,11 @@ typedef u64 duration;
 These types can be used in the structs which populate our maps to instruct the runner to treat the values in a special way. For instance, any `duration` value will be processed in the user space program as a golang `time.Duration` and then can be printed, and tracked as such.
 
 
-#### Logging
+### Logging
 
 Logging may be the simplest output format of our `eBPF` probes, but it is also incredibly powerful for both observability and debugging. Logging in our system comes in two main forms. Event based, and timer based. These two types of loggings are used based on the underlying map type which is being logged. When logging a `RingBuffer` each event is handled/logged individually, and therefore it will only be printed once. However, when using a `HashMap` the data has a longer life, and therefore the printing will happen each time there is an update. Let's look at a couple of quick examples to demonstrate this.
 
-##### RingBuffer
+#### RingBuffer
 
 The source for this example can be found in `./examples/kprobetcp/handler.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
 
@@ -89,7 +88,7 @@ After running the program, I simply run `curl httpbin.org` in a separate termina
 ```
 The data in contained is not particularly interesting, but rather the formatting and structure. We have printed the map name this data came from, as well as all the data contains. Notice that the uptime of the system is also printed as a human readable duration, because the `typedef duration` was used in the source struct!
 
-##### HashMap
+#### HashMap
 
 The source for this example can be found in `./examples/tcpconnect/tcpconnect.c`. Detailed steps on building and running are omitted here, please see our [tutorial](getting_started.md) for more in depth steps.
 
@@ -107,13 +106,13 @@ After running the program, I simply run `curl httpbin.org` a few times in a sepa
 ```
 This one differs slightly from the `RingBuffer` example above in a couple important ways. First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer. Secondly, there are multiple key/value pairs, rather than a single value. Each key/value pair represents in this case an upstream/downstream address pair, and the number of connections. Also worth noting that the data described using the `typedef ipv4_addr` gets formatted as the underlying IP type by the printer.
 
-#### Metrics
+### Metrics
 
 Potentially even more powerful than the logging features of the `bee` runner are it's metrics capabilities. As opposed to the logging feature, the metrics feature allows for creation and export of generic metrics + labels from `eBPF` probes. A couple simple, yet powerful, examples of this functionality are in the `examples` folder. `activeconn` keeps track of all active tcpv4 connections in a gauge with source/dest IP as the metric labels. The `tcpconnect` example does something similar, but it increments a counter for each new connection, rather than maintaining all active.
 
-##### Counter
+#### Counter
 
-Currently there are 2 ways to use a gauge with `bee`. One with a `HashMap` and one with a `RingBuffer`.
+Currently there are 2 ways to use a counter with `bee`. One with a `HashMap` and one with a `RingBuffer`.
 
 An example of the both the `RingBuffer` counter and `HashMap` counter exist in the `examples/tcpconnect` folder. The program tracks the number of TCP connections using both map types to illustrate their use. We do not recommend saving the same value two separate ways.
 
@@ -131,4 +130,27 @@ ebpf_solo_io_events_ring{daddr="3.216.167.140",saddr="10.128.0.79"} 5
 
 As we can see the number of connections are being tracked both from our `HashMap` and `RingBuffer` implementation.
 
-##### Gauge 
+#### Gauge 
+
+Gauges are used to track numeric values that can change over time.
+BumbleBee supports automatically exporting gauge style metrics for both `RingBuffer` and `HashMap` type maps as long as your map is correctly defined with a section name with a `.gauge` suffix.
+
+An example of a gauge is the number of active connections to a given host.
+The [/examples/activeconn/activeconn.c](/examples/activeconn/activeconn.c) file contains an implementation of active connection tracking by using a `HashMap` type map with a `.gauge` output type.
+
+Let's take a closer look at the `struct` which defines the map that will contain the connection counts.
+```c
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, struct dimensions_t);
+	__type(value, u64);
+} sockets_ext SEC(".maps.gauge");
+```
+
+This defines a `HashMap` containing integer values for connection counts which are keyed by `struct dimensions_t` (which we explored in the [HashMap](#hashmap-1) section).
+In other words, this means that each source and destination address pair will point to an integer representing the current number of active connections.
+
+The exporting of metrics is automatically handled thanks to the section name of `.maps.gauge`.
+This tells the `bee` runner to export gauge metrics of the current value for each entry in the `HashMap` map each time the value of the map is polled.
+Alternatively, if we were using a `RingBuffer` with gauge output, when each entry is processed by the `bee` runner, the gauge value will be updated accordingly.
