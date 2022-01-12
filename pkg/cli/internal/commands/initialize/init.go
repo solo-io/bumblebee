@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
-	"text/template"
 
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"os"
+	"text/template"
 )
 
 type InitOptions struct {
@@ -47,8 +47,9 @@ func Command() *cobra.Command {
 
 func initialize(opts *InitOptions) error {
 	var err error
+	var languageType string
 	if opts.Language == "" {
-		_, err = selectLanguage()
+		languageType, err = selectLanguage()
 		if err != nil {
 			return err
 		}
@@ -95,6 +96,9 @@ func initialize(opts *InitOptions) error {
 	fileLocation := opts.FilePath
 	if fileLocation == "" {
 		fileLocation, err = getFileLocation()
+		if fileLocation == "" && languageType == "C" {
+			fileLocation = "bee.c"
+		}
 		if err != nil {
 			return err
 		}
