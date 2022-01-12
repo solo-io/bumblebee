@@ -122,8 +122,8 @@ struct {
 As above, we can see that the `struct dimensions_t` type is being used, this time as the `key` type for our `HashMap`.
 When running the program, we can see the entries get updated as connections are created:
 ```json
-daddr			saddr			value
-1.1.1.1 		10.128.0.119			1
+daddr         saddr          value
+1.1.1.1       10.128.0.119   1
 ```
 This one differs slightly from the `RingBuffer` example above in a couple important ways.
 First of all the log lines do not happen at the same frequency as the events themselves, but rather on a timer.
