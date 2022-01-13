@@ -41,8 +41,17 @@ Now that you have run your first example program, you can go ahead and write you
 ## Installation
 
 ### Using our install script
+
+Download the latest version:
+
 ```bash
 curl -sL https://run.solo.io/bee/install | sh
+```
+
+Or download a given version (e.g. v0.0.8):
+
+```bash
+curl -sL https://run.solo.io/bee/install | BUMBLEBEE_VERSION=v0.0.8 sh
 ```
 
 ### Using go
