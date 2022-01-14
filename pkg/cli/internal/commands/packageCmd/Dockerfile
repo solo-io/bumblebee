@@ -1,7 +1,6 @@
-ARG BEE_IMAGE=ghcr.io/solo-io/bumblebee/bee
-ARG BEE_TAG=latest
+ARG BEE_IMAGE
 
-FROM $BEE_IMAGE:$BEE_TAG
+FROM $BEE_IMAGE
 
 USER root
 COPY ./store /root/.bumblebee/store/
