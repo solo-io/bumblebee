@@ -5,7 +5,7 @@ OUTDIR?=_output
 HUB?=ghcr.io/solo-io
 REPO_NAME?=bumblebee
 EXAMPLES_DIR?=examples
-
+DOCKER := docker
 
 RELEASE := "true"
 ifeq ($(TAGGED_VERSION),)
@@ -31,7 +31,6 @@ clean:
 #----------------------------------------------------------------------------------
 PUSH_CMD:=
 PLATFORMS?=linux/amd64
-DOCKER := docker
 docker-build:
 #   may run into issues with apt-get and the apt.llvm.org repo, in which case use --no-cache to build
 #   e.g. `docker build --no-cache ./builder -f builder/Dockerfile -t $(HUB)/bumblebee/builder:$(VERSION)
@@ -86,6 +85,18 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 .PHONY: install-cli
 install-cli:
 	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
+
+BEE_DIR := bee
+$(OUTDIR)/Dockerfile-bee: $(BEE_DIR)/Dockerfile-bee
+	cp $< $@
+
+.PHONY: docker-build-bee
+docker-build-bee: build-cli $(OUTDIR)/Dockerfile-bee
+	$(DOCKER) build $(OUTDIR) -f $(OUTDIR)/Dockerfile-bee -t $(HUB)/bumblebee/bee:$(VERSION)
+
+.PHONY: docker-push-bee
+docker-push-bee: docker-build-bee
+	$(DOCKER) push $(HUB)/bumblebee/bee:$(VERSION)
 
 ##----------------------------------------------------------------------------------
 ## Release

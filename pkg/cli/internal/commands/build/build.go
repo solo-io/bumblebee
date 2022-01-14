@@ -35,7 +35,6 @@ func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
-
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -181,7 +180,6 @@ func buildDocker(
 	opts *buildOptions,
 	inputFile, outputFile string,
 ) error {
-	// TODO: handle cwd to be glooBPF/epfctl?
 	// TODO: debug log this
 	wd, err := os.Getwd()
 	if err != nil {
