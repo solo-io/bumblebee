@@ -20,22 +20,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"oras.land/oras-go/pkg/content"
-	"oras.land/oras-go/pkg/oras"
 )
-
-//go:embed Dockerfile-uber
-var uberDockerfile []byte
 
 type buildOptions struct {
 	BuildImage string
 	Builder    string
 	OutputFile string
 	Local      bool
-
-	Uber      bool
-	BeeImage  string
-	BeeTag    string
-	UberImage string
 
 	general *options.GeneralOptions
 }
@@ -45,10 +36,6 @@ func addToFlags(flags *pflag.FlagSet, opts *buildOptions) {
 	flags.StringVarP(&opts.Builder, "builder", "b", "docker", "Executable to use for docker build command, default: `docker`")
 	flags.StringVarP(&opts.OutputFile, "output-file", "o", "", "Output file for BPF ELF. If left blank will default to <inputfile.o>")
 	flags.BoolVarP(&opts.Local, "local", "l", false, "Build the output binary and OCI image using local tools")
-	flags.BoolVar(&opts.Uber, "uber", false, "Build an 'uber' docker image that contains the `bee` runner and the BPF program")
-	flags.StringVar(&opts.BeeImage, "bee-image", "ghcr.io/solo-io/bumblebee/bee", "Docker image to use a base image when building an 'uber' image")
-	flags.StringVar(&opts.BeeTag, "bee-tag", version.Version, "Tag of docker image for base image when building an 'uber' image")
-	flags.StringVar(&opts.UberImage, "uber-image", "", "Image and tag of the 'uber' image to build. Defaults to 'bee-<$REGISTRY_REF>:latest")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -167,61 +154,6 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 	registrySpinner.UpdateText(fmt.Sprintf("Saved BPF OCI image to %s", registryRef))
 	registrySpinner.Success()
 
-	if !opts.Uber {
-		return nil
-	}
-
-	uberImageSpinner, _ := pterm.DefaultSpinner.Start("Building uber image")
-	tmpDir, _ := os.MkdirTemp("", "bee_oci_store")
-	tmpStore := tmpDir + "/store"
-	err = os.Mkdir(tmpStore, 0755)
-	if err != nil {
-		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to create temp dir: %s", tmpStore))
-		uberImageSpinner.Fail()
-		return err
-	}
-	if opts.general.Verbose {
-		fmt.Println("Temp dir name:", tmpDir)
-		fmt.Println("Temp store:", tmpStore)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tempReg, err := content.NewOCI(tmpStore)
-	if err != nil {
-		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to initialize temp OCI registry in: %s", tmpStore))
-		uberImageSpinner.Fail()
-		return err
-	}
-	_, err = oras.Copy(ctx, reg, registryRef, tempReg, "",
-		oras.WithAllowedMediaTypes(spec.AllowedMediaTypes()),
-		oras.WithPullByBFS)
-	if err != nil {
-		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to copy image from '%s' to '%s'", opts.general.OCIStorageDir, tmpStore))
-		uberImageSpinner.Fail()
-		return err
-	}
-
-	dockerfile := tmpDir + "/Dockerfile"
-	err = os.WriteFile(dockerfile, uberDockerfile, 0755)
-	if err != nil {
-		uberImageSpinner.UpdateText(fmt.Sprintf("Failed to write: %s'", dockerfile))
-		uberImageSpinner.Fail()
-		return err
-	}
-
-	uberImage := opts.UberImage
-	if uberImage == "" {
-		uberImage = fmt.Sprintf("bee-%s:latest", registryRef)
-	}
-	err = buildUber(ctx, opts, registryRef, opts.BeeImage, opts.BeeTag, tmpDir, uberImage)
-	if err != nil {
-		uberImageSpinner.UpdateText("Docker build of uber image failed'")
-		uberImageSpinner.Fail()
-		return err
-	}
-
-	uberImageSpinner.UpdateText(fmt.Sprintf("Uber image built and tagged at %s", uberImage))
-	uberImageSpinner.Success()
 	return nil
 }
 
@@ -244,41 +176,11 @@ func getPlatformInfo(ctx context.Context) *ocispec.Platform {
 	}
 }
 
-func buildUber(
-	ctx context.Context,
-	opts *buildOptions,
-	ociImage, beeImage, beeTag, tmpDir, uberTag string,
-) error {
-	dockerArgs := []string{
-		"build",
-		"--build-arg",
-		fmt.Sprintf("BPF_IMAGE=%s", ociImage),
-		"--build-arg",
-		fmt.Sprintf("BEE_IMAGE=%s", beeImage),
-		"--build-arg",
-		fmt.Sprintf("BEE_TAG=%s", beeTag),
-		tmpDir,
-		"-t",
-		uberTag,
-	}
-	dockerCmd := exec.CommandContext(ctx, opts.Builder, dockerArgs...)
-	byt, err := dockerCmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("%s\n", byt)
-		return err
-	}
-	if opts.general.Verbose {
-		fmt.Printf("%s\n", byt)
-	}
-	return nil
-}
-
 func buildDocker(
 	ctx context.Context,
 	opts *buildOptions,
 	inputFile, outputFile string,
 ) error {
-	// TODO: handle cwd to be glooBPF/epfctl?
 	// TODO: debug log this
 	wd, err := os.Getwd()
 	if err != nil {
