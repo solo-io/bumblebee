@@ -2,7 +2,7 @@
 
 ### Building
 
-BumbleBee by default uses a containerized build environment to build you BPF programs to an ELF file, then packages that in an OCI image according to our image spec.
+BumbleBee by default uses a containerized build environment to build your BPF programs to an ELF file, then packages that in an OCI image according to our image spec.
 
 You can then package your BPF program as standard Docker image that contains the `bee` CLI/runner in addition to your BPF programs.
 The end result is a standard docker image that can be distributed via standard docker-like workflows to run your BPF program anywhere you run containerized workloads, such as a K8s cluster.
