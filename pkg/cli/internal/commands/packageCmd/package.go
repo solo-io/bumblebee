@@ -111,9 +111,6 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 	}
 
 	packagedImage := args[1]
-	if packagedImage == "" {
-		packagedImage = fmt.Sprintf("bee-%s:latest", registryRef)
-	}
 	err = buildPackagedImage(ctx, opts, registryRef, opts.BeeImage, tmpDir, packagedImage)
 	if err != nil {
 		packagingSpinner.UpdateText("Docker build of packaged image failed'")
@@ -129,7 +126,7 @@ func build(ctx context.Context, args []string, opts *buildOptions) error {
 func buildPackagedImage(
 	ctx context.Context,
 	opts *buildOptions,
-	ociImage, beeImage, tmpDir, uberTag string,
+	ociImage, beeImage, tmpDir, packagedImage string,
 ) error {
 	dockerArgs := []string{
 		"build",
@@ -139,7 +136,7 @@ func buildPackagedImage(
 		fmt.Sprintf("BEE_IMAGE=%s", beeImage),
 		tmpDir,
 		"-t",
-		uberTag,
+		packagedImage,
 	}
 	dockerCmd := exec.CommandContext(ctx, opts.Builder, dockerArgs...)
 	byt, err := dockerCmd.CombinedOutput()

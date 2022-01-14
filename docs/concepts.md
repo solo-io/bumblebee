@@ -4,16 +4,22 @@
 
 BumbleBee by default uses a containerized build environment to build you BPF programs to an ELF file, then packages that in an OCI image according to our image spec.
 
-You can also build an "uber" image which contains the `bee` CLI in addition to your BPF programs. The end result is a standard docker image which can be distributed via standard docker-like workflows to run your BPF program anywhere that can run containers, such as a K8s cluster. Note that you will need sufficient capabilities to run the image, as loading and running the BPF program is a privileged operation for most intents and purposes.
+You can then package your BPF program as standard Docker image that contains the `bee` CLI/runner in addition to your BPF programs.
+The end result is a standard docker image that can be distributed via standard docker-like workflows to run your BPF program anywhere you run containerized workloads, such as a K8s cluster.
+Note that you will need sufficient capabilities to run the image, as loading and running the BPF program is a privileged operation for most intents and purposes.
 
 An example workflow is as follows:
 ```bash
-$ bee build --uber examples/tcpconnect/tcpconnect.c tcpconnect
+$ bee build examples/tcpconnect/tcpconnect.c tcpconnect
  SUCCESS  Successfully compiled "examples/tcpconnect/tcpconnect.c" and wrote it to "examples/tcpconnect/tcpconnect.o"
  SUCCESS  Saved BPF OCI image to tcpconnect
- SUCCESS  Uber image built and tagged at bee-tcpconnect:latest
 
- $ docker run --privileged --tty bee-tcpconnect:latest
+$ bee package tcpconnect bee-tcpconnect:latest
+ SUCCESS  Packaged image built and tagged at bee-tcpconnect:latest
+
+# run the bee-tcpconnect:latest image somewhere, deploy to K8s, etc.
+# this example below runs locally via `docker` but see the following paragraph for a warning on weird terminal behavior when using this exact command!
+$ docker run --privileged --tty bee-tcpconnect:latest
 ```
 
 Note that the `--privileged` flag is required to provide the permissions necessary and the `--tty` flag is necessary for the TUI rendered by default with `bee run`.
@@ -21,7 +27,6 @@ The `--tty` requirement will be removed shortly as we will introduce a mode that
 Additionally, if you run the image as above, when you attempt to quit via <ctrl-c> your terminal may be left in a bad state. This is because the <ctrl-c> is being handled by `docker run` and not making it to the TTY.
 To clear your screen, do a non-containerized run, e.g. `bee run ghcr.io/solo-io/bumblebee/tcpconnect:$(bee version)`.
 Again, this will have a better UX very soon!
-
 
 ### BPF conventions
 
