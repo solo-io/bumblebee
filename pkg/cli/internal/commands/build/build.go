@@ -2,7 +2,6 @@ package build
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"io"
 	"io/ioutil"

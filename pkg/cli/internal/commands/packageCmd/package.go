@@ -46,12 +46,7 @@ You can then ship this image around anywhere you run docker images, e.g. K8s.
 
 Example workflow:
 $ bee build examples/tcpconnect/tcpconnect.c tcpconnect
- SUCCESS  Successfully compiled "examples/tcpconnect/tcpconnect.c" and wrote it to "examples/tcpconnect/tcpconnect.o"
- SUCCESS  Saved BPF OCI image to tcpconnect
- SUCCESS  Uber image built and tagged at bee-tcpconnect:latest
-
 $ bee package tcpconnect bee-tcpconnect:latest
-
 # deploy 'bee-tcpconnect:latest' to K8s cluster
 `,
 		Args: cobra.ExactArgs(2),
