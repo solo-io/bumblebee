@@ -17,13 +17,13 @@ jobs:
         uses: styfle/cancel-workflow-action@0.4.0
         with:
           access_token: ${{ github.token }}
-      - name: Check out code into the Go module directory
+      - name: Checkout repository
         uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
       - name: Set up Go 1.17
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.3
+          go-version: 1.17.6
       - name: Setup Cache
         uses: actions/cache@v1
         with:
@@ -74,13 +74,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@master
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v1
         with:
-          platforms: all
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@master
+          go-version: 1.17.6
+      - name: Setup Cache
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
@@ -105,7 +108,7 @@ jobs:
       - name: Set up Go 1.17
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.3
+          go-version: 1.17.6
       - name: Setup Cache
         uses: actions/cache@v1
         with:
