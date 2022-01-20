@@ -46,8 +46,8 @@ type MapEntry struct {
 }
 
 type MapWatcher interface {
-	NewRingBuf(name string, keys []string)
-	NewHashMap(name string, keys []string)
+	NewRingBuf(ctx context.Context, name string, keys []string)
+	NewHashMap(ctx context.Context, name string, keys []string)
 	SendEntry(entry MapEntry)
 	PreWatchHandler()
 }
@@ -238,7 +238,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 				increment = &noop{}
 			}
 			eg.Go(func() error {
-				watcher.NewRingBuf(name, bpfMap.Labels)
+				watcher.NewRingBuf(ctx, name, bpfMap.Labels)
 				return l.startRingBuf(ctx, bpfMap.valueStruct, coll.Maps[name], increment, name, watcher)
 			})
 		case ebpf.Array:
@@ -255,7 +255,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 			}
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
-				watcher.NewHashMap(name, labelKeys)
+				watcher.NewHashMap(ctx, name, labelKeys)
 				return l.startHashMap(ctx, bpfMap.mapSpec, coll.Maps[name], instrument, name, watcher)
 			})
 		default:

@@ -10,6 +10,7 @@ type Printer interface {
 	Start(text string)
 	Success()
 	Fail()
+	Info(text string)
 }
 
 type PrinterFactory interface {
@@ -31,6 +32,10 @@ func (p *ptermPrinter) Success() {
 
 func (p *ptermPrinter) Fail() {
 	p.spinner.Fail()
+}
+
+func (p *ptermPrinter) Info(text string) {
+	pterm.Info.Println(text)
 }
 
 func newPTermPrinter() (Printer, error) {
@@ -58,6 +63,10 @@ func (p *logPrinter) Success() {
 
 func (p *logPrinter) Fail() {
 	log.Printf("FAILURE: %s", p.text)
+}
+
+func (p *logPrinter) Info(text string) {
+	log.Printf("INFO: %s", text)
 }
 
 func newLogPrinter() (Printer, error) {
