@@ -17,6 +17,12 @@ type PrinterFactory interface {
 	NewPrinter() (Printer, error)
 }
 
+type PTermFactory struct{}
+
+func (f PTermFactory) NewPrinter() (Printer, error) {
+	return &ptermPrinter{}, nil
+}
+
 type ptermPrinter struct {
 	spinner *pterm.SpinnerPrinter
 }
@@ -38,14 +44,10 @@ func (p *ptermPrinter) Info(text string) {
 	pterm.Info.Println(text)
 }
 
-func newPTermPrinter() (Printer, error) {
-	return &ptermPrinter{}, nil
-}
+type LogFactory struct{}
 
-type PTermFactory struct{}
-
-func (f PTermFactory) NewPrinter() (Printer, error) {
-	return newPTermPrinter()
+func (f LogFactory) NewPrinter() (Printer, error) {
+	return &logPrinter{}, nil
 }
 
 type logPrinter struct {
@@ -67,14 +69,4 @@ func (p *logPrinter) Fail() {
 
 func (p *logPrinter) Info(text string) {
 	log.Printf("INFO: %s", text)
-}
-
-func newLogPrinter() (Printer, error) {
-	return &logPrinter{}, nil
-}
-
-type LogFactory struct{}
-
-func (f LogFactory) NewPrinter() (Printer, error) {
-	return newLogPrinter()
 }
