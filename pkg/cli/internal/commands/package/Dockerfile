@@ -7,4 +7,4 @@ COPY ./store /root/.bumblebee/store/
 
 ARG BPF_IMAGE
 ENV BPF_IMAGE=$BPF_IMAGE
-CMD ./bee-linux-amd64 run ${BPF_IMAGE}
+CMD ./bee-linux-amd64 run --no-tty ${BPF_IMAGE}
