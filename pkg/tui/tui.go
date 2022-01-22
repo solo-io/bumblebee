@@ -14,6 +14,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/go-utils/contextutils"
+	"go.uber.org/zap"
 )
 
 const titleText = `[aqua] __                                                   
@@ -88,12 +89,7 @@ var mapMutex = sync.RWMutex{}
 var currentIndex int
 var preWatchChan = make(chan error, 1)
 
-func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
-	logger := contextutils.LoggerFrom(ctx)
-	ctx, cancel := context.WithCancel(ctx)
-
-	var errToReturn error
-	closeChan := make(chan struct{}, 1)
+func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, closeChan chan struct{}, progLocation string) (*tview.Application, *tview.Flex) {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
@@ -128,7 +124,7 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	fmt.Fprint(title, titleText)
 
 	fetchText := tview.NewTextView().SetDynamicColors(true)
-	fmt.Fprintf(fetchText, "Program location: [aqua]%s", a.progLocation)
+	fmt.Fprintf(fetchText, "Program location: [aqua]%s", progLocation)
 
 	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
 	fmt.Fprint(help, helpText)
@@ -146,6 +142,18 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 10, 0, false)
+
+	return app, flex
+}
+
+func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
+	logger := contextutils.LoggerFrom(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+
+	var errToReturn error
+	closeChan := make(chan struct{}, 1)
+
+	app, flex := buildTView(logger, cancel, closeChan, a.progLocation)
 	a.Entries = make(chan loader.MapEntry, 20)
 	a.tviewApp = app
 	a.flex = flex

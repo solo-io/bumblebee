@@ -138,7 +138,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		PrinterFactory: printerFactory,
 		NoTTY:          opts.notty,
 	}
-	app := tui.NewApp(&appOpts)
 
 	var sugaredLogger *zap.SugaredLogger
 	if opts.debug {
@@ -155,6 +154,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
+	app := tui.NewApp(&appOpts)
 	return app.Run(ctx, progReader)
 }
 
