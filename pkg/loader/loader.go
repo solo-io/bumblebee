@@ -49,7 +49,6 @@ type MapWatcher interface {
 	NewRingBuf(name string, keys []string)
 	NewHashMap(name string, keys []string)
 	SendEntry(entry MapEntry)
-	PreWatchHandler()
 }
 
 type WatchedMap struct {
@@ -161,21 +160,15 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
-	loaderProgress, _ := l.printerFactory.NewPrinter()
-	loaderProgress.Start("Loading BPF program and maps into Kernel")
 
 	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		loaderProgress.Fail()
 		return err
 	}
 	defer coll.Close()
-	loaderProgress.Success()
 
-	linkerProgress, _ := l.printerFactory.NewPrinter()
-	linkerProgress.Start("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		switch prog.Type {
@@ -185,13 +178,11 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					linkerProgress.Fail()
 					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 				}
 			} else {
 				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 				if err != nil {
-					linkerProgress.Fail()
 					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 				}
 			}
@@ -206,24 +197,19 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				}
 				tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
 				if err != nil {
-					linkerProgress.Fail()
 					return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
 				}
 			}
 			defer tp.Close()
 		default:
-			linkerProgress.Fail()
 			return errors.New("only kprobe programs supported")
 		}
 	}
-	linkerProgress.Success()
 
 	return l.watchMaps(ctx, opts.ParsedELF.WatchedMaps, coll, opts.Watcher)
 }
 
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
-	watcher.PreWatchHandler()
-
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range watchedMaps {
 		name := name
@@ -301,7 +287,7 @@ func (l *loader) startRingBuf(
 
 	for {
 		record, err := rd.Read()
-		logger.Info("read...")
+		// logger.Info("read...")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				logger.Info("ringbuf closed...")

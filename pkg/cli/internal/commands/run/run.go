@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
+	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -152,9 +153,23 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		sugaredLogger = zap.NewNop().Sugar()
 	}
 
-	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	app := tui.NewApp(&appOpts)
-	return app.Run(ctx, progReader)
+
+	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
+	loaderOpts := loader.LoadOptions{
+		ParsedELF: parsedELF,
+		Watcher:   &app,
+	}
+	pterm.Info.Println("Loading BPF programs and maps")
+
+	var errFromLoad error
+	go func() {
+		errFromLoad = progLoader.Load(ctx, &loaderOpts)
+		app.Close()
+	}()
+
+	app.Run(ctx, progReader)
+	return errFromLoad
 }
 
 func getProgram(
