@@ -52,7 +52,6 @@ type AppOpts struct {
 	Filter         map[string]Filter
 	ParsedELF      *loader.ParsedELF
 	PrinterFactory loader.PrinterFactory
-	NoTTY          bool
 }
 
 type App struct {
@@ -66,20 +65,15 @@ type App struct {
 	filter         map[string]Filter
 	parsedELF      *loader.ParsedELF
 	printerFactory loader.PrinterFactory
-	noTTY          bool
 }
 
 func NewApp(opts *AppOpts) App {
-	if opts.PrinterFactory == nil {
-		opts.PrinterFactory = loader.LogFactory{}
-	}
 	a := App{
 		loader:         opts.Loader,
 		progLocation:   opts.ProgLocation,
 		filter:         opts.Filter,
 		parsedELF:      opts.ParsedELF,
 		printerFactory: opts.PrinterFactory,
-		noTTY:          opts.NoTTY,
 	}
 	return a
 }
@@ -195,18 +189,14 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger.Info("starting Watch()")
 	go a.watch(ctx)
 
-	if a.noTTY {
+	if a.printerFactory != nil {
 		printer, _ := a.printerFactory.NewPrinter()
-		printer.Start("Programs and maps successfully loaded, watching maps...")
-		<-closeChan
-	} else {
-		printer, _ := a.printerFactory.NewPrinter()
-		printer.Info("Rendering TUI...")
-		logger.Info("render tui")
-		// begin rendering the TUI
-		if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
-			return err
-		}
+		printer.Start("Rendering TUI...")
+	}
+	logger.Info("render tui")
+	// begin rendering the TUI
+	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
+		return err
 	}
 
 	logger.Infof("stopped app, errToReturn: %s", errToReturn)
@@ -221,10 +211,6 @@ func (a *App) watch(ctx context.Context) {
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Info("beginning Watch() loop")
 	for r := range a.Entries {
-		if a.noTTY {
-			// no TUI being rendered, drop event and continue
-			continue
-		}
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			a.renderHash(ctx, r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
@@ -332,12 +318,12 @@ func (a *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
 	}
 }
 
-func (a *App) NewRingBuf(ctx context.Context, name string, keys []string) {
-	a.makeMapValue(ctx, name, keys, ebpf.RingBuf)
+func (a *App) NewRingBuf(name string, keys []string) {
+	a.makeMapValue(name, keys, ebpf.RingBuf)
 }
 
-func (a *App) NewHashMap(ctx context.Context, name string, keys []string) {
-	a.makeMapValue(ctx, name, keys, ebpf.Hash)
+func (a *App) NewHashMap(name string, keys []string) {
+	a.makeMapValue(name, keys, ebpf.Hash)
 }
 
 func (a *App) SendEntry(entry loader.MapEntry) {
@@ -346,13 +332,7 @@ func (a *App) SendEntry(entry loader.MapEntry) {
 	}
 }
 
-func (a *App) makeMapValue(ctx context.Context, name string, keys []string, mapType ebpf.MapType) {
-	logger := contextutils.LoggerFrom(ctx)
-	if a.noTTY {
-		logger.Infof("no TUI being rendered, skipping creation of UI for map '%s'", name)
-		return
-
-	}
+func (a *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	// get a copy of keys, sort for consistent key/label ordering
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)

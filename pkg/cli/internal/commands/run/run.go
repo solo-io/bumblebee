@@ -136,7 +136,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		ParsedELF:      parsedELF,
 		Filter:         filter,
 		PrinterFactory: printerFactory,
-		NoTTY:          opts.notty,
 	}
 
 	var sugaredLogger *zap.SugaredLogger
