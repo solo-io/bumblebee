@@ -48,18 +48,15 @@ type WatchedMap struct {
 type loader struct {
 	decoderFactory  decoder.DecoderFactory
 	metricsProvider stats.MetricsProvider
-	printerFactory  PrinterFactory
 }
 
 func NewLoader(
 	decoderFactory decoder.DecoderFactory,
 	metricsProvider stats.MetricsProvider,
-	printerFactory PrinterFactory,
 ) Loader {
 	return &loader{
 		decoderFactory:  decoderFactory,
 		metricsProvider: metricsProvider,
-		printerFactory:  printerFactory,
 	}
 }
 
@@ -143,6 +140,11 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
+	contextutils.LoggerFrom(ctx).Info("enter Load()")
+	if ctx.Err() != nil {
+		contextutils.LoggerFrom(ctx).Info("context is done")
+		return ctx.Err()
+	}
 
 	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
@@ -193,6 +195,11 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 }
 
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
+	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
+	if ctx.Err() != nil {
+		contextutils.LoggerFrom(ctx).Info("context is done")
+		return ctx.Err()
+	}
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range watchedMaps {
 		name := name

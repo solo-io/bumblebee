@@ -47,7 +47,6 @@ type MapValue struct {
 }
 
 type AppOpts struct {
-	Loader       loader.Loader
 	ProgLocation string
 	Filter       map[string]Filter
 	ParsedELF    *loader.ParsedELF
@@ -74,13 +73,11 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
-func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, progLocation string) (*tview.Application, *tview.Flex) {
+func buildTView(logger *zap.SugaredLogger, progLocation string) (*tview.Application, *tview.Flex) {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
 			logger.Info("captured ctrl-c")
-			cancel()
-			logger.Info("called cancel()")
 		}
 		return event
 	})
@@ -129,11 +126,14 @@ func (a *App) Close() {
 	close(a.Entries)
 }
 
+func (a *App) Stop() {
+	a.tviewApp.Stop()
+}
+
 func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger := contextutils.LoggerFrom(ctx)
-	ctx, cancel := context.WithCancel(ctx)
 
-	app, flex := buildTView(logger, cancel, a.progLocation)
+	app, flex := buildTView(logger, a.progLocation)
 	a.tviewApp = app
 	a.flex = flex
 	a.Entries = make(chan loader.MapEntry, 20)

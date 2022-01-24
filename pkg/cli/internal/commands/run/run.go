@@ -118,7 +118,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
 		promProvider,
-		printerFactory,
 	)
 
 	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
@@ -141,25 +140,53 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 
-	app, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
-	if err != nil {
-		return err
+	var watcher loader.MapWatcher
+	var tuiApp *tui.App
+	if opts.notty {
+		watcher = &loader.NoopWatcher{}
+		tuiApp = nil
+	} else {
+		watcher, err = buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
+		if err != nil {
+			return err
+		}
+		tuiApp = watcher.(*tui.App)
 	}
 
 	loaderOpts := loader.LoadOptions{
 		ParsedELF: parsedELF,
-		Watcher:   app,
+		Watcher:   watcher,
 	}
-	loadingTextPrinter, _ := printerFactory.NewPrinter()
-	loadingTextPrinter.Info("Loading BPF programs and maps")
 
-	var errFromLoad error
+	ctx, cancel := context.WithCancel(ctx)
+	signal.Stop(stopper)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+
+	if tuiApp != nil {
+		go func() {
+			tuiApp.Run(ctx, progReader)
+			sugaredLogger.Info("after tui run()")
+			cancel()
+		}()
+	}
+
 	go func() {
-		errFromLoad = progLoader.Load(ctx, &loaderOpts)
-		app.Close()
+		<-ctx.Done()
+		// fmt.Println(ctx.Err()) // prints "context canceled"
+		sugaredLogger.Info("after done from sigint")
+		stop() // stop receiving signal notifications as soon as possible.
+		cancel()
+		sugaredLogger.Info("after cancel from sigint")
+		if tuiApp != nil {
+			tuiApp.Stop()
+		}
 	}()
+	errFromLoad := progLoader.Load(ctx, &loaderOpts)
+	sugaredLogger.Info("after load")
 
-	app.Run(ctx, progReader)
+	if tuiApp != nil {
+		tuiApp.Close()
+	}
 	return errFromLoad
 }
 
@@ -170,7 +197,6 @@ func buildTuiApp(loader *loader.Loader, progLocation string, filterString []stri
 		return nil, fmt.Errorf("could not build filter %w", err)
 	}
 	appOpts := tui.AppOpts{
-		Loader:       *loader,
 		ProgLocation: progLocation,
 		ParsedELF:    parsedELF,
 		Filter:       filter,
