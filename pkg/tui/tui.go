@@ -47,28 +47,25 @@ type MapValue struct {
 }
 
 type AppOpts struct {
-	Loader         loader.Loader
-	ProgLocation   string
-	Filter         map[string]Filter
-	ParsedELF      *loader.ParsedELF
-	PrinterFactory loader.PrinterFactory
+	Loader       loader.Loader
+	ProgLocation string
+	Filter       map[string]Filter
+	ParsedELF    *loader.ParsedELF
 }
 
 type App struct {
 	Entries chan loader.MapEntry
 
-	tviewApp       *tview.Application
-	flex           *tview.Flex
-	progLocation   string
-	filter         map[string]Filter
-	printerFactory loader.PrinterFactory
+	tviewApp     *tview.Application
+	flex         *tview.Flex
+	progLocation string
+	filter       map[string]Filter
 }
 
 func NewApp(opts *AppOpts) App {
 	a := App{
-		progLocation:   opts.ProgLocation,
-		filter:         opts.Filter,
-		printerFactory: opts.PrinterFactory,
+		progLocation: opts.ProgLocation,
+		filter:       opts.Filter,
 	}
 	return a
 }
@@ -136,11 +133,10 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	logger := contextutils.LoggerFrom(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 
-	a.Entries = make(chan loader.MapEntry, 20)
-
 	app, flex := buildTView(logger, cancel, a.progLocation)
 	a.tviewApp = app
 	a.flex = flex
+	a.Entries = make(chan loader.MapEntry, 20)
 
 	go a.watch(ctx)
 

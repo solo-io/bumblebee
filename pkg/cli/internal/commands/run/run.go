@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
-	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -125,20 +124,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
-	// TODO: add filter to UI
-	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
-	if err != nil {
-		return fmt.Errorf("could not build filter %w", err)
-	}
-
-	appOpts := tui.AppOpts{
-		Loader:         progLoader,
-		ProgLocation:   progLocation,
-		ParsedELF:      parsedELF,
-		Filter:         filter,
-		PrinterFactory: printerFactory,
-	}
-
 	var sugaredLogger *zap.SugaredLogger
 	if opts.debug {
 		cfg := zap.NewDevelopmentConfig()
@@ -152,15 +137,27 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	} else {
 		sugaredLogger = zap.NewNop().Sugar()
 	}
+	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 
+	// TODO: add filter to UI
+	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
+	if err != nil {
+		return fmt.Errorf("could not build filter %w", err)
+	}
+	appOpts := tui.AppOpts{
+		Loader:       progLoader,
+		ProgLocation: progLocation,
+		ParsedELF:    parsedELF,
+		Filter:       filter,
+	}
 	app := tui.NewApp(&appOpts)
 
-	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 	loaderOpts := loader.LoadOptions{
 		ParsedELF: parsedELF,
 		Watcher:   &app,
 	}
-	pterm.Info.Println("Loading BPF programs and maps")
+	loadingTextPrinter, _ := printerFactory.NewPrinter()
+	loadingTextPrinter.Info("Loading BPF programs and maps")
 
 	var errFromLoad error
 	go func() {
