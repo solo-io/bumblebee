@@ -34,23 +34,6 @@ type Loader interface {
 	Load(ctx context.Context, opts *LoadOptions) error
 }
 
-type KvPair struct {
-	Key   map[string]string
-	Value string
-	Hash  uint64
-}
-
-type MapEntry struct {
-	Name  string
-	Entry KvPair
-}
-
-type MapWatcher interface {
-	NewRingBuf(name string, keys []string)
-	NewHashMap(name string, keys []string)
-	SendEntry(entry MapEntry)
-}
-
 type WatchedMap struct {
 	Name   string
 	Labels []string

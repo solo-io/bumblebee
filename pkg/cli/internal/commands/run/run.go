@@ -79,6 +79,8 @@ $ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	// Subscribe to signals for terminating the program.
 	// This is used until management of signals is passed to the TUI
+	// TODO: need to have a cancelable context here to handle time from when loader.Load() is called and the TUI
+	// starts handling signals
 	stopper = make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -139,22 +141,14 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 
-	// TODO: add filter to UI
-	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
+	app, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
 	if err != nil {
-		return fmt.Errorf("could not build filter %w", err)
+		return err
 	}
-	appOpts := tui.AppOpts{
-		Loader:       progLoader,
-		ProgLocation: progLocation,
-		ParsedELF:    parsedELF,
-		Filter:       filter,
-	}
-	app := tui.NewApp(&appOpts)
 
 	loaderOpts := loader.LoadOptions{
 		ParsedELF: parsedELF,
-		Watcher:   &app,
+		Watcher:   app,
 	}
 	loadingTextPrinter, _ := printerFactory.NewPrinter()
 	loadingTextPrinter.Info("Loading BPF programs and maps")
@@ -167,6 +161,22 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	app.Run(ctx, progReader)
 	return errFromLoad
+}
+
+func buildTuiApp(loader *loader.Loader, progLocation string, filterString []string, parsedELF *loader.ParsedELF) (*tui.App, error) {
+	// TODO: add filter to UI
+	filter, err := tui.BuildFilter(filterString, parsedELF.WatchedMaps)
+	if err != nil {
+		return nil, fmt.Errorf("could not build filter %w", err)
+	}
+	appOpts := tui.AppOpts{
+		Loader:       *loader,
+		ProgLocation: progLocation,
+		ParsedELF:    parsedELF,
+		Filter:       filter,
+	}
+	app := tui.NewApp(&appOpts)
+	return &app, nil
 }
 
 func getProgram(
