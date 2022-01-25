@@ -2,7 +2,7 @@ FROM debian:bullseye
 
 LABEL org.opencontainers.image.source https://github.com/solo-io/bumblebee
 
-RUN apt-get update && \
+RUN apt-get update &&\
     apt-get -y install lsb-release wget software-properties-common gnupg file git make
 
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
