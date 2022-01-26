@@ -141,8 +141,9 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
 	contextutils.LoggerFrom(ctx).Info("enter Load()")
+	defer opts.Watcher.Close() // send side closing watcher as no longer have entries to send
 	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("context is done")
+		contextutils.LoggerFrom(ctx).Info("load entrypoint context is done")
 		return ctx.Err()
 	}
 
@@ -158,6 +159,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, prog := range spec.Programs {
 		select {
 		case <-ctx.Done():
+			contextutils.LoggerFrom(ctx).Info("while loading progs context is done")
 			return ctx.Err()
 		default:
 			switch prog.Type {
@@ -202,7 +204,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
 	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
 	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("context is done")
+		contextutils.LoggerFrom(ctx).Info("watching maps context is done")
 		return ctx.Err()
 	}
 	eg, ctx := errgroup.WithContext(ctx)
@@ -247,7 +249,6 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 
 	err := eg.Wait()
 	contextutils.LoggerFrom(ctx).Info("after waitgroup")
-	watcher.Close() // send side closing watcher as no longer have entries to send
 	return err
 }
 

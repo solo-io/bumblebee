@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"io"
 	"regexp"
 	"sort"
 	"sync"
@@ -73,11 +72,12 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
-func buildTView(logger *zap.SugaredLogger, progLocation string) (*tview.Application, *tview.Flex) {
+func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, progLocation string) (*tview.Application, *tview.Flex) {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
-			logger.Info("captured ctrl-c in tui")
+			logger.Info("captured ctrl-c in tui, canceling context")
+			cancel()
 		}
 		return event
 	})
@@ -126,28 +126,49 @@ func (a *App) Close() {
 	close(a.Entries)
 }
 
-func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
+func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loader.LoadOptions) error {
 	logger := contextutils.LoggerFrom(ctx)
 
-	app, flex := buildTView(logger, a.progLocation)
+	ctx, cancel := context.WithCancel(ctx)
+	app, flex := buildTView(logger, cancel, a.progLocation)
 	a.tviewApp = app
 	a.flex = flex
 	a.Entries = make(chan loader.MapEntry, 20)
 
-	go a.watch(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		logger.Info("calling watch()")
+		a.watch(ctx)
+		logger.Info("returned from watch()")
+		wg.Done()
+	}()
+
+	var errFromLoad error
+	wg.Add(1)
+	go func() {
+		logger.Info("calling Load()")
+		errFromLoad = progLoader.Load(ctx, loaderOpts)
+		logger.Info("returned from Load()")
+		wg.Done()
+	}()
 
 	logger.Info("render tui")
+	//TODO: consider running TUI in goroutine and stopping signals watching after to eliminate raceyness
 	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
 		return err
 	}
+	logger.Info("tui stopped")
 
-	logger.Info("stopped tui")
-	return nil
+	wg.Wait()
+	logger.Info("after tui waitgroup")
+	return errFromLoad
 }
 
 func (a *App) watch(ctx context.Context) {
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Info("beginning Watch() loop")
+	//todo; select{} on done
 	for r := range a.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			a.renderHash(ctx, r)

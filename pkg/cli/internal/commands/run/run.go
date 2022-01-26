@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -120,7 +119,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		decoder.NewDecoderFactory(),
 		promProvider,
 	)
-
 	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
@@ -141,64 +139,22 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
 
-	var watcher loader.MapWatcher
-	var tuiApp *tui.App
-	if opts.notty {
-		watcher = &loader.NoopWatcher{}
-		tuiApp = nil
-	} else {
-		watcher, err = buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
-		if err != nil {
-			return err
-		}
-		tuiApp = watcher.(*tui.App)
+	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
+	if err != nil {
+		return err
 	}
-
 	loaderOpts := loader.LoadOptions{
 		ParsedELF: parsedELF,
-		Watcher:   watcher,
+		Watcher:   tuiApp,
 	}
 
+	// stop watching for sigints, signal watching will now be TUI's responsibility
 	signal.Stop(stopper)
 	close(stopper)
-
-	ctx, cancel := context.WithCancel(ctx)
-	canceller := make(chan os.Signal, 1)
-	tuiDone := make(chan struct{})
-	signal.Notify(canceller, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-canceller:
-			sugaredLogger.Info("got sigterm or interrupt")
-			cancel()
-		case <-tuiDone:
-			sugaredLogger.Info("tui returned, shutting down")
-			cancel()
-		}
-	}()
-
-	var wg sync.WaitGroup
-
-	if tuiApp != nil {
-		wg.Add(1)
-		go func() {
-			tuiApp.Run(ctx, progReader)
-			sugaredLogger.Info("after tui run()")
-			tuiDone <- struct{}{}
-			wg.Done()
-		}()
-	}
-
-	var errFromLoad error
-	wg.Add(1)
-	go func() {
-		errFromLoad = progLoader.Load(ctx, &loaderOpts)
-		sugaredLogger.Info("after load")
-		wg.Done()
-	}()
-
-	wg.Wait()
-	return errFromLoad
+	sugaredLogger.Info("calling tui run()")
+	err = tuiApp.Run(ctx, progLoader, &loaderOpts)
+	sugaredLogger.Info("after tui run()")
+	return err
 }
 
 func buildTuiApp(loader *loader.Loader, progLocation string, filterString []string, parsedELF *loader.ParsedELF) (*tui.App, error) {
