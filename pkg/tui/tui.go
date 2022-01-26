@@ -77,7 +77,7 @@ func buildTView(logger *zap.SugaredLogger, progLocation string) (*tview.Applicat
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
-			logger.Info("captured ctrl-c")
+			logger.Info("captured ctrl-c in tui")
 		}
 		return event
 	})
@@ -124,10 +124,6 @@ func buildTView(logger *zap.SugaredLogger, progLocation string) (*tview.Applicat
 
 func (a *App) Close() {
 	close(a.Entries)
-}
-
-func (a *App) Stop() {
-	a.tviewApp.Stop()
 }
 
 func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {

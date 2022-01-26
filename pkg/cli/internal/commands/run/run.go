@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -158,35 +159,45 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		Watcher:   watcher,
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
 	signal.Stop(stopper)
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	close(stopper)
+
+	ctx, cancel := context.WithCancel(ctx)
+	canceller := make(chan os.Signal, 1)
+	tuiDone := make(chan struct{})
+	signal.Notify(canceller, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-canceller:
+			sugaredLogger.Info("got sigterm or interrupt")
+			cancel()
+		case <-tuiDone:
+			sugaredLogger.Info("tui returned, shutting down")
+			cancel()
+		}
+	}()
+
+	var wg sync.WaitGroup
 
 	if tuiApp != nil {
+		wg.Add(1)
 		go func() {
 			tuiApp.Run(ctx, progReader)
 			sugaredLogger.Info("after tui run()")
-			cancel()
+			tuiDone <- struct{}{}
+			wg.Done()
 		}()
 	}
 
+	var errFromLoad error
+	wg.Add(1)
 	go func() {
-		<-ctx.Done()
-		// fmt.Println(ctx.Err()) // prints "context canceled"
-		sugaredLogger.Info("after done from sigint")
-		stop() // stop receiving signal notifications as soon as possible.
-		cancel()
-		sugaredLogger.Info("after cancel from sigint")
-		if tuiApp != nil {
-			tuiApp.Stop()
-		}
+		errFromLoad = progLoader.Load(ctx, &loaderOpts)
+		sugaredLogger.Info("after load")
+		wg.Done()
 	}()
-	errFromLoad := progLoader.Load(ctx, &loaderOpts)
-	sugaredLogger.Info("after load")
 
-	if tuiApp != nil {
-		tuiApp.Close()
-	}
+	wg.Wait()
 	return errFromLoad
 }
 

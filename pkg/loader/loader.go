@@ -156,38 +156,43 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
-		switch prog.Type {
-		case ebpf.Kprobe:
-			var kp link.Link
-			var err error
-			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
-				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
-				if err != nil {
-					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
-				}
-			} else {
-				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
-				if err != nil {
-					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
-				}
-			}
-			defer kp.Close()
-		case ebpf.TracePoint:
-			var tp link.Link
-			var err error
-			if strings.HasPrefix(prog.SectionName, "tracepoint/") {
-				tokens := strings.Split(prog.AttachTo, "/")
-				if len(tokens) != 2 {
-					return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
-				}
-				tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
-				if err != nil {
-					return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
-				}
-			}
-			defer tp.Close()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
-			return errors.New("only kprobe programs supported")
+			switch prog.Type {
+			case ebpf.Kprobe:
+				var kp link.Link
+				var err error
+				if strings.HasPrefix(prog.SectionName, "kretprobe/") {
+					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
+					}
+				} else {
+					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
+					}
+				}
+				defer kp.Close()
+			case ebpf.TracePoint:
+				var tp link.Link
+				var err error
+				if strings.HasPrefix(prog.SectionName, "tracepoint/") {
+					tokens := strings.Split(prog.AttachTo, "/")
+					if len(tokens) != 2 {
+						return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
+					}
+					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
+					}
+				}
+				defer tp.Close()
+			default:
+				return errors.New("only kprobe programs supported")
+			}
 		}
 	}
 
@@ -242,6 +247,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 
 	err := eg.Wait()
 	contextutils.LoggerFrom(ctx).Info("after waitgroup")
+	watcher.Close() // send side closing watcher as no longer have entries to send
 	return err
 }
 
