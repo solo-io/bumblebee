@@ -14,6 +14,7 @@ import (
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/go-utils/contextutils"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const titleText = `[aqua] __                                                   
@@ -135,34 +136,31 @@ func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loa
 	a.flex = flex
 	a.Entries = make(chan loader.MapEntry, 20)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		logger.Info("render tui")
+		err := a.tviewApp.SetRoot(a.flex, true).Run()
+		logger.Info("tui stopped")
+		return err
+	})
+
+	eg.Go(func() error {
 		logger.Info("calling watch()")
 		a.watch(ctx)
 		logger.Info("returned from watch()")
-		wg.Done()
-	}()
+		return nil
+	})
 
-	var errFromLoad error
-	wg.Add(1)
-	go func() {
+	eg.Go(func() error {
 		logger.Info("calling Load()")
-		errFromLoad = progLoader.Load(ctx, loaderOpts)
+		err := progLoader.Load(ctx, loaderOpts)
 		logger.Info("returned from Load()")
-		wg.Done()
-	}()
-
-	logger.Info("render tui")
-	//TODO: consider running TUI in goroutine and stopping signals watching after to eliminate raceyness
-	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
 		return err
-	}
-	logger.Info("tui stopped")
+	})
 
-	wg.Wait()
+	err := eg.Wait()
 	logger.Info("after tui waitgroup")
-	return errFromLoad
+	return err
 }
 
 func (a *App) watch(ctx context.Context) {

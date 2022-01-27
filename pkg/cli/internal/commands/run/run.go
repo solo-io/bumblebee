@@ -77,17 +77,15 @@ $ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
-	// Subscribe to signals for terminating the program.
 	// This is used until management of signals is passed to the TUI
-	// TODO: need to have a cancelable context here to handle time from when loader.Load() is called and the TUI
-	// starts handling signals
+	ctx, cancel := context.WithCancel(cmd.Context())
 	stopper = make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		for sig := range stopper {
 			if sig == os.Interrupt || sig == syscall.SIGTERM {
 				fmt.Println("got sigterm or interrupt")
-				os.Exit(0)
+				cancel()
 			}
 		}
 	}()
@@ -100,7 +98,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	// guaranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd.Context(), opts.general, progLocation, printerFactory)
+	progReader, err := getProgram(ctx, opts.general, progLocation, printerFactory)
 	if err != nil {
 		return err
 	}
@@ -110,7 +108,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
 
-	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
+	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
 	if err != nil {
 		return err
 	}
@@ -119,7 +117,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		decoder.NewDecoderFactory(),
 		promProvider,
 	)
-	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
+	parsedELF, err := progLoader.Parse(ctx, progReader)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
@@ -137,7 +135,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	} else {
 		sugaredLogger = zap.NewNop().Sugar()
 	}
-	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
+	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
 
 	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
 	if err != nil {
@@ -148,9 +146,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		Watcher:   tuiApp,
 	}
 
-	// stop watching for sigints, signal watching will now be TUI's responsibility
-	signal.Stop(stopper)
-	close(stopper)
 	sugaredLogger.Info("calling tui run()")
 	err = tuiApp.Run(ctx, progLoader, &loaderOpts)
 	sugaredLogger.Info("after tui run()")
