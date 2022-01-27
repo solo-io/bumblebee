@@ -83,6 +83,9 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return err
 	}
 	contextutils.LoggerFrom(ctx).Info("starting bee run")
+	if opts.notty {
+		pterm.DisableStyling()
+	}
 
 	progLocation := args[0]
 	progReader, err := getProgram(ctx, opts.general, progLocation)
@@ -123,10 +126,17 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
 		return ctx.Err()
 	}
-	contextutils.LoggerFrom(ctx).Info("calling tui run()")
-	err = tuiApp.Run(ctx, progLoader, &loaderOpts)
-	contextutils.LoggerFrom(ctx).Info("after tui run()")
-	return err
+	if opts.notty {
+		fmt.Println("Calling Load...")
+		loaderOpts.Watcher = &loader.NoopWatcher{}
+		err = progLoader.Load(ctx, &loaderOpts)
+		return err
+	} else {
+		contextutils.LoggerFrom(ctx).Info("calling tui run()")
+		err = tuiApp.Run(ctx, progLoader, &loaderOpts)
+		contextutils.LoggerFrom(ctx).Info("after tui run()")
+		return err
+	}
 }
 
 func buildTuiApp(loader *loader.Loader, progLocation string, filterString []string, parsedELF *loader.ParsedELF) (*tui.App, error) {
