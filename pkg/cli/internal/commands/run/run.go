@@ -81,6 +81,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	if err != nil {
 		return err
 	}
+	contextutils.LoggerFrom(ctx).Info("starting bee run")
 
 	var printerFactory loader.PrinterFactory
 	printerFactory = loader.PTermFactory{}
@@ -122,6 +123,11 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		Watcher:   tuiApp,
 	}
 
+	// bail out before starting TUI if context canceled
+	if ctx.Err() != nil {
+		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
+		return ctx.Err()
+	}
 	contextutils.LoggerFrom(ctx).Info("calling tui run()")
 	err = tuiApp.Run(ctx, progLoader, &loaderOpts)
 	contextutils.LoggerFrom(ctx).Info("after tui run()")
@@ -149,10 +155,7 @@ func getProgram(
 	progLocation string,
 	printerFactory loader.PrinterFactory,
 ) (io.ReaderAt, error) {
-
-	var (
-		progReader io.ReaderAt
-	)
+	var progReader io.ReaderAt
 	programSpinner, _ := printerFactory.NewPrinter()
 	_, err := os.Stat(progLocation)
 	if err != nil {

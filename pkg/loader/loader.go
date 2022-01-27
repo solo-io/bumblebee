@@ -141,7 +141,10 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
 	contextutils.LoggerFrom(ctx).Info("enter Load()")
-	defer opts.Watcher.Close() // send side closing watcher as no longer have entries to send
+	// on shutdown notify watcher we have no more entries to send
+	defer opts.Watcher.Close()
+
+	// bail out before loading stuff into kernel if context canceled
 	if ctx.Err() != nil {
 		contextutils.LoggerFrom(ctx).Info("load entrypoint context is done")
 		return ctx.Err()
@@ -203,10 +206,6 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
 	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
-	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("watching maps context is done")
-		return ctx.Err()
-	}
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range watchedMaps {
 		name := name
