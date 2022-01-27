@@ -163,24 +163,22 @@ func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loa
 	return err
 }
 
-// Receives entries from the loader and updates the TUI
 func (a *App) watch(ctx context.Context) {
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Info("beginning Watch() loop")
-	select {
-	case <-ctx.Done():
-		logger.Info("context closed while ranging over entries channel returning from watch()")
-		return
-	case r := <-a.Entries:
+	//todo; select{} on done
+	for r := range a.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			a.renderHash(ctx, r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
 			a.renderRingBuf(ctx, r)
 		}
-		// we need to queue a UI update since tview app is running in a separate goroutine
-		// don't block here as we still want to process entries as they come in
+		// update the screen if the UI is still running
+		// don't block here as we still want to process entries as they come in,
+		// let the tview.App handle the synchronization of updates
 		go a.tviewApp.QueueUpdateDraw(func() {})
 	}
+	logger.Info("no more entries, returning from Watch()")
 }
 
 func (a *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
