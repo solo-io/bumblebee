@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
+	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -83,14 +84,8 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	contextutils.LoggerFrom(ctx).Info("starting bee run")
 
-	var printerFactory loader.PrinterFactory
-	printerFactory = loader.PTermFactory{}
-	if opts.notty {
-		printerFactory = loader.LogFactory{}
-	}
-
 	progLocation := args[0]
-	progReader, err := getProgram(ctx, opts.general, progLocation, printerFactory)
+	progReader, err := getProgram(ctx, opts.general, progLocation)
 	if err != nil {
 		return err
 	}
@@ -153,13 +148,17 @@ func getProgram(
 	ctx context.Context,
 	opts *options.GeneralOptions,
 	progLocation string,
-	printerFactory loader.PrinterFactory,
 ) (io.ReaderAt, error) {
-	var progReader io.ReaderAt
-	programSpinner, _ := printerFactory.NewPrinter()
+
+	var (
+		progReader     io.ReaderAt
+		programSpinner *pterm.SpinnerPrinter
+	)
 	_, err := os.Stat(progLocation)
 	if err != nil {
-		programSpinner.Start(fmt.Sprintf("Fetching program from registry: %s", progLocation))
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from registry: %s", progLocation),
+		)
 
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
@@ -170,6 +169,7 @@ func getProgram(
 			opts.AuthOptions.ToRegistryOptions(),
 		)
 		if err != nil {
+			programSpinner.UpdateText("Failed to load OCI image")
 			programSpinner.Fail()
 			if err, ok := err.(interface {
 				StackTrace() errors.StackTrace
@@ -183,10 +183,13 @@ func getProgram(
 		}
 		progReader = bytes.NewReader(prog.ProgramFileBytes)
 	} else {
-		programSpinner.Start(fmt.Sprintf("Fetching program from file: %s", progLocation))
+		programSpinner, _ = pterm.DefaultSpinner.Start(
+			fmt.Sprintf("Fetching program from file: %s", progLocation),
+		)
 		// Attempt to use file
 		progReader, err = os.Open(progLocation)
 		if err != nil {
+			programSpinner.UpdateText("Failed to open BPF file")
 			programSpinner.Fail()
 			return nil, err
 		}
