@@ -77,18 +77,10 @@ $ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
-	// This is used until management of signals is passed to the TUI
-	ctx, cancel := context.WithCancel(cmd.Context())
-	stopper = make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		for sig := range stopper {
-			if sig == os.Interrupt || sig == syscall.SIGTERM {
-				fmt.Println("got sigterm or interrupt")
-				cancel()
-			}
-		}
-	}()
+	ctx, err := buildContext(cmd.Context(), opts.debug)
+	if err != nil {
+		return err
+	}
 
 	var printerFactory loader.PrinterFactory
 	printerFactory = loader.PTermFactory{}
@@ -96,7 +88,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		printerFactory = loader.LogFactory{}
 	}
 
-	// guaranteed to be length 1
 	progLocation := args[0]
 	progReader, err := getProgram(ctx, opts.general, progLocation, printerFactory)
 	if err != nil {
@@ -122,21 +113,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
-	var sugaredLogger *zap.SugaredLogger
-	if opts.debug {
-		cfg := zap.NewDevelopmentConfig()
-		cfg.OutputPaths = []string{"debug.log"}
-		cfg.ErrorOutputPaths = []string{"debug.log"}
-		logger, err := cfg.Build()
-		if err != nil {
-			return fmt.Errorf("couldn't create zap logger: '%w'", err)
-		}
-		sugaredLogger = logger.Sugar()
-	} else {
-		sugaredLogger = zap.NewNop().Sugar()
-	}
-	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
-
 	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
 	if err != nil {
 		return err
@@ -146,9 +122,9 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		Watcher:   tuiApp,
 	}
 
-	sugaredLogger.Info("calling tui run()")
+	contextutils.LoggerFrom(ctx).Info("calling tui run()")
 	err = tuiApp.Run(ctx, progLoader, &loaderOpts)
-	sugaredLogger.Info("after tui run()")
+	contextutils.LoggerFrom(ctx).Info("after tui run()")
 	return err
 }
 
@@ -215,4 +191,32 @@ func getProgram(
 	programSpinner.Success()
 
 	return progReader, nil
+}
+
+func buildContext(ctx context.Context, debug bool) (context.Context, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	stopper = make(chan os.Signal, 1)
+	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stopper
+		fmt.Println("got sigterm or interrupt")
+		cancel()
+	}()
+
+	var sugaredLogger *zap.SugaredLogger
+	if debug {
+		cfg := zap.NewDevelopmentConfig()
+		cfg.OutputPaths = []string{"debug.log"}
+		cfg.ErrorOutputPaths = []string{"debug.log"}
+		logger, err := cfg.Build()
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create zap logger: '%w'", err)
+		}
+		sugaredLogger = logger.Sugar()
+	} else {
+		sugaredLogger = zap.NewNop().Sugar()
+	}
+	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
+
+	return ctx, nil
 }
