@@ -29,7 +29,6 @@ func (w *NoopWatcher) NewHashMap(name string, keys []string) {
 func (w *NoopWatcher) SendEntry(entry MapEntry) {
 	// noop
 }
-
 func (w *NoopWatcher) Close() {
 	// noop
 }
