@@ -18,17 +18,21 @@ type MapWatcher interface {
 	Close()
 }
 
-type NoopWatcher struct{}
+type noopWatcher struct{}
 
-func (w *NoopWatcher) NewRingBuf(name string, keys []string) {
+func (w *noopWatcher) NewRingBuf(name string, keys []string) {
 	// noop
 }
-func (w *NoopWatcher) NewHashMap(name string, keys []string) {
+func (w *noopWatcher) NewHashMap(name string, keys []string) {
 	// noop
 }
-func (w *NoopWatcher) SendEntry(entry MapEntry) {
+func (w *noopWatcher) SendEntry(entry MapEntry) {
 	// noop
 }
-func (w *NoopWatcher) Close() {
+func (w *noopWatcher) Close() {
 	// noop
+}
+
+func NewNoopWatcher() *noopWatcher {
+	return &noopWatcher{}
 }

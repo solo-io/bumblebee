@@ -128,7 +128,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 	if opts.notty {
 		fmt.Println("Calling Load...")
-		loaderOpts.Watcher = &loader.NoopWatcher{}
+		loaderOpts.Watcher = loader.NewNoopWatcher()
 		err = progLoader.Load(ctx, &loaderOpts)
 		return err
 	} else {
