@@ -29,6 +29,7 @@ type runOptions struct {
 
 	debug  bool
 	filter []string
+	notty  bool
 }
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
@@ -39,6 +40,7 @@ var stopper chan os.Signal
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
+	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -76,22 +78,17 @@ $ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/
 }
 
 func run(cmd *cobra.Command, args []string, opts *runOptions) error {
-	// Subscribe to signals for terminating the program.
-	// This is used until management of signals is passed to the TUI
-	stopper = make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		for sig := range stopper {
-			if sig == os.Interrupt || sig == syscall.SIGTERM {
-				fmt.Println("got sigterm or interrupt")
-				os.Exit(0)
-			}
-		}
-	}()
+	ctx, err := buildContext(cmd.Context(), opts.debug)
+	if err != nil {
+		return err
+	}
+	contextutils.LoggerFrom(ctx).Info("starting bee run")
+	if opts.notty {
+		pterm.DisableStyling()
+	}
 
-	// guaranteed to be length 1
 	progLocation := args[0]
-	progReader, err := getProgram(cmd.Context(), opts.general, progLocation)
+	progReader, err := getProgram(ctx, opts.general, progLocation)
 	if err != nil {
 		return err
 	}
@@ -101,7 +98,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
 
-	promProvider, err := stats.NewPrometheusMetricsProvider(cmd.Context(), &stats.PrometheusOpts{})
+	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
 	if err != nil {
 		return err
 	}
@@ -110,42 +107,51 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		decoder.NewDecoderFactory(),
 		promProvider,
 	)
-
-	parsedELF, err := progLoader.Parse(cmd.Context(), progReader)
+	parsedELF, err := progLoader.Parse(ctx, progReader)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
-	// TODO: add filter to UI
-	filter, err := tui.BuildFilter(opts.filter, parsedELF.WatchedMaps)
+	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
 	if err != nil {
-		return fmt.Errorf("could not build filter %w", err)
+		return err
+	}
+	loaderOpts := loader.LoadOptions{
+		ParsedELF: parsedELF,
+		Watcher:   tuiApp,
 	}
 
+	// bail out before starting TUI if context canceled
+	if ctx.Err() != nil {
+		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
+		return ctx.Err()
+	}
+	if opts.notty {
+		fmt.Println("Calling Load...")
+		loaderOpts.Watcher = loader.NewNoopWatcher()
+		err = progLoader.Load(ctx, &loaderOpts)
+		return err
+	} else {
+		contextutils.LoggerFrom(ctx).Info("calling tui run()")
+		err = tuiApp.Run(ctx, progLoader, &loaderOpts)
+		contextutils.LoggerFrom(ctx).Info("after tui run()")
+		return err
+	}
+}
+
+func buildTuiApp(loader *loader.Loader, progLocation string, filterString []string, parsedELF *loader.ParsedELF) (*tui.App, error) {
+	// TODO: add filter to UI
+	filter, err := tui.BuildFilter(filterString, parsedELF.WatchedMaps)
+	if err != nil {
+		return nil, fmt.Errorf("could not build filter %w", err)
+	}
 	appOpts := tui.AppOpts{
-		Loader:       progLoader,
 		ProgLocation: progLocation,
 		ParsedELF:    parsedELF,
 		Filter:       filter,
 	}
 	app := tui.NewApp(&appOpts)
-
-	var sugaredLogger *zap.SugaredLogger
-	if opts.debug {
-		cfg := zap.NewDevelopmentConfig()
-		cfg.OutputPaths = []string{"debug.log"}
-		cfg.ErrorOutputPaths = []string{"debug.log"}
-		logger, err := cfg.Build()
-		if err != nil {
-			return fmt.Errorf("couldn't create zap logger: '%w'", err)
-		}
-		sugaredLogger = logger.Sugar()
-	} else {
-		sugaredLogger = zap.NewNop().Sugar()
-	}
-
-	ctx := contextutils.WithExistingLogger(cmd.Context(), sugaredLogger)
-	return app.Run(ctx, progReader)
+	return &app, nil
 }
 
 func getProgram(
@@ -201,4 +207,32 @@ func getProgram(
 	programSpinner.Success()
 
 	return progReader, nil
+}
+
+func buildContext(ctx context.Context, debug bool) (context.Context, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	stopper = make(chan os.Signal, 1)
+	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stopper
+		fmt.Println("got sigterm or interrupt")
+		cancel()
+	}()
+
+	var sugaredLogger *zap.SugaredLogger
+	if debug {
+		cfg := zap.NewDevelopmentConfig()
+		cfg.OutputPaths = []string{"debug.log"}
+		cfg.ErrorOutputPaths = []string{"debug.log"}
+		logger, err := cfg.Build()
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create zap logger: '%w'", err)
+		}
+		sugaredLogger = logger.Sugar()
+	} else {
+		sugaredLogger = zap.NewNop().Sugar()
+	}
+	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
+
+	return ctx, nil
 }

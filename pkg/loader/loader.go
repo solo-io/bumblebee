@@ -13,7 +13,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/pterm/pterm"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/go-utils/contextutils"
@@ -33,24 +32,6 @@ type LoadOptions struct {
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
-}
-
-type KvPair struct {
-	Key   map[string]string
-	Value string
-	Hash  uint64
-}
-
-type MapEntry struct {
-	Name  string
-	Entry KvPair
-}
-
-type MapWatcher interface {
-	NewRingBuf(name string, keys []string)
-	NewHashMap(name string, keys []string)
-	SendEntry(entry MapEntry)
-	PreWatchHandler()
 }
 
 type WatchedMap struct {
@@ -159,67 +140,72 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	// TODO: add invariant checks on opts
-	loaderProgress, _ := pterm.DefaultSpinner.Start("Loading BPF program and maps into Kernel")
+	contextutils.LoggerFrom(ctx).Info("enter Load()")
+	// on shutdown notify watcher we have no more entries to send
+	defer opts.Watcher.Close()
+
+	// bail out before loading stuff into kernel if context canceled
+	if ctx.Err() != nil {
+		contextutils.LoggerFrom(ctx).Info("load entrypoint context is done")
+		return ctx.Err()
+	}
 
 	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
 	coll, err := ebpf.NewCollection(spec)
 	if err != nil {
-		loaderProgress.Fail()
 		return err
 	}
 	defer coll.Close()
-	loaderProgress.Success()
 
-	linkerProgress, _ := pterm.DefaultSpinner.Start("Linking BPF functions to associated probe/tracepoint")
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
-		switch prog.Type {
-		case ebpf.Kprobe:
-			var kp link.Link
-			var err error
-			if strings.HasPrefix(prog.SectionName, "kretprobe/") {
-				kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
-				if err != nil {
-					linkerProgress.Fail()
-					return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
-				}
-			} else {
-				kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
-				if err != nil {
-					linkerProgress.Fail()
-					return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
-				}
-			}
-			defer kp.Close()
-		case ebpf.TracePoint:
-			var tp link.Link
-			var err error
-			if strings.HasPrefix(prog.SectionName, "tracepoint/") {
-				tokens := strings.Split(prog.AttachTo, "/")
-				if len(tokens) != 2 {
-					return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
-				}
-				tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
-				if err != nil {
-					linkerProgress.Fail()
-					return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
-				}
-			}
-			defer tp.Close()
+		select {
+		case <-ctx.Done():
+			contextutils.LoggerFrom(ctx).Info("while loading progs context is done")
+			return ctx.Err()
 		default:
-			linkerProgress.Fail()
-			return errors.New("only kprobe programs supported")
+			switch prog.Type {
+			case ebpf.Kprobe:
+				var kp link.Link
+				var err error
+				if strings.HasPrefix(prog.SectionName, "kretprobe/") {
+					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
+					}
+				} else {
+					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
+					}
+				}
+				defer kp.Close()
+			case ebpf.TracePoint:
+				var tp link.Link
+				var err error
+				if strings.HasPrefix(prog.SectionName, "tracepoint/") {
+					tokens := strings.Split(prog.AttachTo, "/")
+					if len(tokens) != 2 {
+						return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
+					}
+					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
+					if err != nil {
+						return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
+					}
+				}
+				defer tp.Close()
+			default:
+				return errors.New("only kprobe programs supported")
+			}
 		}
 	}
-	linkerProgress.Success()
 
 	return l.watchMaps(ctx, opts.ParsedELF.WatchedMaps, coll, opts.Watcher)
 }
 
 func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
-	watcher.PreWatchHandler()
-
+	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range watchedMaps {
 		name := name
@@ -297,7 +283,6 @@ func (l *loader) startRingBuf(
 
 	for {
 		record, err := rd.Read()
-		logger.Info("read...")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				logger.Info("ringbuf closed...")

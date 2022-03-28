@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"io"
 	"regexp"
 	"sort"
 	"sync"
@@ -11,10 +10,11 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
-	"github.com/pterm/pterm"
 	"github.com/rivo/tview"
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/go-utils/contextutils"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const titleText = `[aqua] __                                                   
@@ -47,30 +47,24 @@ type MapValue struct {
 }
 
 type AppOpts struct {
-	Loader       loader.Loader
 	ProgLocation string
 	Filter       map[string]Filter
 	ParsedELF    *loader.ParsedELF
 }
 
 type App struct {
-	Entries   chan loader.MapEntry
-	CloseChan chan struct{}
+	Entries chan loader.MapEntry
 
 	tviewApp     *tview.Application
 	flex         *tview.Flex
-	loader       loader.Loader
 	progLocation string
 	filter       map[string]Filter
-	parsedELF    *loader.ParsedELF
 }
 
 func NewApp(opts *AppOpts) App {
 	a := App{
-		loader:       opts.Loader,
 		progLocation: opts.ProgLocation,
 		filter:       opts.Filter,
-		parsedELF:    opts.ParsedELF,
 	}
 	return a
 }
@@ -78,26 +72,13 @@ func NewApp(opts *AppOpts) App {
 var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
-var preWatchChan = make(chan error, 1)
 
-func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
-	logger := contextutils.LoggerFrom(ctx)
-	ctx, cancel := context.WithCancel(ctx)
-
-	var errToReturn error
-	closeChan := make(chan struct{}, 1)
+func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, progLocation string) (*tview.Application, *tview.Flex) {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
-			logger.Info("captured ctrl-c")
+			logger.Info("captured ctrl-c in tui, canceling context")
 			cancel()
-			logger.Info("called cancel()")
-			// need to block here until the map watches from Load() are complete
-			// so that tview.App doesn't stop before they do, otherwise we get in a deadlock
-			// when Watch() attempts to Draw() to a stopped tview.App
-			<-closeChan
-			logger.Info("received from closeChan")
-			close(closeChan)
 		}
 		return event
 	})
@@ -120,7 +101,7 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	fmt.Fprint(title, titleText)
 
 	fetchText := tview.NewTextView().SetDynamicColors(true)
-	fmt.Fprintf(fetchText, "Program location: [aqua]%s", a.progLocation)
+	fmt.Fprintf(fetchText, "Program location: [aqua]%s", progLocation)
 
 	help := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetDynamicColors(true)
 	fmt.Fprint(help, helpText)
@@ -138,74 +119,62 @@ func (a *App) Run(ctx context.Context, progReader io.ReaderAt) error {
 	header.AddItem(rightMenu, 0, 1, 1, 1, 0, 0, false)
 
 	flex.AddItem(header, 10, 0, false)
-	a.Entries = make(chan loader.MapEntry, 20)
-	a.tviewApp = app
-	a.flex = flex
-	a.CloseChan = closeChan
 
-	loaderOptions := loader.LoadOptions{
-		ParsedELF: a.parsedELF,
-		Watcher:   a,
-	}
-
-	go func() {
-		logger.Info("calling loader.Load()")
-		errToReturn = a.loader.Load(ctx, &loaderOptions)
-		logger.Infof("returned from Load() with err: %s", errToReturn)
-		// we have returned from Load(...) so we know the waitgroups on the map watches have completed
-		// let's close the Entries chan so a.Watch(...) will return and we will no longer call Draw() on
-		// the tview.App
-		close(a.Entries)
-		logger.Info("closed entries")
-		// send to the closeChan to signal in the case the TUI was closed via CtrlC that Load()
-		// has returned and no new updates will be sent to the tview.App
-		a.CloseChan <- struct{}{}
-		// send to the preWatchChan in case Load() returned from an error in the Load/Link phase
-		// i.e. not the Watch phase, so we don't block when loader.PreWatchHandler() hasn't been called
-		preWatchChan <- errToReturn
-		// call Stop() on the tview.App to handle the case where Load() returned with an error
-		// safe to call this more than once, i.e. it's ok that CtrlC handler will also Stop() the tview.App
-		a.tviewApp.Stop()
-		logger.Info("called stop")
-	}()
-
-	err := <-preWatchChan
-	logger.Infof("received from preWatchChan with err: %s", err)
-	if err != nil {
-		return err
-	}
-
-	// goroutine for updating the TUI data based on updates from loader watching maps
-	logger.Info("starting Watch()")
-	go a.watch(ctx)
-
-	pterm.Info.Println("Rendering TUI...")
-	logger.Info("render tui")
-	// begin rendering the TUI
-	if err := a.tviewApp.SetRoot(a.flex, true).Run(); err != nil {
-		return err
-	}
-
-	logger.Infof("stopped app, errToReturn: %s", errToReturn)
-	return errToReturn
+	return app, flex
 }
 
-func (a *App) PreWatchHandler() {
-	preWatchChan <- nil
+func (a *App) Close() {
+	close(a.Entries)
+}
+
+func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loader.LoadOptions) error {
+	logger := contextutils.LoggerFrom(ctx)
+
+	ctx, cancel := context.WithCancel(ctx)
+	app, flex := buildTView(logger, cancel, a.progLocation)
+	a.tviewApp = app
+	a.flex = flex
+	a.Entries = make(chan loader.MapEntry, 20)
+
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		logger.Info("render tui")
+		err := a.tviewApp.SetRoot(a.flex, true).Run()
+		logger.Info("tui stopped")
+		return err
+	})
+
+	eg.Go(func() error {
+		logger.Info("calling watch()")
+		a.watch(ctx)
+		logger.Info("returned from watch()")
+		return nil
+	})
+
+	eg.Go(func() error {
+		logger.Info("calling Load()")
+		err := progLoader.Load(ctx, loaderOpts)
+		logger.Info("returned from Load()")
+		return err
+	})
+
+	err := eg.Wait()
+	logger.Info("after tui waitgroup")
+	return err
 }
 
 func (a *App) watch(ctx context.Context) {
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Info("beginning Watch() loop")
+	// a.Entries channel will be closed by the Loader
 	for r := range a.Entries {
 		if mapOfMaps[r.Name].Type == ebpf.Hash {
 			a.renderHash(ctx, r)
 		} else if mapOfMaps[r.Name].Type == ebpf.RingBuf {
 			a.renderRingBuf(ctx, r)
 		}
-		// update the screen if the UI is still running
-		// don't block here as we still want to process entries as they come in,
-		// let the tview.App handle the synchronization of updates
+		// we need to queue a UI update since tview app is running in a separate goroutine
+		// don't block here as we still want to process entries as they come in
 		go a.tviewApp.QueueUpdateDraw(func() {})
 	}
 	logger.Info("no more entries, returning from Watch()")

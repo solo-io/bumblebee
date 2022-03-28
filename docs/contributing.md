@@ -59,3 +59,15 @@ You can then use the docker image in the `bee build` command, for example:
 ```bash
 bee build examples/tcpconnect/tcpconnect.c tcpconnect.o -i $DOCKER_BUILT_IMAGE
 ```
+
+### Workflow for `bee package` dev
+
+```
+TAGGED_VERSION=vdev make docker-build-bee
+
+go run ./bee/main.go build -i ghcr.io/solo-io/bumblebee/builder:0.0.9 examples/tcpconnect/tcpconnect.c tcpconnect
+
+go run ./bee/main.go package tcpconnect bee-tcpconnect:v1
+
+docker run --privileged bee-tcpconnect:v1
+```
