@@ -283,7 +283,6 @@ func (l *loader) startRingBuf(
 
 	for {
 		record, err := rd.Read()
-		// logger.Info("read...")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				logger.Info("ringbuf closed...")
