@@ -6,9 +6,9 @@
 #include <bpf/bpf_core_read.h>
 #include "exitsnoop.h"
 
-const volatile pid_t target_pid = 0;
+//const volatile pid_t target_pid = 0;
+//const volatile bool trace_by_process = true;
 const volatile bool trace_failed_only = false;
-const volatile bool trace_by_process = true;
 
 struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -26,11 +26,10 @@ int sched_process_exit(void *ctx)
         struct task_struct *task;
         struct event event = {};
 
-        if (target_pid && target_pid != pid)
-                return 0;
-
-        if (trace_by_process && pid != tid)
-                return 0;
+//        if (target_pid && target_pid != pid)
+//                return 0;
+//        if (trace_by_process && pid != tid)
+//                return 0;
 
         task = (struct task_struct *)bpf_get_current_task();
         exit_code = BPF_CORE_READ(task, exit_code);
