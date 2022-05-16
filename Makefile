@@ -49,6 +49,8 @@ docker-push: docker-build
 activeconn: $(EXAMPLES_DIR)/activeconn
 .PHONY: tcpconnect
 tcpconnect: $(EXAMPLES_DIR)/tcpconnect
+.PHONY: exitsnoop
+tcpconnect: $(EXAMPLES_DIR)/exitsnoop
 
 
 $(EXAMPLES_DIR)/%:
@@ -56,7 +58,7 @@ $(EXAMPLES_DIR)/%:
 	$(OUTDIR)/bee-linux-amd64 push $(HUB)/$(REPO_NAME)/$*:$(VERSION)
 
 .PHONY: release-examples
-release-examples: activeconn tcpconnect
+release-examples: activeconn tcpconnect exitsnoop
 
 #----------------------------------------------------------------------------------
 # CLI
