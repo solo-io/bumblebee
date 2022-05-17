@@ -51,6 +51,8 @@ activeconn: $(EXAMPLES_DIR)/activeconn
 tcpconnect: $(EXAMPLES_DIR)/tcpconnect
 .PHONY: exitsnoop
 tcpconnect: $(EXAMPLES_DIR)/exitsnoop
+.PHONY: oomkill
+tcpconnect: $(EXAMPLES_DIR)/oomkill
 
 
 $(EXAMPLES_DIR)/%:
@@ -58,7 +60,7 @@ $(EXAMPLES_DIR)/%:
 	$(OUTDIR)/bee-linux-amd64 push $(HUB)/$(REPO_NAME)/$*:$(VERSION)
 
 .PHONY: release-examples
-release-examples: activeconn tcpconnect exitsnoop
+release-examples: activeconn tcpconnect exitsnoop oomkill
 
 #----------------------------------------------------------------------------------
 # CLI
