@@ -4,7 +4,7 @@
 
 BumbleBee helps to build, run and distribute eBPF programs using OCI images. It allows you to focus on writing eBPF code, while taking care of the user space components - automatically exposing your data as metrics or logs.
 
-Join the conversation [on our Slack](https://slack.solo.io/) in the [#bumblebee](https://solo-io.slack.com/app_redirect?channel=C02TEN3MV3J) channel!
+Join the conversation [on our Slack](https://soloio.slack.com/) in the [#bumblebee](https://solo-io.slack.com/app_redirect?channel=C02TEN3MV3J) channel!
 
 ### Documentation
 - **Installation**
