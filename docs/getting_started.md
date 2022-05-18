@@ -384,6 +384,50 @@ bee tag my_probe:v1 gcr.io/<YOUR PROJECT ID>/my_probe:v1
 bee push gcr.io/<YOUR PROJECT ID>/my_probe:v1
 ```
 
+### Security
+
+Now that we have created, ran, and published our first container, let's talk about security!
+
+`bumblebee` allows the community to create and share `eBPF` modules, but how do we ensure the code we're running is safe. This is a hot topic in the `eBPF` community as of right now, and we think we have a good answer.
+
+Container provenance and signing is becoming more and more popular along with the rise of tools such as [`cosign`](https://github.com/sigstore/cosign). Since we publish our modules in the OCI format, we can easily verify the provenance of our modules using `cosign`!!
+
+Let's take the image we just pushed as an easy example. Before starting you will need to download `cosign` by following their [instructions](https://docs.sigstore.dev/cosign/installation).
+
+Now that `cosign` is installed we can go ahead and sign/verify the provenance of our modules.
+
+```shell
+$ cosign generate-key-pair
+Enter password for private key:
+Enter password for private key again:
+Private key written to cosign.key
+Public key written to cosign.pub
+```
+
+If you use a password, make sure to remember it!
+
+Now that we have generated a key pair, we can go ahead and sign our image.
+
+```shell
+$ cosign sign  --key cosign.key  localhost:5000/my_probe:v1
+Enter password for private key:
+Pushing signature to: localhost:5000/my_probe
+```
+
+Time to verify our image.
+
+```shell
+cosign verify --key cosign.pub localhost:5000/my_probe:v1
+
+Verification for localhost:5000/my_probe:v1 --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - The signatures were verified against the specified public key
+
+[{"critical":{"identity":{"docker-reference":"localhost:5000/my_probe"},"image":{"docker-manifest-digest":"sha256:7a91c50d922925f152fec96ed1d84b7bc6b2079c169d68826f6cf307f22d40e6"},"type":"cosign container image signature"},"optional":null}]
+```
+
+
 ### Troubleshooting
 
 If you get a `403` error code when using `bee push` to push the image to your registry, check if you have permission to push.  The error below indicated the token only has read access to the registry but not write access. You'll need to generate a new `GITHUB_TOKEN` with proper access to fix it.
