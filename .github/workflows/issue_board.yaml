@@ -6,7 +6,7 @@ on:
       - opened
 jobs:
   add-to-project:
-    name: Add Bumblebee to Gloo Mesh or Docs project board
+    name: Add Bumblebee to Gloo Mesh.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/add-to-project@main
