@@ -11,6 +11,8 @@ The following items are on our roadmap:
   - Enable easy interaction with Kubernetes objects such as pods
 - Add support for [user space control](https://github.com/solo-io/bumblebee/issues/68)
 - Support for multi-arch builds
-- Exposing filters in the eBPF program itself to filter output through the `bee run` command.
+- Exposing filters in the eBPF program itself to filter output through the `bee run` command
 - Support additional BPF program and map types
+- Support histogram Prometheus metric type
+- Add support for integration with logging pipelines (e.g. in structured format to stdout)
 
