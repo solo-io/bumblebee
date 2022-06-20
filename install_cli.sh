@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+shopt -s expand_aliases
 
 if [ -x "$(command -v python3)" ]; then
   alias any_python='python3'
