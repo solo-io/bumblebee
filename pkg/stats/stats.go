@@ -9,6 +9,8 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/solo-io/go-utils/contextutils"
 )
 
 const (
@@ -18,6 +20,7 @@ const (
 type PrometheusOpts struct {
 	Port        uint32
 	MetricsPath string
+	Registry *prometheus.Registry
 }
 
 func (p *PrometheusOpts) initDefaults() {
@@ -33,13 +36,20 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 	opts.initDefaults()
 
 	serveMux := http.NewServeMux()
-	serveMux.Handle(opts.MetricsPath, promhttp.Handler())
+	handler := promhttp.Handler()
+	if opts.Registry != nil {
+		handler = promhttp.InstrumentMetricHandler(opts.Registry, promhttp.HandlerFor(opts.Registry, promhttp.HandlerOpts{}))
+	}
+	serveMux.Handle(opts.MetricsPath, handler)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", opts.Port),
 		Handler: serveMux,
 	}
 	go func() {
-		_ = server.ListenAndServe()
+		err := server.ListenAndServe()
+		if err != nil {
+			contextutils.LoggerFrom(ctx).Errorf("could not listen for Prometheus metrics: %v", err)
+		}
 	}()
 
 	go func() {
@@ -47,7 +57,9 @@ func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (Me
 		server.Close()
 	}()
 
-	return &metricsProvider{}, nil
+	return &metricsProvider{
+		registry: opts.Registry,
+	}, nil
 }
 
 type MetricsProvider interface {
@@ -64,7 +76,9 @@ type SetInstrument interface {
 	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
-type metricsProvider struct{}
+type metricsProvider struct{
+	registry *prometheus.Registry
+}
 
 func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrument {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -72,7 +86,7 @@ func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrum
 		Name:      name,
 	}, labels)
 
-	prometheus.MustRegister(counter)
+	m.register(counter)
 	return &setCounter{
 		counter:    counter,
 		counterMap: map[uint64]int64{},
@@ -85,7 +99,7 @@ func (m *metricsProvider) NewIncrementCounter(name string, labels []string) Incr
 		Name:      name,
 	}, labels)
 
-	prometheus.MustRegister(counter)
+	m.register(counter)
 	return &incrementCounter{
 		counter: counter,
 	}
@@ -96,9 +110,19 @@ func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
 		Namespace: ebpfNamespace,
 		Name:      name,
 	}, labels)
+
+	m.register(gaugeVec)
 	return &gauge{
 		gauge: gaugeVec,
 	}
+}
+
+func (m *metricsProvider) register(collectors ...prometheus.Collector) {
+	if m.registry != nil {
+		m.registry.MustRegister(collectors...)
+		return
+	}
+	prometheus.MustRegister(collectors...)
 }
 
 type setCounter struct {
