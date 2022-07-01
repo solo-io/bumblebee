@@ -27,9 +27,11 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	debug  bool
-	filter []string
-	notty  bool
+	debug    bool
+	filter   []string
+	notty    bool
+	pinMaps  string
+	pinProgs string
 }
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
@@ -41,6 +43,8 @@ func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
 	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
+	flags.StringVar(&opts.pinMaps, "pin-maps", "", "Directory to pin maps to, left unpinned if empty")
+	flags.StringVar(&opts.pinProgs, "pin-progs", "", "Directory to pin progs to, left unpinned if empty")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -119,6 +123,8 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	loaderOpts := loader.LoadOptions{
 		ParsedELF: parsedELF,
 		Watcher:   tuiApp,
+		PinMaps:   opts.pinMaps,
+		PinProgs:  opts.pinProgs,
 	}
 
 	// bail out before starting TUI if context canceled
