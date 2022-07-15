@@ -26,6 +26,7 @@ struct piddata {
         u32 tgid;
 };
 
+//Commenting these and the corresponding logic out until we have support for kernel-side filtering.
 //const volatile __u64 targ_min_us = 0;
 //const volatile pid_t targ_tgid = 0;
 

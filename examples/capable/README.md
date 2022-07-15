@@ -1,7 +1,7 @@
 # Overview
 
 The capable example is heavily based on the [capable program in BCC repository](https://github.com/iovisor/bcc/blob/master/tools/capable.py), which is created by Brendan Gregg.
-This eBPF program will trace all security capabilitiy checks (cap_capable() calls) in your system.
+This eBPF program will trace all security capability checks (cap_capable() calls) in your system.
 
 # Usage
 
