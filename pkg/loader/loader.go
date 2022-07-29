@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,10 +15,11 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/go-utils/contextutils"
-	"golang.org/x/sync/errgroup"
 )
 
 type ParsedELF struct {
@@ -27,11 +30,14 @@ type ParsedELF struct {
 type LoadOptions struct {
 	ParsedELF *ParsedELF
 	Watcher   MapWatcher
+	PinMaps   string
+	PinProgs  string
 }
 
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
+	WatchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll map[string]*ebpf.Map, watcher MapWatcher) error
 }
 
 type WatchedMap struct {
@@ -86,6 +92,12 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 	spec, err := ebpf.LoadCollectionSpecFromReader(progReader)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, prog := range spec.Programs {
+		if prog.Type == ebpf.UnspecifiedProgram {
+			contextutils.LoggerFrom(ctx).Debug("Program %s does not specify a type", prog.Name)
+		}
 	}
 
 	watchedMaps := make(map[string]WatchedMap)
@@ -150,9 +162,26 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		return ctx.Err()
 	}
 
+	if opts.PinMaps != "" {
+		// Specify that we'd like to pin the referenced maps, or open them if already existing.
+		for _, m := range opts.ParsedELF.Spec.Maps {
+			// Do not pin/load read-only data
+			if strings.HasSuffix(m.Name, ".rodata") {
+				continue
+			}
+
+			// PinByName specifies that we should pin the map by name, or load it if it already exists.
+			m.Pinning = ebpf.PinByName
+		}
+	}
+
 	spec := opts.ParsedELF.Spec
 	// Load our eBPF spec into the kernel
-	coll, err := ebpf.NewCollection(spec)
+	coll, err := ebpf.NewCollectionWithOptions(opts.ParsedELF.Spec, ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			PinPath: opts.PinMaps,
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -198,13 +227,29 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 			default:
 				return errors.New("only kprobe programs supported")
 			}
+			if opts.PinProgs != "" {
+				if err := createDir(ctx, opts.PinProgs, 0700); err != nil {
+					return err
+				}
+
+				pinFile := filepath.Join(opts.PinProgs, prog.Name)
+				if err := coll.Programs[name].Pin(pinFile); err != nil {
+					return fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
+				}
+				fmt.Printf("Successfully pinned program '%v'\n", pinFile)
+			}
 		}
 	}
 
-	return l.watchMaps(ctx, opts.ParsedELF.WatchedMaps, coll, opts.Watcher)
+	return l.WatchMaps(ctx, opts.ParsedELF.WatchedMaps, coll.Maps, opts.Watcher)
 }
 
-func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll *ebpf.Collection, watcher MapWatcher) error {
+func (l *loader) WatchMaps(
+	ctx context.Context,
+	watchedMaps map[string]WatchedMap,
+	maps map[string]*ebpf.Map,
+	watcher MapWatcher,
+) error {
 	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range watchedMaps {
@@ -221,7 +266,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 			}
 			eg.Go(func() error {
 				watcher.NewRingBuf(name, bpfMap.Labels)
-				return l.startRingBuf(ctx, bpfMap.valueStruct, coll.Maps[name], increment, name, watcher)
+				return l.startRingBuf(ctx, bpfMap.valueStruct, maps[name], increment, name, watcher)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -238,7 +283,7 @@ func (l *loader) watchMaps(ctx context.Context, watchedMaps map[string]WatchedMa
 			eg.Go(func() error {
 				// TODO: output type of instrument in UI?
 				watcher.NewHashMap(name, labelKeys)
-				return l.startHashMap(ctx, bpfMap.mapSpec, coll.Maps[name], instrument, name, watcher)
+				return l.startHashMap(ctx, bpfMap.mapSpec, maps[name], instrument, name, watcher)
 			})
 		default:
 			// TODO: Support more map types
@@ -406,4 +451,18 @@ func (n *noop) Set(
 	val int64,
 	labels map[string]string,
 ) {
+}
+
+func createDir(ctx context.Context, path string, perm os.FileMode) error {
+	file, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		contextutils.LoggerFrom(ctx).Info("path does not exist, creating pin directory: %s", path)
+		return os.Mkdir(path, perm)
+	} else if err != nil {
+		return fmt.Errorf("could not create pin directory '%v': %w", path, err)
+	} else if !file.IsDir() {
+		return fmt.Errorf("pin location '%v' exists but is not a directory", path)
+	}
+
+	return nil
 }

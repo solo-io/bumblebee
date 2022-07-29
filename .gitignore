@@ -21,6 +21,7 @@ _output
 # Staging ground for bpf programs
 bpf/
 
-# Ignore vscode
+# Ignore IDE folders
 .vscode/
 .vagrant/
+.idea
