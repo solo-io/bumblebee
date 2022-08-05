@@ -5,7 +5,11 @@
 
 bumblebee:
   enabled: true
-  env: null
+  env:
+  - name: NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
   floatingUserId: false
   image:
     registry: ghcr.io/solo-io/bumblebee

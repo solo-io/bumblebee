@@ -99,6 +99,16 @@ func run() error {
 
 						UseDaemonSet: true,
 						Container: model.Container{
+							Env: []corev1.EnvVar{
+								{
+									Name: "NODE_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "spec.nodeName",
+										},
+									},
+								},
+							},
 							Image: values.Image{
 								Tag:        "latest",
 								Repository: "bee",
