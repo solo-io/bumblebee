@@ -33,6 +33,9 @@ spec:
         prometheus.io/scrape: "true"
     spec:
       serviceAccountName: bumblebee
+      volumes:
+      - emptyDir: {}
+        name: image-cache
       containers:
 {{- $bumblebee := $.Values.bumblebee }}
 {{- $bumblebeeImage := $bumblebee.image }}
@@ -45,6 +48,9 @@ spec:
         env:
 {{ toYaml $bumblebee.env | indent 10 }}
 {{- end }}
+        volumeMounts:
+        - mountPath: /tmp/image-cache
+          name: image-cache
         resources:
 {{- if $bumblebee.resources }}
 {{ toYaml $bumblebee.resources | indent 10}}

@@ -46,5 +46,20 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 		return false
 	}
 
+	if strings.Compare(m.GetImageName(), target.GetImageName()) != 0 {
+		return false
+	}
+
+	if len(m.GetNodeLabels()) != len(target.GetNodeLabels()) {
+		return false
+	}
+	for k, v := range m.GetNodeLabels() {
+
+		if strings.Compare(v, target.GetNodeLabels()[k]) != 0 {
+			return false
+		}
+
+	}
+
 	return true
 }

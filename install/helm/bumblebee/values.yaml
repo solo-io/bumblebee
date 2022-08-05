@@ -14,5 +14,9 @@ bumblebee:
   ports:
     stats: 9001
   runAsUser: 10101
+  securityContext:
+    privileged: true
+    runAsNonRoot: false
+    runAsUser: 0
   serviceType: ClusterIP
   sidecars: {}

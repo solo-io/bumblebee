@@ -33,5 +33,16 @@ func (m *ProbeSpec) Clone() proto.Message {
 	}
 	target = &ProbeSpec{}
 
+	target.ImageName = m.GetImageName()
+
+	if m.GetNodeLabels() != nil {
+		target.NodeLabels = make(map[string]string, len(m.GetNodeLabels()))
+		for k, v := range m.GetNodeLabels() {
+
+			target.NodeLabels[k] = v
+
+		}
+	}
+
 	return target
 }

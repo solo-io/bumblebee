@@ -12,6 +12,7 @@ import (
 	"github.com/solo-io/skv2/codegen/render"
 	"github.com/solo-io/skv2/codegen/skv2_anyvendor"
 	"github.com/solo-io/skv2/codegen/util"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -44,7 +45,6 @@ func main() {
 }
 
 func run() error {
-
 	cmd := codegen.Command{
 		AppName: "bumblebee",
 		AnyVendorConfig: skv2_anyvendor.CreateDefaultMatchOptions(
@@ -96,6 +96,7 @@ func run() error {
 				{
 					Name: "bumblebee",
 					Deployment: model.Deployment{
+
 						UseDaemonSet: true,
 						Container: model.Container{
 							Image: values.Image{
@@ -103,7 +104,26 @@ func run() error {
 								Repository: "bee",
 								Registry:   "ghcr.io/solo-io/bumblebee",
 							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsNonRoot: pointer(false),
+								Privileged:   pointer(true),
+								RunAsUser:    pointer(int64(0)),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "image-cache",
+									MountPath: "/tmp/image-cache",
+								},
+							},
 							Args: []string{"operator"},
+						},
+						Volumes: []corev1.Volume{
+							{
+								Name: "image-cache",
+								VolumeSource: corev1.VolumeSource{
+									EmptyDir: &corev1.EmptyDirVolumeSource{},
+								},
+							},
 						},
 					},
 					Service: model.Service{
@@ -135,6 +155,8 @@ func run() error {
 
 	return cmd.Execute()
 }
+
+func pointer[T comparable](val T) *T { return &val }
 
 // func genApis() codegen.Command {
 // 	return codegen.Command{
