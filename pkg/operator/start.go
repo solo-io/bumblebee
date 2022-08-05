@@ -62,6 +62,7 @@ func Start(ctx context.Context) error {
 	if err := loop.RunProbeReconciler(ctx, &probeReconciler{
 		ctx:        ctx,
 		progLoader: progLoader,
+		rps:        &runningProbes{probes: &sync.Map{}},
 	}, &predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
@@ -173,7 +174,7 @@ func getProgram(
 }
 
 type runningProbes struct {
-	probes sync.Map
+	probes *sync.Map
 }
 
 func (r *runningProbes) Store(key types.NamespacedName, rp *runningProbe) {
