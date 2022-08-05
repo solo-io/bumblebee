@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/stats"
+	"github.com/solo-io/go-utils/contextutils"
 	"github.com/solo-io/skv2/pkg/reconcile"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -70,7 +72,7 @@ func Start(ctx context.Context) error {
 type probeReconciler struct {
 	ctx context.Context
 	// TODO: Account for image name changes
-	running    map[types.NamespacedName]context.CancelFunc
+	rps        *runningProbes
 	progLoader loader.Loader
 }
 
@@ -80,9 +82,15 @@ func (r *probeReconciler) ReconcileProbe(obj *probes_bumblebee_io_v1alpha1.Probe
 		Name:      obj.Name,
 		Namespace: obj.Namespace,
 	}
-	if _, ok := r.running[key]; ok {
-		// Image is already running :)
-		return reconcile.Result{}, nil
+	currentImg, ok := r.rps.ImageName(key)
+	if ok {
+		if currentImg == obj.Spec.GetImageName() {
+			// Image is already running :)
+			return reconcile.Result{}, nil
+		}
+		// Image is already running, but with a different image.
+		// Cancel the running program and start the new one.
+		r.rps.Clean(key)
 	}
 	if err := r.startProgram(r.ctx, obj); err != nil {
 		fmt.Errorf("uh oh %v", err)
@@ -95,9 +103,7 @@ func (r *probeReconciler) ReconcileProbe(obj *probes_bumblebee_io_v1alpha1.Probe
 func (p *probeReconciler) ReconcileProbeDeletion(req reconcile.Request) error {
 
 	// Cancel the running program if found
-	if cancel, ok := p.running[req.NamespacedName]; ok {
-		cancel()
-	}
+	p.rps.Clean(req.NamespacedName)
 	return nil
 }
 
@@ -115,16 +121,28 @@ func (p *probeReconciler) startProgram(ctx context.Context, obj *probes_bumblebe
 	loaderOpts := &loader.LoadOptions{
 		ParsedELF: parsedELF,
 		Watcher:   loader.NewNoopWatcher(),
+		AdditionalLabels: map[string]string{
+			"probe_name":      obj.Name,
+			"probe_namespace": obj.Namespace,
+		},
 	}
+
+	key := types.NamespacedName{Name: obj.Name, Namespace: obj.Namespace}
 
 	nestedCtx, cancel := context.WithCancel(ctx)
-	if err := p.progLoader.Load(nestedCtx, loaderOpts); err != nil {
-		// always cancel the context to prevent leaking goroutines
-		cancel()
-		return err
-	}
 
-	p.running[types.NamespacedName{Name: obj.Name, Namespace: obj.Namespace}] = cancel
+	p.rps.Store(key, &runningProbe{
+		image:  obj.Spec.GetImageName(),
+		cancel: cancel,
+	})
+	go func() {
+		// always cancel the context to prevent leaking goroutines
+		defer p.rps.Clean(key)
+		if err := p.progLoader.Load(nestedCtx, loaderOpts); err != nil && !errors.Is(err, context.Canceled) {
+			contextutils.LoggerFrom(nestedCtx).Errorf("could not load BPF program: %v", err)
+		}
+	}()
+
 	return nil
 }
 
@@ -152,4 +170,34 @@ func getProgram(
 		return nil, err
 	}
 	return bytes.NewReader(prog.ProgramFileBytes), nil
+}
+
+type runningProbes struct {
+	probes sync.Map
+}
+
+func (r *runningProbes) Store(key types.NamespacedName, rp *runningProbe) {
+	r.probes.Store(key, rp)
+}
+
+func (r *runningProbes) Clean(key types.NamespacedName) {
+	val, ok := r.probes.LoadAndDelete(key)
+	if !ok {
+		return
+	}
+	rp := val.(*runningProbe)
+	rp.cancel()
+}
+
+func (r *runningProbes) ImageName(key types.NamespacedName) (string, bool) {
+	val, ok := r.probes.Load(key)
+	if !ok {
+		return "", false
+	}
+	return val.(*runningProbe).image, ok
+}
+
+type runningProbe struct {
+	image  string
+	cancel context.CancelFunc
 }

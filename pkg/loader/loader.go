@@ -28,16 +28,24 @@ type ParsedELF struct {
 }
 
 type LoadOptions struct {
-	ParsedELF *ParsedELF
-	Watcher   MapWatcher
-	PinMaps   string
-	PinProgs  string
+	ParsedELF        *ParsedELF
+	Watcher          MapWatcher
+	PinMaps          string
+	PinProgs         string
+	AdditionalLabels map[string]string
+}
+
+type WatchOpts struct {
+	WatchedMaps      map[string]WatchedMap
+	Coll             map[string]*ebpf.Map
+	Watcher          MapWatcher
+	AdditionalLabels map[string]string
 }
 
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
-	WatchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll map[string]*ebpf.Map, watcher MapWatcher) error
+	WatchMaps(ctx context.Context, opts *WatchOpts) error
 }
 
 type WatchedMap struct {
@@ -241,18 +249,21 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		}
 	}
 
-	return l.WatchMaps(ctx, opts.ParsedELF.WatchedMaps, coll.Maps, opts.Watcher)
+	return l.WatchMaps(ctx, &WatchOpts{
+		WatchedMaps:      opts.ParsedELF.WatchedMaps,
+		Coll:             coll.Maps,
+		Watcher:          opts.Watcher,
+		AdditionalLabels: opts.AdditionalLabels,
+	})
 }
 
 func (l *loader) WatchMaps(
 	ctx context.Context,
-	watchedMaps map[string]WatchedMap,
-	maps map[string]*ebpf.Map,
-	watcher MapWatcher,
+	opts *WatchOpts,
 ) error {
 	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
 	eg, ctx := errgroup.WithContext(ctx)
-	for name, bpfMap := range watchedMaps {
+	for name, bpfMap := range opts.WatchedMaps {
 		name := name
 		bpfMap := bpfMap
 
@@ -260,13 +271,14 @@ func (l *loader) WatchMaps(
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
 			if isCounterMap(bpfMap.mapSpec) {
-				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
+				increment = l.metricsProvider.NewIncrementCounter(name, opts.AdditionalLabels, bpfMap.Labels...)
 			} else if isPrintMap(bpfMap.mapSpec) {
 				increment = &noop{}
 			}
 			eg.Go(func() error {
-				watcher.NewRingBuf(name, bpfMap.Labels)
-				return l.startRingBuf(ctx, bpfMap.valueStruct, maps[name], increment, name, watcher)
+				defer increment.Clean()
+				opts.Watcher.NewRingBuf(name, bpfMap.Labels)
+				return l.startRingBuf(ctx, bpfMap.valueStruct, opts.Coll[name], increment, name, opts.Watcher)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -274,16 +286,17 @@ func (l *loader) WatchMaps(
 			labelKeys := bpfMap.Labels
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap.mapSpec) {
-				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
+				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, opts.AdditionalLabels, labelKeys...)
 			} else if isGaugeMap(bpfMap.mapSpec) {
-				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
+				instrument = l.metricsProvider.NewGauge(bpfMap.Name, opts.AdditionalLabels, labelKeys...)
 			} else {
 				instrument = &noop{}
 			}
 			eg.Go(func() error {
+				defer instrument.Clean()
 				// TODO: output type of instrument in UI?
-				watcher.NewHashMap(name, labelKeys)
-				return l.startHashMap(ctx, bpfMap.mapSpec, maps[name], instrument, name, watcher)
+				opts.Watcher.NewHashMap(name, labelKeys)
+				return l.startHashMap(ctx, bpfMap.mapSpec, opts.Coll[name], instrument, name, opts.Watcher)
 			})
 		default:
 			// TODO: Support more map types
@@ -439,6 +452,10 @@ func getLabelsForBtfStruct(structKey *btf.Struct) []string {
 }
 
 type noop struct{}
+
+func (n *noop) Clean() {
+
+}
 
 func (n *noop) Increment(
 	ctx context.Context,
