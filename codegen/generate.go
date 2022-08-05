@@ -8,9 +8,11 @@ import (
 
 	"github.com/solo-io/skv2/codegen"
 	"github.com/solo-io/skv2/codegen/model"
+	"github.com/solo-io/skv2/codegen/model/values"
 	"github.com/solo-io/skv2/codegen/render"
 	"github.com/solo-io/skv2/codegen/skv2_anyvendor"
 	"github.com/solo-io/skv2/codegen/util"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -82,7 +84,53 @@ func run() error {
 			},
 		},
 		RenderProtos: true,
-		// Chart:        ,
+		Chart: &model.Chart{
+			Data: model.Data{
+				ApiVersion:  "v2",
+				Description: "Bumblebee is a tool for collecting and analyzing system metrics.",
+				Name:        "bumblebee",
+				Version:     "v0.0.1",
+				Home:        "github.com/solo-io/bumblebee",
+			},
+			Operators: []model.Operator{
+				{
+					Name: "bumblebee",
+					Deployment: model.Deployment{
+						UseDaemonSet: true,
+						Container: model.Container{
+							Image: values.Image{
+								Tag:        "latest",
+								Repository: "bee",
+								Registry:   "ghcr.io/solo-io/bumblebee",
+							},
+							Args: []string{"operator"},
+						},
+					},
+					Service: model.Service{
+						Type: "ClusterIP",
+						Ports: []model.ServicePort{
+							{
+								Name:        "stats",
+								DefaultPort: 9001,
+							},
+						},
+					},
+					Rbac: []rbacv1.PolicyRule{
+						{
+							Verbs: []string{
+								"get",
+								"list",
+								"watch",
+							},
+							APIGroups: []string{"probes.bumblebee.io"},
+							Resources: []string{
+								"probes",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	return cmd.Execute()
