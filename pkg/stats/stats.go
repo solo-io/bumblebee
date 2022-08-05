@@ -20,7 +20,7 @@ const (
 type PrometheusOpts struct {
 	Port        uint32
 	MetricsPath string
-	Registry *prometheus.Registry
+	Registry    *prometheus.Registry
 }
 
 func (p *PrometheusOpts) initDefaults() {
@@ -76,7 +76,7 @@ type SetInstrument interface {
 	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
-type metricsProvider struct{
+type metricsProvider struct {
 	registry *prometheus.Registry
 }
 

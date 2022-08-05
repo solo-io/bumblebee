@@ -26,6 +26,35 @@ clean:
 	rm -f $(EXAMPLES_DIR)/**/*.o
 	rm -rf $(OUTDIR)
 
+
+#----------------------------------------------------------------------------------
+# Generated Code
+#----------------------------------------------------------------------------------
+DEPSGOBIN:=$(shell pwd)/.bin
+export PATH:=$(DEPSGOBIN):$(PATH)
+export GOBIN:=$(DEPSGOBIN)
+
+# Generate go code from protos
+.PHONY: generated-code
+generated-code:
+	go run -ldflags=$(LDFLAGS) codegen/generate.go
+	$(DEPSGOBIN)/goimports -w $(shell ls -d */ | grep -v vendor)
+
+# Go dependencies download
+.PHONY: mod-download
+mod-download:
+	go mod download
+
+# Go tools installation
+.PHONY: install-go-tools
+install-go-tools: mod-download
+	mkdir -p $(DEPSGOBIN)
+	go install istio.io/tools/cmd/protoc-gen-jsonshim@1.13.7
+	go install github.com/golang/protobuf/protoc-gen-go@v1.4.0
+	go install github.com/solo-io/protoc-gen-ext@v0.0.16
+	go install github.com/golang/mock/mockgen@v1.5.0
+	go install golang.org/x/tools/cmd/goimports@v0.1.2
+
 #----------------------------------------------------------------------------------
 # Build Container
 #----------------------------------------------------------------------------------

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package probes.bumblebee.io;
+option go_package = "github.com/solo-io/bumblebee/pkg/api/probes.bumblebee.io/v1alpha1";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+import "extproto/ext.proto";
+option (extproto.hash_all) = true;
+option (extproto.equal_all) = true;
+option (extproto.clone_all) = true;
+
+message ProbeSpec {}

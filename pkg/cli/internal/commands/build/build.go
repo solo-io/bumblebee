@@ -26,9 +26,9 @@ type buildOptions struct {
 	BuildImage        string
 	Builder           string
 	OutputFile        string
-	Local      bool
-	BinaryOnly bool
-	CFlags     []string
+	Local             bool
+	BinaryOnly        bool
+	CFlags            []string
 	BuildScript       string
 	BuildScriptOutput bool
 

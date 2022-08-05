@@ -21,9 +21,9 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		general: opts,
 	}
 	cmd := &cobra.Command{
-		Use:  "push",
+		Use:   "push",
 		Short: "Push an OCI image to a specified destination.",
-		Args: cobra.ExactArgs(1), // Ref
+		Args:  cobra.ExactArgs(1), // Ref
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return push(cmd.Context(), pushOpts.general, args[0])
 		},

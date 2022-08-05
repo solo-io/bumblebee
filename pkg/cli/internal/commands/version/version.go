@@ -21,7 +21,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		general: opts,
 	}
 	cmd := &cobra.Command{
-		Use: "version",
+		Use:   "version",
 		Short: "Display bee Version Information.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", version.Version)
