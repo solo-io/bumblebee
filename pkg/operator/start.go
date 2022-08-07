@@ -99,7 +99,7 @@ func Start(ctx context.Context) error {
 
 	ap.Store(&nodeLabels)
 
-	probeLoop := reconcile_v2.NewLoop("bumblebee-operator", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
+	probeLoop := reconcile_v2.NewLoop("probe-watcher", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
 	if err := probeLoop.RunReconciler(ctx, &probeReconciler{
 		progLoader: progLoader,
 		rps:        &runningProbes{probes: &sync.Map{}},

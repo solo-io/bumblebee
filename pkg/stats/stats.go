@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ebpfNamespace = "ebpf_solo_io"
+	ebpfNamespace = "ebpf_bumblebee_io"
 )
 
 type PrometheusOpts struct {

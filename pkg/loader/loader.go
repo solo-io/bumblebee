@@ -266,12 +266,13 @@ func (l *loader) WatchMaps(
 	for name, bpfMap := range opts.WatchedMaps {
 		name := name
 		bpfMap := bpfMap
+		labelKeys := bpfMap.Labels
 
 		switch bpfMap.mapType {
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
 			if isCounterMap(bpfMap.mapSpec) {
-				increment = l.metricsProvider.NewIncrementCounter(name, opts.AdditionalLabels, bpfMap.Labels...)
+				increment = l.metricsProvider.NewIncrementCounter(name, opts.AdditionalLabels, labelKeys...)
 			} else if isPrintMap(bpfMap.mapSpec) {
 				increment = &noop{}
 			}
@@ -283,7 +284,8 @@ func (l *loader) WatchMaps(
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
-			labelKeys := bpfMap.Labels
+			// labelKeys := bpfMap.Labels
+			// labelKeys = append(labelKeys, mapNameKey)
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap.mapSpec) {
 				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, opts.AdditionalLabels, labelKeys...)

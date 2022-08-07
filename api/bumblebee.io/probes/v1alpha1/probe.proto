@@ -20,6 +20,11 @@ message ProbeSpec {
   // If empty, the probe will run on all nodes.
   map<string, string> node_selector = 2; 
 
+  // TODO: Implement
   // prefix to add to all stats emitted by the probe.
-  string stat_prefix = 3;
+  // string stat_prefix = 3;
+  
+  // TODO: Implement
+  // Additional labels to add to all programs loaded by this probe
+  // map<string, string> additional_labels = 4; 
 }

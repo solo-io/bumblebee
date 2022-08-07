@@ -61,9 +61,5 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 
 	}
 
-	if strings.Compare(m.GetStatPrefix(), target.GetStatPrefix()) != 0 {
-		return false
-	}
-
 	return true
 }

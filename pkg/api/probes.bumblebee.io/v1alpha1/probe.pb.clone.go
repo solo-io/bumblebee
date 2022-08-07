@@ -44,7 +44,5 @@ func (m *ProbeSpec) Clone() proto.Message {
 		}
 	}
 
-	target.StatPrefix = m.GetStatPrefix()
-
 	return target
 }
