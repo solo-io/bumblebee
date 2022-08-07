@@ -50,15 +50,19 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 		return false
 	}
 
-	if len(m.GetNodeLabels()) != len(target.GetNodeLabels()) {
+	if len(m.GetNodeSelector()) != len(target.GetNodeSelector()) {
 		return false
 	}
-	for k, v := range m.GetNodeLabels() {
+	for k, v := range m.GetNodeSelector() {
 
-		if strings.Compare(v, target.GetNodeLabels()[k]) != 0 {
+		if strings.Compare(v, target.GetNodeSelector()[k]) != 0 {
 			return false
 		}
 
+	}
+
+	if strings.Compare(m.GetStatPrefix(), target.GetStatPrefix()) != 0 {
+		return false
 	}
 
 	return true

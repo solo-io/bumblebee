@@ -35,14 +35,16 @@ func (m *ProbeSpec) Clone() proto.Message {
 
 	target.ImageName = m.GetImageName()
 
-	if m.GetNodeLabels() != nil {
-		target.NodeLabels = make(map[string]string, len(m.GetNodeLabels()))
-		for k, v := range m.GetNodeLabels() {
+	if m.GetNodeSelector() != nil {
+		target.NodeSelector = make(map[string]string, len(m.GetNodeSelector()))
+		for k, v := range m.GetNodeSelector() {
 
-			target.NodeLabels[k] = v
+			target.NodeSelector[k] = v
 
 		}
 	}
+
+	target.StatPrefix = m.GetStatPrefix()
 
 	return target
 }

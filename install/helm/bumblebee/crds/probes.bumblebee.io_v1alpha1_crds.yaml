@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    crd.solo.io/specHash: 8d005a7eba46e1b6
+    crd.solo.io/specHash: c27085c9390144a3
   labels:
     app: bumblebee
     app.kubernetes.io/name: bumblebee
@@ -32,13 +32,16 @@ spec:
               imageName:
                 description: Image name of the probe to run.
                 type: string
-              nodeLabels:
+              nodeSelector:
                 additionalProperties:
                   type: string
                 description: |-
                   List of node labels to run the probe on.
                   If empty, the probe will run on all nodes.
                 type: object
+              statPrefix:
+                description: prefix to add to all stats emitted by the probe.
+                type: string
             type: object
         type: object
     served: true

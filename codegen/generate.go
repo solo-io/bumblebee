@@ -157,6 +157,15 @@ func run() error {
 								"probes",
 							},
 						},
+						{
+							Verbs: []string{
+								"get",
+							},
+							APIGroups: []string{""},
+							Resources: []string{
+								"nodes ",
+							},
+						},
 					},
 				},
 			},

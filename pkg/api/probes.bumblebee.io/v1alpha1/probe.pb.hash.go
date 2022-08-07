@@ -45,7 +45,7 @@ func (m *ProbeSpec) Hash(hasher hash.Hash64) (uint64, error) {
 	{
 		var result uint64
 		innerHash := fnv.New64()
-		for k, v := range m.GetNodeLabels() {
+		for k, v := range m.GetNodeSelector() {
 			innerHash.Reset()
 
 			if _, err = innerHash.Write([]byte(v)); err != nil {
@@ -63,6 +63,10 @@ func (m *ProbeSpec) Hash(hasher hash.Hash64) (uint64, error) {
 			return 0, err
 		}
 
+	}
+
+	if _, err = hasher.Write([]byte(m.GetStatPrefix())); err != nil {
+		return 0, err
 	}
 
 	return hasher.Sum64(), nil
