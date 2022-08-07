@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/solo-io/bumblebee/pkg/operator"
 	"github.com/solo-io/skv2/codegen"
 	"github.com/solo-io/skv2/codegen/model"
 	"github.com/solo-io/skv2/codegen/model/values"
@@ -122,7 +123,7 @@ func run() error {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "image-cache",
-									MountPath: "/tmp/image-cache",
+									MountPath: operator.ImageCache,
 								},
 							},
 							Args: []string{"operator"},
@@ -160,10 +161,12 @@ func run() error {
 						{
 							Verbs: []string{
 								"get",
+								"list",
+								"watch",
 							},
 							APIGroups: []string{""},
 							Resources: []string{
-								"nodes ",
+								"nodes",
 							},
 						},
 					},

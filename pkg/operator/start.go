@@ -19,16 +19,21 @@ import (
 	"github.com/solo-io/go-utils/contextutils"
 	"github.com/solo-io/skv2/pkg/reconcile"
 	reconcile_v2 "github.com/solo-io/skv2/pkg/reconcile/v2"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"oras.land/oras-go/pkg/content"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
+
+const ImageCache = "/tmp/image-cache"
 
 func Start(ctx context.Context) error {
 
@@ -58,11 +63,13 @@ func Start(ctx context.Context) error {
 	nodeLabels := map[string]string{}
 	nodeName, ok := os.LookupEnv("NODE_NAME")
 	if ok {
-		// TODO: But a watch on the node to update the nodeLabels live.
-		node := corev1.Node{}
-		if err := mgr.GetClient().Get(ctx, types.NamespacedName{
-			Name: nodeName,
-		}, &node); err != nil {
+
+		cli, err := v1.NewForConfig(cfg)
+		if err != nil {
+			return err
+		}
+		node, err := cli.Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
 			return err
 		}
 		nodeLabels = node.GetLabels()
@@ -103,7 +110,7 @@ func Start(ctx context.Context) error {
 	if err := probeLoop.RunReconciler(ctx, &probeReconciler{
 		progLoader: progLoader,
 		rps:        &runningProbes{probes: &sync.Map{}},
-		nodeLabels: &atomic.Pointer[map[string]string]{},
+		nodeLabels: ap,
 	}, &predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
@@ -125,14 +132,18 @@ func (r *probeReconciler) Reconcile(ctx context.Context, obj *probes_bumblebee_i
 		Name:      obj.Name,
 		Namespace: obj.Namespace,
 	}
+	logger := contextutils.LoggerFrom(contextutils.WithLoggerValues(ctx, zap.String("probe_id", key.String())))
+
 	selectionSet := labels.SelectorFromSet(labels.Set(obj.Spec.GetNodeSelector()))
 	if !selectionSet.Matches(labels.Set(*(r.nodeLabels.Load()))) {
+		logger.Debugf("not loading probe because it doesn't match node labels")
 		return reconcile.Result{}, nil
 	}
 
 	currentImg, ok := r.rps.ImageName(key)
 	if ok {
 		if currentImg == obj.Spec.GetImageName() {
+			logger.Debugf("not loading probe because as it is already running")
 			// Image is already running :)
 			return reconcile.Result{}, nil
 		}
@@ -141,7 +152,7 @@ func (r *probeReconciler) Reconcile(ctx context.Context, obj *probes_bumblebee_i
 		r.rps.Clean(key)
 	}
 	if err := r.startProgram(ctx, obj); err != nil {
-		fmt.Errorf("uh oh %v", err)
+		logger.Errorf("uh oh %v", err)
 		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, nil
@@ -150,6 +161,8 @@ func (r *probeReconciler) Reconcile(ctx context.Context, obj *probes_bumblebee_i
 // This function will be triggered when a probe is deleted.
 func (p *probeReconciler) ReconcileDeletion(ctx context.Context, req reconcile.Request) error {
 
+	logger := contextutils.LoggerFrom(contextutils.WithLoggerValues(ctx, zap.String("probe_id", req.NamespacedName.String())))
+	logger.Debugf("handling deletion of probe")
 	// Cancel the running program if found
 	p.rps.Clean(req.NamespacedName)
 	return nil
@@ -202,8 +215,9 @@ func getProgram(
 	prog, err := spec.TryFromLocal(
 		ctx,
 		progLocation,
-		"/tmp/image-cache",
+		ImageCache,
 		client,
+		// Handle Auth
 		content.RegistryOptions{},
 	)
 	if err != nil {

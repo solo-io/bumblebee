@@ -23,8 +23,17 @@ message ProbeSpec {
   // TODO: Implement
   // prefix to add to all stats emitted by the probe.
   // string stat_prefix = 3;
-  
+
   // TODO: Implement
   // Additional labels to add to all programs loaded by this probe
   // map<string, string> additional_labels = 4; 
+  
+  // TODO: Implement cosign verification
+  // oneof cosign {
+  //   // Path to file containing cosign key
+  //   string file_path = 5;
+
+  //   // Secret containing cosign key
+  //   string secret_name = 6;
+  // }
 }

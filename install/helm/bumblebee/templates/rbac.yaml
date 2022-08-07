@@ -25,9 +25,11 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - 'nodes '
+  - nodes
   verbs:
   - get
+  - list
+  - watch
 
 ---
 

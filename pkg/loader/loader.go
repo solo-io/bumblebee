@@ -159,14 +159,12 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 }
 
 func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
-	// TODO: add invariant checks on opts
-	contextutils.LoggerFrom(ctx).Info("enter Load()")
 	// on shutdown notify watcher we have no more entries to send
 	defer opts.Watcher.Close()
 
 	// bail out before loading stuff into kernel if context canceled
 	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("load entrypoint context is done")
+		contextutils.LoggerFrom(ctx).Warn("load entrypoint context is done")
 		return ctx.Err()
 	}
 
@@ -261,7 +259,6 @@ func (l *loader) WatchMaps(
 	ctx context.Context,
 	opts *WatchOpts,
 ) error {
-	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, bpfMap := range opts.WatchedMaps {
 		name := name
@@ -307,7 +304,6 @@ func (l *loader) WatchMaps(
 	}
 
 	err := eg.Wait()
-	contextutils.LoggerFrom(ctx).Info("after waitgroup")
 	return err
 }
 
@@ -334,21 +330,20 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
-		logger.Info("in ringbuf watcher, got done...")
+		logger.Infof("Closing ringbuf watcher (%s)...", name)
 		if err := rd.Close(); err != nil {
-			logger.Infof("error while closing ringbuf '%s' reader: %s", name, err)
+			logger.Warnf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
-		logger.Info("after reader.Close()")
 	}()
 
 	for {
 		record, err := rd.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
-				logger.Info("ringbuf closed...")
+				logger.Debug("ringbuf closed...")
 				return nil
 			}
-			logger.Infof("error while reading from ringbuf '%s' reader: %s", name, err)
+			logger.Warnf("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
