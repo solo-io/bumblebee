@@ -100,7 +100,6 @@ func run() error {
 				RenderValidationSchemas: true,
 				RenderTypes:             true,
 				RenderClients:           true,
-				RenderController:        true,
 				MockgenDirective:        true,
 			},
 		},
