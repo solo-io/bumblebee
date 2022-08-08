@@ -1,0 +1,5 @@
+bumblebee:
+  image:
+    registry: ghcr.io/solo-io/bumblebee
+    repository: bee
+    tag: 0.0.13-9-gdaf3654-dirty

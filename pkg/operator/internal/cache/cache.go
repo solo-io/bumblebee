@@ -114,6 +114,10 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	return nil
 }
 
+func (p *probeCache) Clean(key types.NamespacedName) {
+	p.probes.Clean(key)
+}
+
 type atomicProbeMap struct {
 	probes *sync.Map
 }
