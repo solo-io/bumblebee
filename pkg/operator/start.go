@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -13,6 +14,7 @@ import (
 	"github.com/solo-io/bumblebee/pkg/operator/internal/reconcilers"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	reconcile_v2 "github.com/solo-io/skv2/pkg/reconcile/v2"
+	skv2_stats "github.com/solo-io/skv2/pkg/stats"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -48,7 +50,8 @@ func Start(ctx context.Context) error {
 	}
 
 	mgr, err := manager.New(cfg, manager.Options{
-		Scheme: scheme.Scheme,
+		Scheme:             scheme.Scheme,
+		MetricsBindAddress: "0", // Disable their server as we're using our own.
 	})
 	if err != nil {
 		return err
@@ -90,18 +93,50 @@ func Start(ctx context.Context) error {
 	*/
 	probeCache := cache.NewProbeCache(ImageCache, node.GetLabels(), progLoader)
 
+	if err := mgr.Add(
+		manager.RunnableFunc(
+			func(ctx context.Context) error {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+					// Healthy
+					w.Write([]byte("healthy"))
+				})
+				skv2_stats.AddPprof(mux)
+				skv2_stats.AddMetrics(mux)
+				mux.Handle("/cache", probeCache)
+				server := http.Server{
+					Addr:    fmt.Sprintf(":%d", 9091),
+					Handler: mux,
+				}
+				go func() {
+					<-ctx.Done()
+					server.Shutdown(ctx)
+				}()
+				return server.ListenAndServe()
+			},
+		),
+	); err != nil {
+		return err
+	}
+
 	// Create and start the node reconciler
 	nodeLoop := reconcile_v2.NewLoop("node-watcher", mgr, &corev1.Node{}, reconcile_v2.Options{})
-	if err := nodeLoop.RunReconciler(ctx,
-		reconcilers.NewNodeReconciler(probeCache),
-		// Only run if it's our node AND the node's labels have changed.
-		predicate.And(
-			predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return e.ObjectNew.GetName() == nodeName
-				},
+	if err := mgr.Add(
+		manager.RunnableFunc(
+			func(ctx context.Context) error {
+				return nodeLoop.RunReconciler(ctx,
+					reconcilers.NewNodeReconciler(probeCache),
+					// Only run if it's our node AND the node's labels have changed.
+					predicate.And(
+						predicate.Funcs{
+							UpdateFunc: func(e event.UpdateEvent) bool {
+								return e.ObjectNew.GetName() == nodeName
+							},
+						},
+						predicate.LabelChangedPredicate{},
+					),
+				)
 			},
-			predicate.LabelChangedPredicate{},
 		),
 	); err != nil {
 		return err
@@ -109,10 +144,16 @@ func Start(ctx context.Context) error {
 
 	// Create and start the probe reconciler
 	probeLoop := reconcile_v2.NewLoop("probe-watcher", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
-	if err := probeLoop.RunReconciler(
-		ctx,
-		reconcilers.NewProbeReconciler(probeCache),
-		predicate.GenerationChangedPredicate{},
+	if err := mgr.Add(
+		manager.RunnableFunc(
+			func(ctx context.Context) error {
+				return probeLoop.RunReconciler(
+					ctx,
+					reconcilers.NewProbeReconciler(probeCache),
+					predicate.GenerationChangedPredicate{},
+				)
+			},
+		),
 	); err != nil {
 		return err
 	}

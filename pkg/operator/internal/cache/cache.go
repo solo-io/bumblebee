@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -120,6 +122,16 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 
 func (p *probeCache) Clean(key types.NamespacedName) {
 	p.probes.Clean(key)
+}
+
+// TODO: make this output JSON so it's consumbale via API
+func (p *probeCache) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	builder := strings.Builder{}
+	p.probes.Range(func(key types.NamespacedName, probe *cachedProbe) bool {
+		builder.WriteString(fmt.Sprintf("resource: (%s), running: (%t)\n", key.String(), probe.running))
+		return true
+	})
+	w.Write([]byte(builder.String()))
 }
 
 type atomicProbeMap struct {
