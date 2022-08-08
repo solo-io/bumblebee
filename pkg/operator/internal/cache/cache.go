@@ -93,29 +93,20 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	// In practice, this means that only spec changes to the probe CR will trigger this function.
 	// Currently on generation change a new probe needs to be started, with the exception of one case.
 	// NodeSelector has changed, but the node's labels still match.
-	if existing, ok := r.probes.Probe(key); ok {
-		contextutils.LoggerFrom(ctx).Debug("checking existing probe for potential update")
-		// If the probe now has a new image, cancel the old one, and start a new one.
-		if existing.probe.Spec.Image != probe.Spec.Image {
-			contextutils.LoggerFrom(ctx).Debug("Existing probe has a different image, closing old one, and starting new one")
-			r.probes.Clean(key)
-			// Attempt to restart program
-			if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
-				return err
-			}
+	if _, ok := r.probes.Probe(key); ok {
+		contextutils.LoggerFrom(ctx).Debug("Restarting probe as the generation has changed")
+		r.probes.Clean(key)
+		// Attempt to restart program, if it fails, return error.
+	}
+	// Check if the node selcetor matches the node labels
+	if labels.SelectorFromSet(probe.Spec.NodeSelector).Matches(labels.Set(currentLabels)) {
+		// If so attempt to start the program
+		contextutils.LoggerFrom(ctx).Debug("Attempting to start program")
+		if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
+			return err
 		}
-
 	} else {
-		// Check if the node selcetor matches the node labels
-		if labels.SelectorFromSet(probe.Spec.NodeSelector).Matches(labels.Set(currentLabels)) {
-			// If so attempt to start the program
-			contextutils.LoggerFrom(ctx).Debug("Attempting to start program")
-			if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
-				return err
-			}
-		} else {
-			contextutils.LoggerFrom(ctx).Debug("Node selector doesn't match current node, not starting program")
-		}
+		contextutils.LoggerFrom(ctx).Debug("Node selector doesn't match current node, not starting program")
 	}
 
 	return nil
