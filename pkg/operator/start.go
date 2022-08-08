@@ -29,9 +29,9 @@ import (
 const ImageCache = "/tmp/image-cache"
 
 // TODO:
-// 1. Use our stats server and add all stats to that. Controller runtime and our app.
-// 2. Cosign verification for the images.
-// 3. Authentication for the images.
+// 1. Cosign verification for the images.
+// 2. Authentication for the images.
+// 3. Cache images locally.
 func Start(ctx context.Context) error {
 
 	// Allow the current process to lock memory for eBPF resources.
@@ -103,7 +103,7 @@ func Start(ctx context.Context) error {
 				})
 				skv2_stats.AddPprof(mux)
 				skv2_stats.AddMetrics(mux)
-				mux.Handle("/cache", probeCache)
+				mux.Handle("/probes", probeCache)
 				server := http.Server{
 					Addr:    fmt.Sprintf(":%d", 9091),
 					Handler: mux,
