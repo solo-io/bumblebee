@@ -16,7 +16,7 @@ endif
 # This tag has the refs/tags prefix, which we need to remove here.
 export VERSION ?= $(shell echo $(TAGGED_VERSION) | sed -e "s/^refs\/tags\///" | cut -c 2-)
 
-LDFLAGS := "-X github.com/solo-io/bumblebee/pkg/internal/version.Version=$(VERSION)"
+LDFLAGS := -X github.com/solo-io/bumblebee/internal/version.Version=$(VERSION)
 GCFLAGS := all="-N -l"
 
 SOURCES := $(shell find . -name "*.go" | grep -v test.go)
@@ -37,7 +37,7 @@ export GOBIN:=$(DEPSGOBIN)
 # Generate go code from protos
 .PHONY: generated-code
 generated-code:
-	go run -ldflags=$(LDFLAGS) codegen/generate.go
+	go run -ldflags="$(LDFLAGS)" codegen/generate.go
 	$(DEPSGOBIN)/goimports -w $(shell ls -d */ | grep -v vendor)
 
 # Go dependencies download
@@ -100,8 +100,10 @@ release-examples: activeconn tcpconnect exitsnoop oomkill capable tcpconnlat
 #----------------------------------------------------------------------------------
 
 
+COMPRESSION_FLAGS=-s -w
+
 $(OUTDIR)/bee-linux-amd64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ bee/main.go
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ bee/main.go
 
 .PHONY: bee-linux-amd64
 bee-linux-amd64: $(OUTDIR)/bee-linux-amd64.sha256
@@ -109,7 +111,7 @@ $(OUTDIR)/bee-linux-amd64.sha256: $(OUTDIR)/bee-linux-amd64
 	sha256sum $(OUTDIR)/bee-linux-amd64 > $@
 
 $(OUTDIR)/bee-linux-arm64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) -o $@ bee/main.go
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ bee/main.go
 
 .PHONY: bee-linux-arm64
 bee-linux-arm64: $(OUTDIR)/bee-linux-arm64.sha256
@@ -121,7 +123,7 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 
 .PHONY: install-cli
 install-cli:
-	CGO_ENABLED=0 go install -ldflags=$(LDFLAGS) -gcflags=$(GCFLAGS) ./bee
+	CGO_ENABLED=0 go install -ldflags="$(LDFLAGS)" -gcflags=$(GCFLAGS) ./bee
 
 BEE_DIR := bee
 $(OUTDIR)/Dockerfile-bee: $(BEE_DIR)/Dockerfile-bee
@@ -148,3 +150,17 @@ endif
 .PHONY: regen-vmlinux
 regen-vmlinux:
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > builder/vmlinux.h
+
+##----------------------------------------------------------------------------------
+## Helm
+##----------------------------------------------------------------------------------
+
+.PHONY: upload-github-release-assets
+upload-github-release-assets: build-cli
+ifeq ($(RELEASE),"true")
+	go run ci/release_assets.go
+endif
+
+.PHONY: release-helm
+release-helm: generated-code
+

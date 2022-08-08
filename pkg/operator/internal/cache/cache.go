@@ -86,6 +86,10 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	key := types.NamespacedName{Name: probe.Name, Namespace: probe.Namespace}
 	currentLabels := *(r.nodeLabels.Load())
 
+	// We have a predicate on updates such that only generation changes will trigger this function.
+	// In practice, this means that only spec changes to the probe CR will trigger this function.
+	// Currently on generation change a new probe needs to be started, with the exception of one case.
+	// NodeSelector has changed, but the node's labels still match.
 	if existing, ok := r.probes.Probe(key); ok {
 		contextutils.LoggerFrom(ctx).Debug("checking existing probe for potential update")
 		// If the probe now has a new image, cancel the old one, and start a new one.

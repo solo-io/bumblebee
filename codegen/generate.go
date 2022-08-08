@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/solo-io/bumblebee/internal/version"
 	"github.com/solo-io/bumblebee/pkg/operator"
 	"github.com/solo-io/skv2/codegen"
 	"github.com/solo-io/skv2/codegen/model"
@@ -75,8 +76,7 @@ func run() error {
 					Group:   "probes.bumblebee.io",
 					Version: "v1alpha1",
 				},
-				RenderManifests: true,
-				// AddChartVersion:         GetLatestVersion(),
+				RenderManifests:         true,
 				RenderValidationSchemas: true,
 				RenderTypes:             true,
 				RenderClients:           true,
@@ -90,7 +90,7 @@ func run() error {
 				ApiVersion:  "v2",
 				Description: "Bumblebee is a tool for collecting and analyzing system metrics.",
 				Name:        "bumblebee",
-				Version:     "v0.0.1",
+				Version:     version.Version,
 				Home:        "github.com/solo-io/bumblebee",
 			},
 			Operators: []model.Operator{

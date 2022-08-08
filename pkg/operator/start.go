@@ -109,7 +109,11 @@ func Start(ctx context.Context) error {
 
 	// Create and start the probe reconciler
 	probeLoop := reconcile_v2.NewLoop("probe-watcher", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
-	if err := probeLoop.RunReconciler(ctx, reconcilers.NewProbeReconciler(probeCache)); err != nil {
+	if err := probeLoop.RunReconciler(
+		ctx,
+		reconcilers.NewProbeReconciler(probeCache),
+		predicate.GenerationChangedPredicate{},
+	); err != nil {
 		return err
 	}
 
