@@ -188,7 +188,7 @@ func startProgram(
 	cacheDir string,
 ) error {
 
-	rd, err := getProgram(ctx, obj.Spec.GetImage(), cacheDir)
+	rd, err := getProgram(ctx, obj.Spec.GetImagePullPolicy(), obj.Spec.GetImage(), cacheDir)
 	if err != nil {
 		return err
 	}
@@ -229,17 +229,43 @@ func startProgram(
 
 func getProgram(
 	ctx context.Context,
+	pullPolicy probes_bumblebee_io_v1alpha1.ProbeSpec_PullPolicy,
 	progLocation, cacheDir string,
 ) (io.ReaderAt, error) {
 	client := spec.NewEbpfOCICLient()
-	prog, err := spec.TryFromLocal(
-		ctx,
-		progLocation,
-		cacheDir,
-		client,
-		// Handle Auth
-		content.RegistryOptions{},
-	)
+	var prog *spec.EbpfPackage
+	var err error
+	switch pullPolicy {
+	case probes_bumblebee_io_v1alpha1.ProbeSpec_Always:
+		prog, err = spec.Pull(
+			ctx,
+			progLocation,
+			cacheDir,
+			client,
+			// Handle Auth
+			content.RegistryOptions{},
+		)
+	case probes_bumblebee_io_v1alpha1.ProbeSpec_IfNotPresent:
+		prog, err = spec.TryFromLocal(
+			ctx,
+			progLocation,
+			cacheDir,
+			client,
+			// Handle Auth
+			content.RegistryOptions{},
+		)
+	case probes_bumblebee_io_v1alpha1.ProbeSpec_Never:
+		prog, err = spec.NeverPull(
+			ctx,
+			progLocation,
+			cacheDir,
+			client,
+			// Handle Auth
+			content.RegistryOptions{},
+		)
+	default:
+		return nil, fmt.Errorf("unsupported pull policy: %s", pullPolicy)
+	}
 	if err != nil {
 		if err, ok := err.(interface {
 			StackTrace() errors.StackTrace

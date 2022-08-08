@@ -65,5 +65,10 @@ func (m *ProbeSpec) Hash(hasher hash.Hash64) (uint64, error) {
 
 	}
 
+	err = binary.Write(hasher, binary.LittleEndian, m.GetImagePullPolicy())
+	if err != nil {
+		return 0, err
+	}
+
 	return hasher.Sum64(), nil
 }

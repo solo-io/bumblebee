@@ -13,6 +13,34 @@ func TryFromLocal(
 	client EbpfOCICLient,
 	auth content.RegistryOptions,
 ) (*EbpfPackage, error) {
+	return pullImage(ctx, ref, localStorageDir, client, auth, true, true)
+}
+
+func Pull(
+	ctx context.Context,
+	ref, localStorageDir string,
+	client EbpfOCICLient,
+	auth content.RegistryOptions,
+) (*EbpfPackage, error) {
+	return pullImage(ctx, ref, localStorageDir, client, auth, false, true)
+}
+
+func NeverPull(
+	ctx context.Context,
+	ref, localStorageDir string,
+	client EbpfOCICLient,
+	auth content.RegistryOptions,
+) (*EbpfPackage, error) {
+	return pullImage(ctx, ref, localStorageDir, client, auth, false, false)
+}
+
+func pullImage(
+	ctx context.Context,
+	ref, localStorageDir string,
+	client EbpfOCICLient,
+	auth content.RegistryOptions,
+	tryFromLocal, attemptToPull bool,
+) (*EbpfPackage, error) {
 
 	if localStorageDir == "" {
 		localStorageDir = EbpfImageDir
@@ -22,29 +50,34 @@ func TryFromLocal(
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := localRegistry.Resolve(ctx, ref); err == nil {
-		// If we find the image locally, return it
-		if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
-			return prog, nil
+	if tryFromLocal {
+		if _, _, err := localRegistry.Resolve(ctx, ref); err == nil {
+			// If we find the image locally, return it
+			if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
+				return prog, nil
+			}
 		}
 	}
 
-	remoteRegistry, err := content.NewRegistry(auth)
-	if err != nil {
-		return nil, err
-	}
+	if attemptToPull {
 
-	_, err = oras.Copy(
-		ctx,
-		remoteRegistry,
-		ref,
-		localRegistry,
-		"",
-		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
-		oras.WithPullByBFS,
-	)
-	if err != nil {
-		return nil, err
+		remoteRegistry, err := content.NewRegistry(auth)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = oras.Copy(
+			ctx,
+			remoteRegistry,
+			ref,
+			localRegistry,
+			"",
+			oras.WithAllowedMediaTypes(AllowedMediaTypes()),
+			oras.WithPullByBFS,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// program should now be in the local cache after above copy

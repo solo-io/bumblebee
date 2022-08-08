@@ -61,5 +61,9 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 
 	}
 
+	if m.GetImagePullPolicy() != target.GetImagePullPolicy() {
+		return false
+	}
+
 	return true
 }

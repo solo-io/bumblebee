@@ -36,4 +36,12 @@ message ProbeSpec {
   //   // Secret containing cosign key
   //   string secret_name = 6;
   // }
+
+  enum PullPolicy {
+    IfNotPresent = 0;
+    Always = 1;
+    Never = 2;
+  }
+
+  PullPolicy image_pull_policy = 7;
 }

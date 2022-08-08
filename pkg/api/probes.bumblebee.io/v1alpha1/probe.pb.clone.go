@@ -44,5 +44,7 @@ func (m *ProbeSpec) Clone() proto.Message {
 		}
 	}
 
+	target.ImagePullPolicy = m.GetImagePullPolicy()
+
 	return target
 }
