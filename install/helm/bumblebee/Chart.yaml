@@ -4,4 +4,4 @@ apiVersion: v2
 description: Bumblebee is a tool for collecting and analyzing system metrics.
 home: github.com/solo-io/bumblebee
 name: bumblebee
-version: 0.0.13-17-g495ffcb-dirty
+version: 0.0.13-18-g5aafe97-dirty

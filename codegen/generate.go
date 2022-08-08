@@ -130,7 +130,7 @@ func run() error {
 								},
 							},
 							Image: values.Image{
-								Tag:        "latest",
+								Tag:        version.Version,
 								Repository: "bee",
 								Registry:   "ghcr.io/solo-io/bumblebee",
 							},

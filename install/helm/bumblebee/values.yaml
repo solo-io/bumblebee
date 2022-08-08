@@ -14,7 +14,7 @@ bumblebee:
   image:
     registry: ghcr.io/solo-io/bumblebee
     repository: bee
-    tag: latest
+    tag: 0.0.13-18-g5aafe97-dirty
   ports:
     stats: 9001
   runAsUser: 10101
