@@ -200,6 +200,7 @@ func startProgram(
 		running: true,
 	})
 	go func() {
+		contextutils.LoggerFrom(nestedCtx).Debug("Starting program")
 		// always cancel the context to prevent leaking goroutines
 		defer probeMap.Clean(key)
 		if err := progLoader.Load(nestedCtx, loaderOpts); err != nil && !errors.Is(err, context.Canceled) {

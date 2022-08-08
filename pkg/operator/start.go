@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -70,10 +71,7 @@ func Start(ctx context.Context) error {
 
 	// The stats provider is a factory for creating prometheus collectors used
 	// by the prog_loader
-	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
-	if err != nil {
-		return err
-	}
+	promProvider := stats.NewPrometheusMetricsProvider(ctx, metrics.Registry)
 
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
@@ -111,7 +109,7 @@ func Start(ctx context.Context) error {
 
 	// Create and start the probe reconciler
 	probeLoop := reconcile_v2.NewLoop("probe-watcher", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
-	if err := probeLoop.RunReconciler(ctx, reconcilers.NewProbeReconciler(probeCache), &predicate.GenerationChangedPredicate{}); err != nil {
+	if err := probeLoop.RunReconciler(ctx, reconcilers.NewProbeReconciler(probeCache)); err != nil {
 		return err
 	}
 

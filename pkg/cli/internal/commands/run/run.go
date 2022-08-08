@@ -102,10 +102,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
 
-	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
-	if err != nil {
-		return err
-	}
+	promProvider := stats.NewPrometheusMetricsProvider(ctx, nil)
 
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),

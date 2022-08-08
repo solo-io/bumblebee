@@ -2,64 +2,23 @@ package stats
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"github.com/solo-io/go-utils/contextutils"
 )
 
 const (
 	ebpfNamespace = "ebpf_bumblebee_io"
 )
 
-type PrometheusOpts struct {
-	Port        uint32
-	MetricsPath string
-	Registry    *prometheus.Registry
-}
-
-func (p *PrometheusOpts) initDefaults() {
-	if p.Port == 0 {
-		p.Port = 9091
+func NewPrometheusMetricsProvider(ctx context.Context, registry prometheus.Registerer) MetricsProvider {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
 	}
-	if p.MetricsPath == "" {
-		p.MetricsPath = "/metrics"
-	}
-}
-
-func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (MetricsProvider, error) {
-	opts.initDefaults()
-
-	serveMux := http.NewServeMux()
-	handler := promhttp.Handler()
-	if opts.Registry != nil {
-		handler = promhttp.InstrumentMetricHandler(opts.Registry, promhttp.HandlerFor(opts.Registry, promhttp.HandlerOpts{}))
-	}
-	serveMux.Handle(opts.MetricsPath, handler)
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", opts.Port),
-		Handler: serveMux,
-	}
-	go func() {
-		err := server.ListenAndServe()
-		if err != nil {
-			contextutils.LoggerFrom(ctx).Errorf("could not listen for Prometheus metrics: %v", err)
-		}
-	}()
-
-	go func() {
-		<-ctx.Done()
-		server.Close()
-	}()
-
 	return &metricsProvider{
-		registry: opts.Registry,
-	}, nil
+		registry: registry,
+	}
 }
 
 type MetricsProvider interface {
@@ -83,7 +42,7 @@ type SetInstrument interface {
 }
 
 type metricsProvider struct {
-	registry *prometheus.Registry
+	registry prometheus.Registerer
 }
 
 func (m *metricsProvider) NewSetCounter(name string, additionalLabels map[string]string, labelKeys ...string) SetInstrument {
