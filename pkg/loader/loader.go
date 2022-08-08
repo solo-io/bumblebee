@@ -197,7 +197,6 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, prog := range spec.Programs {
 		select {
 		case <-ctx.Done():
-			contextutils.LoggerFrom(ctx).Info("while loading progs context is done")
 			return ctx.Err()
 		default:
 			switch prog.Type {

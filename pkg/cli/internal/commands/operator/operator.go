@@ -7,11 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/go-logr/zapr"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/operator"
 	"github.com/solo-io/go-utils/contextutils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type operatorOptions struct {
@@ -45,21 +48,20 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 		fmt.Println("got sigterm or interrupt")
 		cancel()
 	}()
-
-	var sugaredLogger *zap.SugaredLogger
-	if debug {
-		cfg := zap.NewDevelopmentConfig()
-		cfg.OutputPaths = []string{"debug.log"}
-		cfg.ErrorOutputPaths = []string{"debug.log"}
-		logger, err := cfg.Build()
-		if err != nil {
-			return nil, fmt.Errorf("couldn't create zap logger: '%w'", err)
-		}
-		sugaredLogger = logger.Sugar()
-	} else {
-		sugaredLogger = zap.NewNop().Sugar()
+	cfg := zap.NewDevelopmentConfig()
+	cfg.OutputPaths = []string{"stdout"}
+	cfg.ErrorOutputPaths = []string{"stdout"}
+	logger, err := cfg.Build()
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create zap logger: '%w'", err)
 	}
-	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
+
+	// controller-runtime
+	zapLogger := zapr.NewLogger(logger)
+	log.SetLogger(zapLogger)
+	klog.SetLogger(zapLogger)
+
+	contextutils.SetFallbackLogger(logger.Sugar())
 
 	return ctx, nil
 }

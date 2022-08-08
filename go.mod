@@ -25,6 +25,7 @@ require (
 require (
 	github.com/docker/cli v20.10.11+incompatible
 	github.com/docker/docker v20.10.11+incompatible
+	github.com/go-logr/zapr v1.2.3
 	github.com/golang/protobuf v1.5.2
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/pkg/errors v0.9.1
@@ -34,6 +35,7 @@ require (
 	k8s.io/api v0.23.7
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v0.23.7
+	k8s.io/klog/v2 v2.60.1
 	sigs.k8s.io/controller-runtime v0.11.2
 )
 
@@ -68,7 +70,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gertd/go-pluralize v0.1.1 // indirect
-	github.com/go-logr/logr v1.2.0 // indirect
+	github.com/go-logr/logr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
@@ -149,7 +151,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/apiextensions-apiserver v0.23.5 // indirect
 	k8s.io/component-base v0.23.7 // indirect
-	k8s.io/klog/v2 v2.60.1 // indirect
 	k8s.io/kube-openapi v0.23.5 // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
@@ -174,3 +175,5 @@ replace (
 	k8s.io/kubectl => k8s.io/kubectl v0.23.7
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.11.2
 )
+
+replace github.com/solo-io/skv2 => ../skv2
