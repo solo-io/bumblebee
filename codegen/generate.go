@@ -16,6 +16,7 @@ import (
 	"github.com/solo-io/skv2/codegen/util"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -65,8 +66,27 @@ func run() error {
 								Name: "ProbeSpec",
 							},
 						},
-						ShortNames: []string{"pr"},
+						ShortNames: []string{"pr", "probe"},
 						Categories: []string{"solo-io", "bumbebee"},
+						AdditionalPrinterColumns: []apiextv1.CustomResourceColumnDefinition{
+							{
+								Name:        "IMAGE",
+								Type:        "string",
+								JSONPath:    ".spec.image",
+								Description: "The image tag of the probe",
+							},
+							{
+								Name:        "NODE SELECTOR",
+								Type:        "string",
+								JSONPath:    ".spec.nodeSelector",
+								Description: "Node selector for the probe",
+							},
+							{
+								Name:     "CREATION TIMESTAMP",
+								Type:     "date",
+								JSONPath: ".metadata.creationTimestamp",
+							},
+						},
 					},
 				},
 				RenderFieldJsonDeepcopy: true,

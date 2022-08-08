@@ -33,7 +33,7 @@ func (m *ProbeSpec) Clone() proto.Message {
 	}
 	target = &ProbeSpec{}
 
-	target.ImageName = m.GetImageName()
+	target.Image = m.GetImage()
 
 	if m.GetNodeSelector() != nil {
 		target.NodeSelector = make(map[string]string, len(m.GetNodeSelector()))

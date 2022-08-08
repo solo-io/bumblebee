@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    crd.solo.io/specHash: 953dbbb07c834a5f
+    crd.solo.io/specHash: e9e70f6835ef0285
   labels:
     app: bumblebee
     app.kubernetes.io/name: bumblebee
@@ -20,16 +20,29 @@ spec:
     plural: probes
     shortNames:
     - pr
+    - probe
     singular: probe
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The image tag of the probe
+      jsonPath: .spec.image
+      name: IMAGE
+      type: string
+    - description: Node selector for the probe
+      jsonPath: .spec.nodeSelector
+      name: NODE SELECTOR
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: CREATION TIMESTAMP
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
           spec:
             properties:
-              imageName:
+              image:
                 description: Image name of the probe to run.
                 type: string
               nodeSelector:

@@ -38,7 +38,7 @@ func (m *ProbeSpec) Hash(hasher hash.Hash64) (uint64, error) {
 		return 0, err
 	}
 
-	if _, err = hasher.Write([]byte(m.GetImageName())); err != nil {
+	if _, err = hasher.Write([]byte(m.GetImage())); err != nil {
 		return 0, err
 	}
 

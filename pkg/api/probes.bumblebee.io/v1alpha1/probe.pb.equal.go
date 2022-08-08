@@ -46,7 +46,7 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 		return false
 	}
 
-	if strings.Compare(m.GetImageName(), target.GetImageName()) != 0 {
+	if strings.Compare(m.GetImage(), target.GetImage()) != 0 {
 		return false
 	}
 

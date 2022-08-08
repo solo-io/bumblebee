@@ -14,7 +14,7 @@ option (extproto.clone_all) = true;
 message ProbeSpec {
 
   // Image name of the probe to run.
-  string image_name = 1;
+  string image = 1;
 
   // List of node labels to run the probe on.
   // If empty, the probe will run on all nodes.

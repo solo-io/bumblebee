@@ -93,7 +93,7 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	if existing, ok := r.probes.Probe(key); ok {
 		contextutils.LoggerFrom(ctx).Debug("checking existing probe for potential update")
 		// If the probe now has a new image, cancel the old one, and start a new one.
-		if existing.probe.Spec.ImageName != probe.Spec.ImageName {
+		if existing.probe.Spec.Image != probe.Spec.Image {
 			contextutils.LoggerFrom(ctx).Debug("Existing probe has a different image, closing old one, and starting new one")
 			r.probes.Clean(key)
 			// Attempt to restart program
@@ -176,7 +176,7 @@ func startProgram(
 	cacheDir string,
 ) error {
 
-	rd, err := getProgram(ctx, obj.Spec.GetImageName(), cacheDir)
+	rd, err := getProgram(ctx, obj.Spec.GetImage(), cacheDir)
 	if err != nil {
 		return err
 	}
