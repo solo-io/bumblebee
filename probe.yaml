@@ -1,7 +1,0 @@
-apiVersion: probes.bumblebee.io/v1alpha1
-kind: Probe
-metadata:
-  name: bumblebee
-  namespace: default
-spec:
-  imageName: ghcr.io/solo-io/bumblebee/tcpconnect:0.0.13

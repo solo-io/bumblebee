@@ -25,6 +25,10 @@ import (
 
 const ImageCache = "/tmp/image-cache"
 
+// TODO:
+// 1. Use our stats server and add all stats to that. Controller runtime and our app.
+// 2. Cosign verification for the images.
+// 3. Authentication for the images.
 func Start(ctx context.Context) error {
 
 	// Allow the current process to lock memory for eBPF resources.
