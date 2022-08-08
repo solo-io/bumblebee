@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	probes_bumblebee_io_v1alpha1 "github.com/solo-io/bumblebee/pkg/api/probes.bumblebee.io/v1alpha1"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -18,12 +19,22 @@ import (
 	"oras.land/oras-go/pkg/content"
 )
 
+// ProbeCache is a component resonsible for keeping track of probe resources.
 type ProbeCache interface {
+	// UpdateAll takes in a list of node labels and compares them against
+	// The cached probe node selector. If the node selector matches the
+	// current node, and isn't yet running, start it. Likewise if it's
+	// running but shouldn't be, cancel it.
 	UpdateAll(ctx context.Context, nodeLabels map[string]string) error
+	// UpdateProbe adds or updates a single probe's lifecycle status in the cache.
+	// If the image name has changed from it's existing one, the old one will be
+	// cancelled, and the new one started.
 	UpdateProbe(ctx context.Context, probe *probes_bumblebee_io_v1alpha1.Probe) error
+	// Clean removes a probe from the cache. It will stop the probe if it is running.
 	Clean(key types.NamespacedName)
 }
 
+// NewProbeCache creates a new probe cache.
 func NewProbeCache(
 	cacheDir string,
 	nodeLabels map[string]string,
@@ -32,7 +43,7 @@ func NewProbeCache(
 	ap := &atomic.Pointer[map[string]string]{}
 	ap.Store(&nodeLabels)
 	return &probeCache{
-		probes:     &sync.Map{},
+		probes:     &atomicProbeMap{probes: &sync.Map{}},
 		nodeLabels: ap,
 		progLoader: progLoader,
 	}
@@ -40,38 +51,49 @@ func NewProbeCache(
 
 type probeCache struct {
 	cacheDir   string
-	probes     *sync.Map
+	probes     *atomicProbeMap
 	nodeLabels *atomic.Pointer[map[string]string]
 	progLoader loader.Loader
 }
 
 func (r *probeCache) UpdateAll(ctx context.Context, nodeLabels map[string]string) error {
 	r.nodeLabels.Store(&nodeLabels)
-	r.probes.Range(func(key, value interface{}) bool {
-		rp := value.(*cachedProbe)
+	var multierr *multierror.Error
+	r.probes.Range(func(key types.NamespacedName, probe *cachedProbe) bool {
 		// If the probe node selector matches the current node, and isn't yet running, start it.
-		if labels.SelectorFromSet(rp.probe.Spec.NodeSelector).Matches(labels.Set(nodeLabels)) && !rp.running {
+		if labels.SelectorFromSet(probe.probe.Spec.NodeSelector).Matches(labels.Set(nodeLabels)) && !probe.running {
+			if err := startProgram(ctx, probe.probe, r.progLoader, r.probes, r.cacheDir); err != nil {
+				multierr = multierror.Append(err)
+			}
+			// Continue iteration
+			return true
+		}
 
+		// If the node selector matches the current node, and is running, cancel it.
+		if !labels.SelectorFromSet(probe.probe.Spec.NodeSelector).Matches(labels.Set(nodeLabels)) && probe.running {
+			r.probes.Clean(key)
+			// Continue iteration
+			return true
 		}
 
 		// Always finish list
 		return true
 	})
-	return nil
+	return multierr.ErrorOrNil()
 }
 
 func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io_v1alpha1.Probe) error {
 	key := types.NamespacedName{Name: probe.Name, Namespace: probe.Namespace}
 	currentLabels := *(r.nodeLabels.Load())
 
-	if existing, ok := r.Probe(key); ok {
+	if existing, ok := r.probes.Probe(key); ok {
 		contextutils.LoggerFrom(ctx).Debug("checking existing probe for potential update")
 		// If the probe now has a new image, cancel the old one, and start a new one.
 		if existing.probe.Spec.ImageName != probe.Spec.ImageName {
 			contextutils.LoggerFrom(ctx).Debug("Existing probe has a different image, closing old one, and starting new one")
-			r.Clean(key)
+			r.probes.Clean(key)
 			// Attempt to restart program
-			if err := r.startProgram(ctx, probe); err != nil {
+			if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
 				return err
 			}
 		}
@@ -81,7 +103,7 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 		if labels.SelectorFromSet(probe.Spec.NodeSelector).Matches(labels.Set(currentLabels)) {
 			// If so attempt to start the program
 			contextutils.LoggerFrom(ctx).Debug("Attempting to start program")
-			if err := r.startProgram(ctx, probe); err != nil {
+			if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
 				return err
 			}
 		} else {
@@ -92,11 +114,21 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	return nil
 }
 
-func (r *probeCache) Store(key types.NamespacedName, rp *cachedProbe) {
+type atomicProbeMap struct {
+	probes *sync.Map
+}
+
+func (r *atomicProbeMap) Range(f func(key types.NamespacedName, val *cachedProbe) bool) {
+	r.probes.Range(func(key, value interface{}) bool {
+		return f(key.(types.NamespacedName), value.(*cachedProbe))
+	})
+}
+
+func (r *atomicProbeMap) Store(key types.NamespacedName, rp *cachedProbe) {
 	r.probes.Store(key, rp)
 }
 
-func (r *probeCache) Clean(key types.NamespacedName) {
+func (r *atomicProbeMap) Clean(key types.NamespacedName) {
 	val, ok := r.probes.LoadAndDelete(key)
 	if !ok {
 		return
@@ -105,9 +137,13 @@ func (r *probeCache) Clean(key types.NamespacedName) {
 	if rp.running {
 		rp.cancel()
 	}
+
+	rp.running = false
+	rp.cancel = nil
+
 }
 
-func (r *probeCache) Probe(key types.NamespacedName) (*cachedProbe, bool) {
+func (r *atomicProbeMap) Probe(key types.NamespacedName) (*cachedProbe, bool) {
 	val, ok := r.probes.Load(key)
 	if !ok {
 		return nil, false
@@ -124,13 +160,19 @@ type cachedProbe struct {
 	cancel context.CancelFunc
 }
 
-func (p *probeCache) startProgram(ctx context.Context, obj *probes_bumblebee_io_v1alpha1.Probe) error {
+func startProgram(
+	ctx context.Context,
+	obj *probes_bumblebee_io_v1alpha1.Probe,
+	progLoader loader.Loader,
+	probeMap *atomicProbeMap,
+	cacheDir string,
+) error {
 
-	rd, err := p.getProgram(ctx, obj.Spec.GetImageName())
+	rd, err := getProgram(ctx, obj.Spec.GetImageName(), cacheDir)
 	if err != nil {
 		return err
 	}
-	parsedELF, err := p.progLoader.Parse(ctx, rd)
+	parsedELF, err := progLoader.Parse(ctx, rd)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
@@ -148,15 +190,15 @@ func (p *probeCache) startProgram(ctx context.Context, obj *probes_bumblebee_io_
 
 	nestedCtx, cancel := context.WithCancel(ctx)
 
-	p.Store(key, &cachedProbe{
+	probeMap.Store(key, &cachedProbe{
 		probe:   obj.DeepCopy(),
 		cancel:  cancel,
 		running: true,
 	})
 	go func() {
 		// always cancel the context to prevent leaking goroutines
-		defer p.Clean(key)
-		if err := p.progLoader.Load(nestedCtx, loaderOpts); err != nil && !errors.Is(err, context.Canceled) {
+		defer probeMap.Clean(key)
+		if err := progLoader.Load(nestedCtx, loaderOpts); err != nil && !errors.Is(err, context.Canceled) {
 			contextutils.LoggerFrom(nestedCtx).Errorf("could not load BPF program: %v", err)
 		}
 	}()
@@ -164,15 +206,15 @@ func (p *probeCache) startProgram(ctx context.Context, obj *probes_bumblebee_io_
 	return nil
 }
 
-func (p *probeCache) getProgram(
+func getProgram(
 	ctx context.Context,
-	progLocation string,
+	progLocation, cacheDir string,
 ) (io.ReaderAt, error) {
 	client := spec.NewEbpfOCICLient()
 	prog, err := spec.TryFromLocal(
 		ctx,
 		progLocation,
-		p.cacheDir,
+		cacheDir,
 		client,
 		// Handle Auth
 		content.RegistryOptions{},

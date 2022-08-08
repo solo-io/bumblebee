@@ -16,7 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1_clients "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -37,6 +37,7 @@ func Start(ctx context.Context) error {
 		return err
 	}
 
+	// Add our probe CRD to the scheme so it is known to the client.
 	if err := probes_bumblebee_io_v1alpha1.AddToScheme(scheme.Scheme); err != nil {
 		return err
 	}
@@ -50,11 +51,11 @@ func Start(ctx context.Context) error {
 
 	nodeName, ok := os.LookupEnv("NODE_NAME")
 	if !ok {
-		// TODO: check for pod name
+		// TODO: check for pod name, can get node from there.
 		return fmt.Errorf("NODE_NAME environment variable not set, it must be to know where we are running")
 	}
 
-	cli, err := v1.NewForConfig(cfg)
+	cli, err := corev1_clients.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -63,6 +64,8 @@ func Start(ctx context.Context) error {
 		return err
 	}
 
+	// The stats provider is a factory for creating prometheus collectors used
+	// by the prog_loader
 	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
 	if err != nil {
 		return err
@@ -72,13 +75,24 @@ func Start(ctx context.Context) error {
 		decoder.NewDecoderFactory(),
 		promProvider,
 	)
+	/*
+		The probe cache is the core of the application.
+		It's main responsibility is to store the state of the probes on the node.
+		It does this in 3 ways:
+			1. Starting the probes when the CR is created.
+			2. Removing the probes when the CR is deleted.
+			3. Scheulding and unscheulding the probes when the node labels change.
 
+		Each of the above pieces is captured by a reconciler.
+		The first 2 by the probe recocniler, the last by the node reconciler.
+	*/
 	probeCache := cache.NewProbeCache(ImageCache, node.GetLabels(), progLoader)
 
+	// Create and start the node reconciler
 	nodeLoop := reconcile_v2.NewLoop("node-watcher", mgr, &corev1.Node{}, reconcile_v2.Options{})
 	if err := nodeLoop.RunReconciler(ctx,
 		reconcilers.NewNodeReconciler(probeCache),
-		// Only run if it's our node
+		// Only run if it's our node AND the node's labels have changed.
 		predicate.And(
 			predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
@@ -91,10 +105,13 @@ func Start(ctx context.Context) error {
 		return err
 	}
 
+	// Create and start the probe reconciler
 	probeLoop := reconcile_v2.NewLoop("probe-watcher", mgr, &probes_bumblebee_io_v1alpha1.Probe{}, reconcile_v2.Options{})
 	if err := probeLoop.RunReconciler(ctx, reconcilers.NewProbeReconciler(probeCache), &predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
 
+	// Start the manager, this is the main blocking call for the application.
+	// All other goroutines are started by the manager. It's pretty useful tbh :laughing:
 	return mgr.Start(ctx)
 }

@@ -49,8 +49,6 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 		cancel()
 	}()
 	cfg := zap.NewDevelopmentConfig()
-	cfg.OutputPaths = []string{"stdout"}
-	cfg.ErrorOutputPaths = []string{"stdout"}
 	logger, err := cfg.Build()
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create zap logger: '%w'", err)
