@@ -50,6 +50,10 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 		return false
 	}
 
+	if m.GetImagePullPolicy() != target.GetImagePullPolicy() {
+		return false
+	}
+
 	if len(m.GetNodeSelector()) != len(target.GetNodeSelector()) {
 		return false
 	}
@@ -61,8 +65,15 @@ func (m *ProbeSpec) Equal(that interface{}) bool {
 
 	}
 
-	if m.GetImagePullPolicy() != target.GetImagePullPolicy() {
+	if len(m.GetAdditionalLabels()) != len(target.GetAdditionalLabels()) {
 		return false
+	}
+	for k, v := range m.GetAdditionalLabels() {
+
+		if strings.Compare(v, target.GetAdditionalLabels()[k]) != 0 {
+			return false
+		}
+
 	}
 
 	return true

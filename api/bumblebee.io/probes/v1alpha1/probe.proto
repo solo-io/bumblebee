@@ -16,32 +16,33 @@ message ProbeSpec {
   // Image name of the probe to run.
   string image = 1;
 
-  // List of node labels to run the probe on.
-  // If empty, the probe will run on all nodes.
-  map<string, string> node_selector = 2; 
-
-  // TODO: Implement
-  // prefix to add to all stats emitted by the probe.
-  // string stat_prefix = 3;
-
-  // TODO: Implement
-  // Additional labels to add to all programs loaded by this probe
-  // map<string, string> additional_labels = 4; 
-  
-  // TODO: Implement cosign verification
-  // oneof cosign {
-  //   // Path to file containing cosign key
-  //   string file_path = 5;
-
-  //   // Secret containing cosign key
-  //   string secret_name = 6;
-  // }
-
   enum PullPolicy {
     IfNotPresent = 0;
     Always = 1;
     Never = 2;
   }
 
-  PullPolicy image_pull_policy = 7;
+  PullPolicy image_pull_policy = 2;
+
+  // List of node labels to run the probe on.
+  // If empty, the probe will run on all nodes.
+  map<string, string> node_selector = 3; 
+
+  // TODO: Implement
+  // Additional labels to add to all programs loaded by this probe
+  map<string, string> additional_labels = 4; 
+
+
+  // TODO: Implement
+  // prefix to add to all stats emitted by the probe.
+  // string stat_prefix = 5;
+  
+  // TODO: Implement cosign verification
+  // oneof cosign {
+  //   // Path to file containing cosign key
+  //   string file_path = 6;
+
+  //   // Secret containing cosign key
+  //   string secret_name = 7;
+  // }
 }

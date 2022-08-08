@@ -32,6 +32,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/solo-io/protoc-gen-ext v0.0.16
 	github.com/solo-io/skv2 v0.22.25
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	google.golang.org/protobuf v1.27.1
 	k8s.io/api v0.23.7
 	k8s.io/apiextensions-apiserver v0.23.5
@@ -117,7 +118,6 @@ require (
 	github.com/mpvl/unique v0.0.0-20150818121801-cbe035fff7de // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/runc v1.0.2 // indirect
-	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.28.0 // indirect
@@ -140,7 +140,6 @@ require (
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	golang.org/x/tools v0.1.10 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

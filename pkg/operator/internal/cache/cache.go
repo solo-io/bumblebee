@@ -16,6 +16,7 @@ import (
 	"github.com/solo-io/bumblebee/pkg/loader"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/go-utils/contextutils"
+	"golang.org/x/exp/maps"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"oras.land/oras-go/pkg/content"
@@ -197,13 +198,18 @@ func startProgram(
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
+	additionalLabels := map[string]string{
+		"probe_name":      obj.Name,
+		"probe_namespace": obj.Namespace,
+	}
+	if len(obj.Spec.GetAdditionalLabels()) > 0 {
+		maps.Copy(additionalLabels, obj.Spec.GetAdditionalLabels())
+	}
+
 	loaderOpts := &loader.LoadOptions{
-		ParsedELF: parsedELF,
-		Watcher:   loader.NewNoopWatcher(),
-		AdditionalLabels: map[string]string{
-			"probe_name":      obj.Name,
-			"probe_namespace": obj.Namespace,
-		},
+		ParsedELF:        parsedELF,
+		Watcher:          loader.NewNoopWatcher(),
+		AdditionalLabels: additionalLabels,
 	}
 
 	key := types.NamespacedName{Name: obj.Name, Namespace: obj.Namespace}

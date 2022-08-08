@@ -35,6 +35,8 @@ func (m *ProbeSpec) Clone() proto.Message {
 
 	target.Image = m.GetImage()
 
+	target.ImagePullPolicy = m.GetImagePullPolicy()
+
 	if m.GetNodeSelector() != nil {
 		target.NodeSelector = make(map[string]string, len(m.GetNodeSelector()))
 		for k, v := range m.GetNodeSelector() {
@@ -44,7 +46,14 @@ func (m *ProbeSpec) Clone() proto.Message {
 		}
 	}
 
-	target.ImagePullPolicy = m.GetImagePullPolicy()
+	if m.GetAdditionalLabels() != nil {
+		target.AdditionalLabels = make(map[string]string, len(m.GetAdditionalLabels()))
+		for k, v := range m.GetAdditionalLabels() {
+
+			target.AdditionalLabels[k] = v
+
+		}
+	}
 
 	return target
 }
