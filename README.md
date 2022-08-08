@@ -55,6 +55,9 @@ curl -sL https://run.solo.io/bee/install | BUMBLEBEE_VERSION=v0.0.8 sh
 ```
 
 ### Using go
+
+In order to build from source, you will need go version > 1.19
+
 ```bash
 git clone git@github.com:solo-io/bumblebee.git
 cd bumblebee
