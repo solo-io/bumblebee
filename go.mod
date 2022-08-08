@@ -27,12 +27,14 @@ require (
 	github.com/docker/docker v20.10.11+incompatible
 	github.com/go-logr/zapr v1.2.3
 	github.com/golang/protobuf v1.5.2
+	github.com/hashicorp/go-multierror v1.1.0
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/solo-io/protoc-gen-ext v0.0.16
-	github.com/solo-io/skv2 v0.22.25-0.20220807154035-ea5e9ecf4edf
+	github.com/solo-io/skv2 v0.22.25
 	google.golang.org/protobuf v1.27.1
 	k8s.io/api v0.23.7
+	k8s.io/apiextensions-apiserver v0.23.5
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v0.23.7
 	k8s.io/klog/v2 v2.60.1
@@ -88,7 +90,6 @@ require (
 	github.com/gookit/color v1.4.2 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/huandu/xstrings v1.3.1 // indirect
 	github.com/iancoleman/strcase v0.1.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -149,7 +150,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	k8s.io/apiextensions-apiserver v0.23.5 // indirect
 	k8s.io/component-base v0.23.7 // indirect
 	k8s.io/kube-openapi v0.23.5 // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
@@ -175,5 +175,3 @@ replace (
 	k8s.io/kubectl => k8s.io/kubectl v0.23.7
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.11.2
 )
-
-replace github.com/solo-io/skv2 => ../skv2

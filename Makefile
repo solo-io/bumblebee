@@ -161,6 +161,31 @@ ifeq ($(RELEASE),"true")
 	go run ci/release_assets.go
 endif
 
-.PHONY: release-helm
 release-helm: generated-code
+release-helm: package-helm-bumblebee
+release-helm: fetch-helm-bumblebee
+release-helm: index-helm-bumblebee
+release-helm: release-helm-bumblebee
+
+HELM_ROOTDIR ?= install/helm
+HELM_OUTPUT_DIR := $(HELM_ROOTDIR)/_output
+CHART_OUTPUT_DIR := $(HELM_OUTPUT_DIR)/charts
+
+package-helm-%:
+	helm package --dependency-update --destination $(CHART_OUTPUT_DIR)/$* $(HELM_ROOTDIR)/$*
+
+fetch-helm-%:
+	gsutil -m rsync -r gs://bumblebee-helm/$* $(CHART_OUTPUT_DIR)/$*
+
+index-helm-%:
+	helm repo index $(CHART_OUTPUT_DIR)/$*
+
+release-helm-%:
+	gsutil -h "Cache-Control:no-cache,max-age=0" -m rsync -r $(CHART_OUTPUT_DIR)/$* gs://gloo-mesh-enterprise/$*
+
+clean-helm-%:
+	rm -rf $(HELM_ROOTDIR)/$*/charts/
+	rm -f $(HELM_ROOTDIR)/$*/chart.lock
+	rm -f $(HELM_ROOTDIR)/$*/chart.yaml
+	rm -f $(HELM_ROOTDIR)/$*/values.yaml
 
