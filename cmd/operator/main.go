@@ -1,33 +1,31 @@
-package operator
+package main
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/go-logr/zapr"
-	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/operator"
 	"github.com/solo-io/go-utils/contextutils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrl_log "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-type operatorOptions struct {
-	general *options.GeneralOptions
+func main() {
+	if err := cmd().ExecuteContext(context.Background()); err != nil {
+		log.Fatalf("exiting: %s", err)
+	}
 }
 
-func Command(opts *options.GeneralOptions) *cobra.Command {
-	// operatorOptions := &operatorOptions{
-	// 	general: opts,
-	// }
+func cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Hidden: true,
-		Use:    "operator",
+		Use: "operator",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, err := buildContext(cmd.Context(), false)
 			if err != nil {
@@ -35,7 +33,6 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 			}
 			return operator.Start(ctx)
 		},
-		SilenceUsage: true,
 	}
 	return cmd
 }
@@ -57,7 +54,7 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 
 	// controller-runtime
 	zapLogger := zapr.NewLogger(logger)
-	log.SetLogger(zapLogger)
+	ctrl_log.SetLogger(zapLogger)
 	klog.SetLogger(zapLogger)
 
 	contextutils.SetFallbackLogger(logger.Sugar())

@@ -9,7 +9,6 @@ import (
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/initialize"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/list"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/login"
-	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/operator"
 	package_cmd "github.com/solo-io/bumblebee/pkg/cli/internal/commands/package"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/pull"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/push"
@@ -50,7 +49,6 @@ func Bee() *cobra.Command {
 		describe.Command(opts),
 		login.Command(opts),
 		version.Command(opts),
-		operator.Command(opts),
 	)
 
 	return cmd

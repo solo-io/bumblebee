@@ -65,7 +65,7 @@ jobs:
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
 
-  push-bee-image:
+  push-docker-images:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,8 +90,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.PUSH_TOKEN }}
-      - name: Push bee container
-        run: make docker-push-bee
+      - name: Push images
+        run: make docker-push-bee docker-push-operator
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
 

@@ -6,7 +6,3 @@ RUN apk upgrade --update-cache \
     && rm -rf /var/cache/apk/*
 
 ADD bee-linux-amd64 bee
-
-USER 0
-
-ENTRYPOINT ["/bee"]

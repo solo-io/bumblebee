@@ -131,7 +131,7 @@ func run() error {
 							},
 							Image: values.Image{
 								Tag:        version.Version,
-								Repository: "bee",
+								Repository: "operator",
 								Registry:   "ghcr.io/solo-io/bumblebee",
 							},
 							SecurityContext: &corev1.SecurityContext{

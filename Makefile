@@ -99,11 +99,11 @@ release-examples: activeconn tcpconnect exitsnoop oomkill capable tcpconnlat
 # CLI
 #----------------------------------------------------------------------------------
 
-
 COMPRESSION_FLAGS=-s -w
+CMD_DIR := cmd
 
 $(OUTDIR)/bee-linux-amd64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ bee/main.go
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/bee/main.go
 
 .PHONY: bee-linux-amd64
 bee-linux-amd64: $(OUTDIR)/bee-linux-amd64.sha256
@@ -111,7 +111,7 @@ $(OUTDIR)/bee-linux-amd64.sha256: $(OUTDIR)/bee-linux-amd64
 	sha256sum $(OUTDIR)/bee-linux-amd64 > $@
 
 $(OUTDIR)/bee-linux-arm64: $(SOURCES)
-	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ bee/main.go
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/bee/main.go
 
 .PHONY: bee-linux-arm64
 bee-linux-arm64: $(OUTDIR)/bee-linux-arm64.sha256
@@ -125,7 +125,8 @@ build-cli: bee-linux-amd64 bee-linux-arm64
 install-cli:
 	CGO_ENABLED=0 go install -ldflags="$(LDFLAGS)" -gcflags=$(GCFLAGS) ./bee
 
-BEE_DIR := bee
+CMD_DIR := cmd
+BEE_DIR := $(CMD_DIR)/bee
 $(OUTDIR)/Dockerfile-bee: $(BEE_DIR)/Dockerfile-bee
 	cp $< $@
 
@@ -136,6 +137,40 @@ docker-build-bee: build-cli $(OUTDIR)/Dockerfile-bee
 .PHONY: docker-push-bee
 docker-push-bee: docker-build-bee
 	$(DOCKER) push $(HUB)/bumblebee/bee:$(VERSION)
+
+
+#----------------------------------------------------------------------------------
+# Operator
+#----------------------------------------------------------------------------------
+
+$(OUTDIR)/operator-linux-amd64: $(SOURCES)
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/operator/main.go
+
+.PHONY: operator-linux-amd64
+operator-linux-amd64: $(OUTDIR)/operator-linux-arm64
+
+$(OUTDIR)/operator-linux-arm64: $(SOURCES)
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/operator/main.go
+
+.PHONY: operator-linux-arm64
+operator-linux-arm64: $(OUTDIR)/operator-linux-arm64
+
+
+.PHONY: build-operator
+build-operator: operator-linux-amd64 operator-linux-arm64
+
+OPERATOR_DIR := $(CMD_DIR)/operator
+$(OUTDIR)/Dockerfile-operator: $(OPERATOR_DIR)/Dockerfile-operator
+	cp $< $@
+
+OPERATOR_DIR := cmd/operator
+.PHONY: docker-build-operator
+docker-build-operator: build-operator $(OUTDIR)/Dockerfile-operator
+	$(DOCKER) build $(OUTDIR) -f $(OUTDIR)/Dockerfile-operator -t $(HUB)/bumblebee/operator:$(VERSION)
+
+.PHONY: docker-push-operator
+docker-push-operator: docker-build-operator
+	$(DOCKER) push $(HUB)/bumblebee/operator:$(VERSION)
 
 ##----------------------------------------------------------------------------------
 ## Release
