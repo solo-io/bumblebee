@@ -98,7 +98,6 @@ func Start(ctx context.Context) error {
 			func(ctx context.Context) error {
 				mux := http.NewServeMux()
 				mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-					// Healthy
 					w.Write([]byte("healthy"))
 				})
 				skv2_stats.AddPprof(mux)
