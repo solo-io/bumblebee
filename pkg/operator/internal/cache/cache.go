@@ -49,6 +49,7 @@ func NewProbeCache(
 		probes:     &atomicProbeMap{probes: &sync.Map{}},
 		nodeLabels: ap,
 		progLoader: progLoader,
+		cacheDir:   cacheDir,
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-
 	"os"
 	"text/template"
 

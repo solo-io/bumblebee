@@ -18,7 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	corev1_clients "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1_client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -33,7 +33,6 @@ const ImageCache = "/tmp/image-cache"
 // 2. Authentication for the images.
 // 3. Cache images locally.
 func Start(ctx context.Context) error {
-
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
@@ -63,7 +62,7 @@ func Start(ctx context.Context) error {
 		return fmt.Errorf("NODE_NAME environment variable not set, it must be to know where we are running")
 	}
 
-	cli, err := corev1_clients.NewForConfig(cfg)
+	cli, err := corev1_client.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}

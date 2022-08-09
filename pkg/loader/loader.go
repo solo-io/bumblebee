@@ -37,7 +37,7 @@ type LoadOptions struct {
 
 type WatchOpts struct {
 	WatchedMaps      map[string]WatchedMap
-	Coll             map[string]*ebpf.Map
+	CollMaps         map[string]*ebpf.Map
 	Watcher          MapWatcher
 	AdditionalLabels map[string]string
 }
@@ -248,7 +248,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 
 	return l.WatchMaps(ctx, &WatchOpts{
 		WatchedMaps:      opts.ParsedELF.WatchedMaps,
-		Coll:             coll.Maps,
+		CollMaps:         coll.Maps,
 		Watcher:          opts.Watcher,
 		AdditionalLabels: opts.AdditionalLabels,
 	})
@@ -275,7 +275,7 @@ func (l *loader) WatchMaps(
 			eg.Go(func() error {
 				defer increment.Clean()
 				opts.Watcher.NewRingBuf(name, bpfMap.Labels)
-				return l.startRingBuf(ctx, bpfMap.valueStruct, opts.Coll[name], increment, name, opts.Watcher)
+				return l.startRingBuf(ctx, bpfMap.valueStruct, opts.CollMaps[name], increment, name, opts.Watcher)
 			})
 		case ebpf.Array:
 			fallthrough
@@ -294,7 +294,7 @@ func (l *loader) WatchMaps(
 				defer instrument.Clean()
 				// TODO: output type of instrument in UI?
 				opts.Watcher.NewHashMap(name, labelKeys)
-				return l.startHashMap(ctx, bpfMap.mapSpec, opts.Coll[name], instrument, name, opts.Watcher)
+				return l.startHashMap(ctx, bpfMap.mapSpec, opts.CollMaps[name], instrument, name, opts.Watcher)
 			})
 		default:
 			// TODO: Support more map types
