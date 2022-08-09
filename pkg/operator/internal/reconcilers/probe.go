@@ -32,7 +32,7 @@ func (r *probeReconciler) Reconcile(ctx context.Context, obj *probes_bumblebee_i
 	logger := contextutils.LoggerFrom(contextutils.WithLoggerValues(ctx, zap.String("probe_id", key.String())))
 	logger.Debugf("handling probe create/update")
 	if err := r.pc.UpdateProbe(ctx, obj); err != nil {
-		// TODO retry?
+		// FIXME retry?
 		logger.Error(err)
 		return reconcile.Result{}, nil
 	}

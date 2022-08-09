@@ -28,7 +28,7 @@ func (r *nodeReconciler) Reconcile(ctx context.Context, obj *corev1.Node) (recon
 	logger.Debugf("handling change in node labels")
 	// Update stored labels
 	if err := r.pc.UpdateAll(ctx, obj.Labels); err != nil {
-		// TODO: retry?
+		// FIXME: retry?
 		logger.Error(err)
 	}
 	return reconcile.Result{}, nil

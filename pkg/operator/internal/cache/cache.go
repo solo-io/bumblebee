@@ -116,7 +116,7 @@ func (p *probeCache) Clean(key types.NamespacedName) {
 	p.probes.Clean(key)
 }
 
-// TODO: make this output JSON so it's consumbale via API
+// FIXME: make this output JSON so it's consumbale via API
 func (p *probeCache) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	builder := strings.Builder{}
 	p.probes.Range(func(key types.NamespacedName, probe *cachedProbe) bool {

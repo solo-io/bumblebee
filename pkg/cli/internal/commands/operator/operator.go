@@ -26,7 +26,8 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 	// 	general: opts,
 	// }
 	cmd := &cobra.Command{
-		Use: "operator",
+		Hidden: true,
+		Use:    "operator",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, err := buildContext(cmd.Context(), false)
 			if err != nil {

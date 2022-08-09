@@ -90,7 +90,6 @@ type ProbeSpec struct {
 	// List of node labels to run the probe on.
 	// If empty, the probe will run on all nodes.
 	NodeSelector map[string]string `protobuf:"bytes,3,rep,name=node_selector,json=nodeSelector,proto3" json:"node_selector,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// TODO: Implement
 	// Additional labels to add to all programs loaded by this probe
 	AdditionalLabels map[string]string `protobuf:"bytes,4,rep,name=additional_labels,json=additionalLabels,proto3" json:"additional_labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }

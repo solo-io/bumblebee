@@ -28,7 +28,7 @@ import (
 
 const ImageCache = "/tmp/image-cache"
 
-// TODO:
+// FIXME:
 // 1. Cosign verification for the images.
 // 2. Authentication for the images.
 // 3. Cache images locally.
@@ -59,7 +59,7 @@ func Start(ctx context.Context) error {
 
 	nodeName, ok := os.LookupEnv("NODE_NAME")
 	if !ok {
-		// TODO: check for pod name, can get node from there.
+		// FIXME: check for pod name, can get node from there.
 		return fmt.Errorf("NODE_NAME environment variable not set, it must be to know where we are running")
 	}
 

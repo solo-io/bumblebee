@@ -52,5 +52,6 @@ func Bee() *cobra.Command {
 		version.Command(opts),
 		operator.Command(opts),
 	)
+
 	return cmd
 }
