@@ -86,7 +86,7 @@ func Start(ctx context.Context) error {
 		It does this in 3 ways:
 			1. Starting the probes when the CR is created.
 			2. Removing the probes when the CR is deleted.
-			3. Scheulding and unscheulding the probes when the node labels change.
+			3. Scheduling and unscheduling the probes when the node labels change.
 
 		Each of the above pieces is captured by a reconciler.
 		The first 2 by the probe recocniler, the last by the node reconciler.
