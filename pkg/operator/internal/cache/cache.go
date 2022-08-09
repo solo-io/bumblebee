@@ -24,11 +24,11 @@ import (
 
 // ProbeCache is a component resonsible for keeping track of probe resources.
 type ProbeCache interface {
-	// UpdateAll takes in a list of node labels and compares them against
+	// UpdateNodeLabels takes in a list of node labels and compares them against
 	// The cached probe node selector. If the node selector matches the
 	// current node, and isn't yet running, start it. Likewise if it's
 	// running but shouldn't be, cancel it.
-	UpdateAll(ctx context.Context, nodeLabels map[string]string) error
+	UpdateNodeLabels(ctx context.Context, nodeLabels map[string]string) error
 	// UpdateProbe adds or updates a single probe's lifecycle status in the cache.
 	// If the image name has changed from it's existing one, the old one will be
 	// cancelled, and the new one started.
@@ -59,7 +59,7 @@ type probeCache struct {
 	progLoader loader.Loader
 }
 
-func (r *probeCache) UpdateAll(ctx context.Context, nodeLabels map[string]string) error {
+func (r *probeCache) UpdateNodeLabels(ctx context.Context, nodeLabels map[string]string) error {
 	r.nodeLabels.Store(&nodeLabels)
 	var multierr *multierror.Error
 	r.probes.Range(func(key types.NamespacedName, probe *cachedProbe) bool {
@@ -74,7 +74,7 @@ func (r *probeCache) UpdateAll(ctx context.Context, nodeLabels map[string]string
 
 		// If the node selector matches the current node, and is running, cancel it.
 		if !labels.SelectorFromSet(probe.probe.Spec.NodeSelector).Matches(labels.Set(nodeLabels)) && probe.running {
-			r.probes.Clean(key)
+			probe.Stop()
 			// Continue iteration
 			return true
 		}
@@ -93,9 +93,9 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	// In practice, this means that only spec changes to the probe CR will trigger this function.
 	// Currently on generation change a new probe needs to be started, with the exception of one case.
 	// NodeSelector has changed, but the node's labels still match.
-	if _, ok := r.probes.Probe(key); ok {
+	if probe, ok := r.probes.Probe(key); ok {
 		contextutils.LoggerFrom(ctx).Debug("Restarting probe as the generation has changed")
-		r.probes.Clean(key)
+		probe.Stop()
 		// Attempt to restart program, if it fails, return error.
 	}
 	// Check if the node selcetor matches the node labels
@@ -149,10 +149,6 @@ func (r *atomicProbeMap) Clean(key types.NamespacedName) {
 	if rp.running {
 		rp.cancel()
 	}
-
-	rp.running = false
-	rp.cancel = nil
-
 }
 
 func (r *atomicProbeMap) Probe(key types.NamespacedName) (*cachedProbe, bool) {
@@ -170,6 +166,15 @@ type cachedProbe struct {
 	running bool
 	// Will only be non-nil if running == true
 	cancel context.CancelFunc
+}
+
+func (c *cachedProbe) Stop() {
+	if !c.running {
+		return
+	}
+	c.cancel()
+	c.cancel = nil
+	c.running = false
 }
 
 func startProgram(
