@@ -22,7 +22,7 @@ import (
 	"oras.land/oras-go/pkg/content"
 )
 
-// ProbeCache is a component resonsible for keeping track of probe resources.
+// ProbeCache is a component responsible for keeping track of probe resources.
 type ProbeCache interface {
 	// UpdateNodeLabels takes in a list of node labels and compares them against
 	// The cached probe node selector. If the node selector matches the

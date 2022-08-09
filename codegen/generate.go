@@ -67,7 +67,7 @@ func run() error {
 							},
 						},
 						ShortNames: []string{"pr", "probe"},
-						Categories: []string{"solo-io", "bumbebee"},
+						Categories: []string{"solo-io", "bumblebee"},
 						AdditionalPrinterColumns: []apiextv1.CustomResourceColumnDefinition{
 							{
 								Name:        "IMAGE",

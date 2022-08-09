@@ -41,7 +41,6 @@ func (r *probeReconciler) Reconcile(ctx context.Context, obj *probes_bumblebee_i
 
 // This function will be triggered when a probe is deleted.
 func (p *probeReconciler) ReconcileDeletion(ctx context.Context, req reconcile.Request) error {
-
 	logger := contextutils.LoggerFrom(contextutils.WithLoggerValues(ctx, zap.String("probe_id", req.NamespacedName.String())))
 	logger.Debugf("handling deletion of probe")
 	// Cancel the running program if found

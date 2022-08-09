@@ -85,10 +85,10 @@ func Start(ctx context.Context) error {
 		It does this in 3 ways:
 			1. Starting the probes when the CR is created.
 			2. Removing the probes when the CR is deleted.
-			3. Scheulding and unscheulding the probes when the node labels change.
+			3. Scheduling and unscheduling the probes when the node labels change.
 
 		Each of the above pieces is captured by a reconciler.
-		The first 2 by the probe recocniler, the last by the node reconciler.
+		The first 2 by the probe reconciler, the last by the node reconciler.
 	*/
 	probeCache := cache.NewProbeCache(ImageCache, node.GetLabels(), progLoader)
 
@@ -97,7 +97,6 @@ func Start(ctx context.Context) error {
 			func(ctx context.Context) error {
 				mux := http.NewServeMux()
 				mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-					// Healthy
 					w.Write([]byte("healthy"))
 				})
 				skv2_stats.AddPprof(mux)
