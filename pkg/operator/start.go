@@ -89,7 +89,7 @@ func Start(ctx context.Context) error {
 			3. Scheduling and unscheduling the probes when the node labels change.
 
 		Each of the above pieces is captured by a reconciler.
-		The first 2 by the probe recocniler, the last by the node reconciler.
+		The first 2 by the probe reconciler, the last by the node reconciler.
 	*/
 	probeCache := cache.NewProbeCache(ImageCache, node.GetLabels(), progLoader)
 
