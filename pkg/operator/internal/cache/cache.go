@@ -152,7 +152,6 @@ func (r *atomicProbeMap) Clean(key types.NamespacedName) {
 
 	rp.running = false
 	rp.cancel = nil
-
 }
 
 func (r *atomicProbeMap) Probe(key types.NamespacedName) (*cachedProbe, bool) {
