@@ -127,7 +127,7 @@ func (a *App) Close() {
 	close(a.Entries)
 }
 
-func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loader.LoadOptions) error {
+func (a *App) Run(ctx context.Context, progLoader loader.Loader, watchOpts *loader.WatchOpts) error {
 	logger := contextutils.LoggerFrom(ctx)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -153,7 +153,7 @@ func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loa
 
 	eg.Go(func() error {
 		logger.Info("calling Load()")
-		err := progLoader.Load(ctx, loaderOpts)
+		err := progLoader.WatchMaps(ctx, watchOpts)
 		logger.Info("returned from Load()")
 		return err
 	})

@@ -129,14 +129,20 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
 		return ctx.Err()
 	}
+
+	watchOpts, err := progLoader.Load(ctx, &loaderOpts)
+	if err != nil {
+		return fmt.Errorf("could not load BPF program: %w", err)
+	}
+
 	if opts.notty {
 		fmt.Println("Calling Load...")
 		loaderOpts.Watcher = loader.NewNoopWatcher()
-		err = progLoader.Load(ctx, &loaderOpts)
+		err := progLoader.WatchMaps(ctx, watchOpts)
 		return err
 	} else {
 		contextutils.LoggerFrom(ctx).Info("calling tui run()")
-		err = tuiApp.Run(ctx, progLoader, &loaderOpts)
+		err = tuiApp.Run(ctx, progLoader, watchOpts)
 		contextutils.LoggerFrom(ctx).Info("after tui run()")
 		return err
 	}
@@ -176,10 +182,12 @@ func getProgram(
 		client := spec.NewEbpfOCICLient()
 		prog, err := spec.TryFromLocal(
 			ctx,
-			progLocation,
-			opts.OCIStorageDir,
-			client,
-			opts.AuthOptions.ToRegistryOptions(),
+			spec.PullOpts{
+				Ref:             progLocation,
+				LocalStorageDir: opts.OCIStorageDir,
+				Client:          client,
+				RegistryOptions: opts.AuthOptions.ToRegistryOptions(),
+			},
 		)
 		if err != nil {
 			programSpinner.UpdateText("Failed to load OCI image")

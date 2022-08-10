@@ -28,11 +28,10 @@ type ParsedELF struct {
 }
 
 type LoadOptions struct {
-	ParsedELF        *ParsedELF
-	Watcher          MapWatcher
-	PinMaps          string
-	PinProgs         string
-	AdditionalLabels map[string]string
+	ParsedELF *ParsedELF
+	Watcher   MapWatcher
+	PinMaps   string
+	PinProgs  string
 }
 
 type WatchOpts struct {
@@ -44,7 +43,7 @@ type WatchOpts struct {
 
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
-	Load(ctx context.Context, opts *LoadOptions) error
+	Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error)
 	WatchMaps(ctx context.Context, opts *WatchOpts) error
 }
 
@@ -158,14 +157,14 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 	return &loadOptions, nil
 }
 
-func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
+func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error) {
 	// on shutdown notify watcher we have no more entries to send
 	defer opts.Watcher.Close()
 
 	// bail out before loading stuff into kernel if context canceled
 	if ctx.Err() != nil {
 		contextutils.LoggerFrom(ctx).Warn("load entrypoint context is done")
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	if opts.PinMaps != "" {
@@ -189,7 +188,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer coll.Close()
 
@@ -197,7 +196,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 	for name, prog := range spec.Programs {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			switch prog.Type {
 			case ebpf.Kprobe:
@@ -206,12 +205,12 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 					}
 				} else {
 					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 					}
 				}
 				defer kp.Close()
@@ -221,37 +220,36 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				if strings.HasPrefix(prog.SectionName, "tracepoint/") {
 					tokens := strings.Split(prog.AttachTo, "/")
 					if len(tokens) != 2 {
-						return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
+						return nil, fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
 					}
 					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
 					}
 				}
 				defer tp.Close()
 			default:
-				return errors.New("only kprobe programs supported")
+				return nil, errors.New("only kprobe programs supported")
 			}
 			if opts.PinProgs != "" {
 				if err := createDir(ctx, opts.PinProgs, 0700); err != nil {
-					return err
+					return nil, err
 				}
 
 				pinFile := filepath.Join(opts.PinProgs, prog.Name)
 				if err := coll.Programs[name].Pin(pinFile); err != nil {
-					return fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
+					return nil, fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
 				}
 				fmt.Printf("Successfully pinned program '%v'\n", pinFile)
 			}
 		}
 	}
 
-	return l.WatchMaps(ctx, &WatchOpts{
-		WatchedMaps:      opts.ParsedELF.WatchedMaps,
-		CollMaps:         coll.Maps,
-		Watcher:          opts.Watcher,
-		AdditionalLabels: opts.AdditionalLabels,
-	})
+	return &WatchOpts{
+		WatchedMaps: opts.ParsedELF.WatchedMaps,
+		CollMaps:    coll.Maps,
+		Watcher:     opts.Watcher,
+	}, nil
 }
 
 func (l *loader) WatchMaps(

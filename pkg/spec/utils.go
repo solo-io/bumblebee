@@ -14,32 +14,32 @@ type PullOpts struct {
 	content.RegistryOptions
 }
 
-type PullFunc func(ctx context.Context, opts *PullOpts) (*EbpfPackage, error)
+type PullFunc func(ctx context.Context, opts PullOpts) (*EbpfPackage, error)
 
 func TryFromLocal(
 	ctx context.Context,
-	opts *PullOpts,
+	opts PullOpts,
 ) (*EbpfPackage, error) {
 	return pullImage(ctx, opts, true, true)
 }
 
 func Pull(
 	ctx context.Context,
-	opts *PullOpts,
+	opts PullOpts,
 ) (*EbpfPackage, error) {
 	return pullImage(ctx, opts, false, true)
 }
 
 func NeverPull(
 	ctx context.Context,
-	opts *PullOpts,
+	opts PullOpts,
 ) (*EbpfPackage, error) {
 	return pullImage(ctx, opts, false, false)
 }
 
 func pullImage(
 	ctx context.Context,
-	opts *PullOpts,
+	opts PullOpts,
 	tryFromLocal, attemptToPull bool,
 ) (*EbpfPackage, error) {
 

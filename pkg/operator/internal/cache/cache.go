@@ -237,26 +237,32 @@ func startProgram(
 	}
 
 	loaderOpts := &loader.LoadOptions{
-		ParsedELF:        parsedELF,
-		Watcher:          loader.NewNoopWatcher(),
-		AdditionalLabels: additionalLabels,
+		ParsedELF: parsedELF,
+		Watcher:   loader.NewNoopWatcher(),
 	}
+
+	watchOpts, err := progLoader.Load(ctx, loaderOpts)
+	if err != nil {
+		return err
+	}
+	watchOpts.AdditionalLabels = additionalLabels
 
 	key := types.NamespacedName{Name: obj.Name, Namespace: obj.Namespace}
 
 	nestedCtx, cancel := context.WithCancel(ctx)
 
-	probeMap.Store(key, &cachedProbe{
+	probe := &cachedProbe{
 		probe:   obj.DeepCopy(),
 		cancel:  cancel,
 		running: true,
-	})
+	}
+	probeMap.Store(key, probe)
 	go func() {
 		contextutils.LoggerFrom(nestedCtx).Debug("Starting program")
 		// always cancel the context to prevent leaking goroutines
-		defer probeMap.Clean(key)
-		if err := progLoader.Load(nestedCtx, loaderOpts); err != nil && !errors.Is(err, context.Canceled) {
-			contextutils.LoggerFrom(nestedCtx).Errorf("could not load BPF program: %v", err)
+		defer probe.Stop()
+		if err := progLoader.WatchMaps(nestedCtx, watchOpts); err != nil && !errors.Is(err, context.Canceled) {
+			contextutils.LoggerFrom(nestedCtx).Errorf("error runnign BPF program: %v", err)
 		}
 	}()
 
@@ -270,8 +276,7 @@ func getProgram(
 	factory PullFuncFactory,
 ) (io.ReaderAt, error) {
 	client := spec.NewEbpfOCICLient()
-	pullFunc := factory(pullPolicy)
-	prog, err := pullFunc(ctx, &spec.PullOpts{
+	prog, err := factory(pullPolicy)(ctx, spec.PullOpts{
 		Ref:             progLocation,
 		LocalStorageDir: cacheDir,
 		Client:          client,
