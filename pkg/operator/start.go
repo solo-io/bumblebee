@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-const ImageCache = "/tmp/image-cache"
+const ImageCache = cache.ImageCache
 
 // FIXME:
 // 1. Cosign verification for the images.
@@ -90,7 +90,10 @@ func Start(ctx context.Context) error {
 		Each of the above pieces is captured by a reconciler.
 		The first 2 by the probe reconciler, the last by the node reconciler.
 	*/
-	probeCache := cache.NewProbeCache(ImageCache, node.GetLabels(), progLoader)
+	probeCache := cache.NewProbeCache(cache.Options{
+		NodeLabels: node.GetLabels(),
+		ProgLoader: progLoader,
+	})
 
 	if err := mgr.Add(
 		manager.RunnableFunc(

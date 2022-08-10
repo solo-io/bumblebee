@@ -19,8 +19,9 @@ import (
 	"golang.org/x/exp/maps"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"oras.land/oras-go/pkg/content"
 )
+
+const ImageCache = "/tmp/image-cache"
 
 // ProbeCache is a component responsible for keeping track of probe resources.
 type ProbeCache interface {
@@ -37,19 +38,49 @@ type ProbeCache interface {
 	Clean(key types.NamespacedName)
 }
 
+type PullFuncFactory func(pullPolicy probes_bumblebee_io_v1alpha1.ProbeSpec_PullPolicy) spec.PullFunc
+
+var defaultPullFactory PullFuncFactory = func(pullPolicy probes_bumblebee_io_v1alpha1.ProbeSpec_PullPolicy) spec.PullFunc {
+	switch pullPolicy {
+	case probes_bumblebee_io_v1alpha1.ProbeSpec_Always:
+		return spec.Pull
+	case probes_bumblebee_io_v1alpha1.ProbeSpec_Never:
+		return spec.NeverPull
+	default:
+		return spec.TryFromLocal
+	}
+}
+
+type Options struct {
+	CacheDir   string
+	NodeLabels map[string]string
+	ProgLoader loader.Loader
+	Factory    PullFuncFactory
+}
+
+func (o *Options) initDefaults() {
+	if o.CacheDir == "" {
+		o.CacheDir = ImageCache
+	}
+
+	if o.Factory == nil {
+		o.Factory = defaultPullFactory
+	}
+}
+
 // NewProbeCache creates a new probe cache.
 func NewProbeCache(
-	cacheDir string,
-	nodeLabels map[string]string,
-	progLoader loader.Loader,
+	opts Options,
 ) *probeCache {
+	opts.initDefaults()
 	ap := &atomic.Pointer[map[string]string]{}
-	ap.Store(&nodeLabels)
+	ap.Store(&opts.NodeLabels)
 	return &probeCache{
 		probes:     &atomicProbeMap{probes: &sync.Map{}},
 		nodeLabels: ap,
-		progLoader: progLoader,
-		cacheDir:   cacheDir,
+		progLoader: opts.ProgLoader,
+		cacheDir:   opts.CacheDir,
+		factory:    opts.Factory,
 	}
 }
 
@@ -58,6 +89,7 @@ type probeCache struct {
 	probes     *atomicProbeMap
 	nodeLabels *atomic.Pointer[map[string]string]
 	progLoader loader.Loader
+	factory    PullFuncFactory
 }
 
 func (r *probeCache) UpdateNodeLabels(ctx context.Context, nodeLabels map[string]string) error {
@@ -66,7 +98,7 @@ func (r *probeCache) UpdateNodeLabels(ctx context.Context, nodeLabels map[string
 	r.probes.Range(func(key types.NamespacedName, probe *cachedProbe) bool {
 		// If the probe node selector matches the current node, and isn't yet running, start it.
 		if labels.SelectorFromSet(probe.probe.Spec.NodeSelector).Matches(labels.Set(nodeLabels)) && !probe.running {
-			if err := startProgram(ctx, probe.probe, r.progLoader, r.probes, r.cacheDir); err != nil {
+			if err := startProgram(ctx, probe.probe, r.progLoader, r.probes, r.cacheDir, r.factory); err != nil {
 				multierr = multierror.Append(err)
 			}
 			// Continue iteration
@@ -103,7 +135,7 @@ func (r *probeCache) UpdateProbe(ctx context.Context, probe *probes_bumblebee_io
 	if labels.SelectorFromSet(probe.Spec.NodeSelector).Matches(labels.Set(currentLabels)) {
 		// If so attempt to start the program
 		contextutils.LoggerFrom(ctx).Debug("Attempting to start program")
-		if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir); err != nil {
+		if err := startProgram(ctx, probe, r.progLoader, r.probes, r.cacheDir, r.factory); err != nil {
 			return err
 		}
 	} else {
@@ -184,9 +216,10 @@ func startProgram(
 	progLoader loader.Loader,
 	probeMap *atomicProbeMap,
 	cacheDir string,
+	factory PullFuncFactory,
 ) error {
 
-	rd, err := getProgram(ctx, obj.Spec.GetImagePullPolicy(), obj.Spec.GetImage(), cacheDir)
+	rd, err := getProgram(ctx, obj.Spec.GetImagePullPolicy(), obj.Spec.GetImage(), cacheDir, factory)
 	if err != nil {
 		return err
 	}
@@ -234,41 +267,15 @@ func getProgram(
 	ctx context.Context,
 	pullPolicy probes_bumblebee_io_v1alpha1.ProbeSpec_PullPolicy,
 	progLocation, cacheDir string,
+	factory PullFuncFactory,
 ) (io.ReaderAt, error) {
 	client := spec.NewEbpfOCICLient()
-	var prog *spec.EbpfPackage
-	var err error
-	switch pullPolicy {
-	case probes_bumblebee_io_v1alpha1.ProbeSpec_Always:
-		prog, err = spec.Pull(
-			ctx,
-			progLocation,
-			cacheDir,
-			client,
-			// Handle Auth
-			content.RegistryOptions{},
-		)
-	case probes_bumblebee_io_v1alpha1.ProbeSpec_IfNotPresent:
-		prog, err = spec.TryFromLocal(
-			ctx,
-			progLocation,
-			cacheDir,
-			client,
-			// Handle Auth
-			content.RegistryOptions{},
-		)
-	case probes_bumblebee_io_v1alpha1.ProbeSpec_Never:
-		prog, err = spec.NeverPull(
-			ctx,
-			progLocation,
-			cacheDir,
-			client,
-			// Handle Auth
-			content.RegistryOptions{},
-		)
-	default:
-		return nil, fmt.Errorf("unsupported pull policy: %s", pullPolicy)
-	}
+	pullFunc := factory(pullPolicy)
+	prog, err := pullFunc(ctx, &spec.PullOpts{
+		Ref:             progLocation,
+		LocalStorageDir: cacheDir,
+		Client:          client,
+	})
 	if err != nil {
 		if err, ok := err.(interface {
 			StackTrace() errors.StackTrace

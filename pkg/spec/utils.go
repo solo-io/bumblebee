@@ -7,53 +7,54 @@ import (
 	"oras.land/oras-go/pkg/oras"
 )
 
+type PullOpts struct {
+	Ref             string
+	LocalStorageDir string
+	Client          EbpfOCICLient
+	content.RegistryOptions
+}
+
+type PullFunc func(ctx context.Context, opts *PullOpts) (*EbpfPackage, error)
+
 func TryFromLocal(
 	ctx context.Context,
-	ref, localStorageDir string,
-	client EbpfOCICLient,
-	auth content.RegistryOptions,
+	opts *PullOpts,
 ) (*EbpfPackage, error) {
-	return pullImage(ctx, ref, localStorageDir, client, auth, true, true)
+	return pullImage(ctx, opts, true, true)
 }
 
 func Pull(
 	ctx context.Context,
-	ref, localStorageDir string,
-	client EbpfOCICLient,
-	auth content.RegistryOptions,
+	opts *PullOpts,
 ) (*EbpfPackage, error) {
-	return pullImage(ctx, ref, localStorageDir, client, auth, false, true)
+	return pullImage(ctx, opts, false, true)
 }
 
 func NeverPull(
 	ctx context.Context,
-	ref, localStorageDir string,
-	client EbpfOCICLient,
-	auth content.RegistryOptions,
+	opts *PullOpts,
 ) (*EbpfPackage, error) {
-	return pullImage(ctx, ref, localStorageDir, client, auth, false, false)
+	return pullImage(ctx, opts, false, false)
 }
 
 func pullImage(
 	ctx context.Context,
-	ref, localStorageDir string,
-	client EbpfOCICLient,
-	auth content.RegistryOptions,
+	opts *PullOpts,
 	tryFromLocal, attemptToPull bool,
 ) (*EbpfPackage, error) {
 
-	if localStorageDir == "" {
-		localStorageDir = EbpfImageDir
+	if opts.LocalStorageDir == "" {
+		opts.LocalStorageDir = EbpfImageDir
 	}
 
-	localRegistry, err := content.NewOCI(localStorageDir)
+	localRegistry, err := content.NewOCI(opts.LocalStorageDir)
 	if err != nil {
 		return nil, err
 	}
 	if tryFromLocal {
-		if _, _, err := localRegistry.Resolve(ctx, ref); err == nil {
+		if _, _, err := localRegistry.Resolve(ctx, opts.Ref); err == nil {
 			// If we find the image locally, return it
-			if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
+			if prog, err := opts.Client.Pull(ctx, opts.Ref, localRegistry); err == nil {
 				return prog, nil
 			}
 		}
@@ -61,7 +62,7 @@ func pullImage(
 
 	if attemptToPull {
 
-		remoteRegistry, err := content.NewRegistry(auth)
+		remoteRegistry, err := content.NewRegistry(opts.RegistryOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +70,7 @@ func pullImage(
 		_, err = oras.Copy(
 			ctx,
 			remoteRegistry,
-			ref,
+			opts.Ref,
 			localRegistry,
 			"",
 			oras.WithAllowedMediaTypes(AllowedMediaTypes()),
@@ -81,5 +82,5 @@ func pullImage(
 	}
 
 	// program should now be in the local cache after above copy
-	return client.Pull(ctx, ref, localRegistry)
+	return opts.Client.Pull(ctx, opts.Ref, localRegistry)
 }
