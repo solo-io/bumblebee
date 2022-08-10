@@ -57,7 +57,7 @@ jobs:
             ${{ runner.os }}-go-
       - name: build
         run: |
-          go build ./bee/main.go
+          go build ./cmd/bee/main.go
       - name: test
         run: |
           go test ./...
