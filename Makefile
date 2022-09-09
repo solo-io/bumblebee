@@ -147,7 +147,7 @@ $(OUTDIR)/operator-linux-amd64: $(SOURCES)
 	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/operator/main.go
 
 .PHONY: operator-linux-amd64
-operator-linux-amd64: $(OUTDIR)/operator-linux-arm64
+operator-linux-amd64: $(OUTDIR)/operator-linux-amd64
 
 $(OUTDIR)/operator-linux-arm64: $(SOURCES)
 	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags="$(LDFLAGS) $(COMPRESSION_FLAGS)" -gcflags=$(GCFLAGS) -o $@ cmd/operator/main.go
