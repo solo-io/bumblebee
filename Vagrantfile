@@ -1,11 +1,11 @@
 
 Vagrant.configure("2") do |config|
     # amd64
-    config.vm.box = "generic/ubuntu2110"
+    config.vm.box = "generic/ubuntu2204"
     # arm64
     # config.vm.box = "nickschuetz/ubuntu-21.10-arm64"
-    config.vm.define :impish
-    config.vm.hostname = "impish"
+    config.vm.define :jammy
+    config.vm.hostname = "jammy"
     config.vm.synced_folder ".", "/source"
     config.vm.provision "shell", inline: <<-SHELL
       # install llvm:
