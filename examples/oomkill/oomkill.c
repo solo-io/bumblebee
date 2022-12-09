@@ -20,7 +20,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct data_t);
-} oomkills SEC(".maps.print");
+} oomkills SEC(".maps.counter");
 
 SEC("kprobe/oom_kill_process")
 int BPF_KPROBE(oom_kill_process, struct oom_control *oc, const char *message)
@@ -32,7 +32,7 @@ int BPF_KPROBE(oom_kill_process, struct oom_control *oc, const char *message)
                 return 0;
         }
 
-        e->tpid = bpf_get_current_pid_tgid();
+        e->tpid = BPF_CORE_READ(oc, chosen, tgid);
         bpf_get_current_comm(&e->fcomm, TASK_COMM_LEN);
 
         e->fpid = bpf_get_current_pid_tgid() >> 32;
