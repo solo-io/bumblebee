@@ -8,6 +8,9 @@ Vagrant.configure("2") do |config|
     config.vm.hostname = "jammy"
     config.vm.synced_folder ".", "/source"
     config.vm.provision "shell", inline: <<-SHELL
+      # fix DNS problem
+      rm -f /etc/resolv.conf
+      ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
       # install llvm:
       export DEBIAN_FRONTEND=noninteractive
       export LLVM_VERSION=13
