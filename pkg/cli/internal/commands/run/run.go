@@ -113,34 +113,43 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
-	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
-	if err != nil {
-		return err
-	}
-	loaderOpts := loader.LoadOptions{
-		ParsedELF: parsedELF,
-		Watcher:   tuiApp,
-		PinMaps:   opts.pinMaps,
-		PinProgs:  opts.pinProgs,
-	}
-
-	// bail out before starting TUI if context canceled
-	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
-		return ctx.Err()
-	}
-
-	watchOpts, err := progLoader.Load(ctx, &loaderOpts)
-	if err != nil {
-		return fmt.Errorf("could not load BPF program: %w", err)
-	}
-
 	if opts.notty {
 		fmt.Println("Calling Load...")
-		loaderOpts.Watcher = loader.NewNoopWatcher()
-		err := progLoader.WatchMaps(ctx, watchOpts)
+
+		loaderOpts := loader.LoadOptions{
+			ParsedELF: parsedELF,
+			PinMaps:   opts.pinMaps,
+			PinProgs:  opts.pinProgs,
+			Watcher:   loader.NewNoopWatcher(),
+		}
+
+		watchOpts, err := progLoader.Load(ctx, &loaderOpts)
+		if err != nil {
+			return fmt.Errorf("could not load BPF program: %w", err)
+		}
+		err = progLoader.WatchMaps(ctx, watchOpts)
 		return err
 	} else {
+		// bail out before starting TUI if context canceled
+		if ctx.Err() != nil {
+			contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
+			return ctx.Err()
+		}
+		tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
+		if err != nil {
+			return err
+		}
+		loaderOpts := loader.LoadOptions{
+			ParsedELF: parsedELF,
+			PinMaps:   opts.pinMaps,
+			PinProgs:  opts.pinProgs,
+			Watcher:   tuiApp,
+		}
+
+		watchOpts, err := progLoader.Load(ctx, &loaderOpts)
+		if err != nil {
+			return fmt.Errorf("could not load BPF program: %w", err)
+		}
 		contextutils.LoggerFrom(ctx).Info("calling tui run()")
 		err = tuiApp.Run(ctx, progLoader, watchOpts)
 		contextutils.LoggerFrom(ctx).Info("after tui run()")
