@@ -105,7 +105,8 @@ func (m *metricsProvider) NewIncrementCounter(name string, labels []string) Incr
 
 	m.register(counter)
 	return &incrementCounter{
-		counter: counter,
+		counter:       counter,
+		currentLabels: map[string]map[string]string{},
 	}
 }
 
@@ -117,7 +118,8 @@ func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
 
 	m.register(gaugeVec)
 	return &gauge{
-		gauge: gaugeVec,
+		gauge:         gaugeVec,
+		currentLabels: map[string]map[string]string{},
 	}
 }
 
