@@ -189,11 +189,14 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error
 	if err != nil {
 		return nil, err
 	}
-	go func() {
-		<-ctx.Done()
-		coll.Close()
-		opts.Watcher.Close()
-	}()
+
+	var cleanups []func()
+	cleanups = append(cleanups, coll.Close, opts.Watcher.Close)
+	// go func() {
+	// 	<-ctx.Done()
+	// 	coll.Close()
+	// 	opts.Watcher.Close()
+	// }()
 
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
@@ -216,7 +219,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error
 						return nil, fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 					}
 				}
-				defer kp.Close()
+				// defer kp.Close()
+				cleanups = append(cleanups, func() { kp.Close() })
 			case ebpf.TracePoint:
 				var tp link.Link
 				var err error
@@ -230,7 +234,8 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error
 						return nil, fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
 					}
 				}
-				defer tp.Close()
+				// defer tp.Close()
+				cleanups = append(cleanups, func() { tp.Close() })
 			default:
 				return nil, errors.New("only kprobe programs supported")
 			}
@@ -243,10 +248,17 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error
 				if err := coll.Programs[name].Pin(pinFile); err != nil {
 					return nil, fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
 				}
-				fmt.Printf("Successfully pinned program '%v'\n", pinFile)
+				contextutils.LoggerFrom(ctx).Infof("Successfully pinned program '%v'\n", pinFile)
 			}
 		}
 	}
+
+	go func() {
+		<-ctx.Done()
+		for _, cleanup := range cleanups {
+			cleanup()
+		}
+	}()
 
 	return &WatchOpts{
 		WatchedMaps: opts.ParsedELF.WatchedMaps,
@@ -277,7 +289,6 @@ func (l *loader) WatchMaps(
 			eg.Go(func() error {
 				defer increment.Clean()
 				opts.Watcher.NewRingBuf(name, bpfMap.Labels)
-				fmt.Println("Starting ring buffer")
 				return l.startRingBuf(ctx, bpfMap.valueStruct, opts.CollMaps[name], increment, name, opts.Watcher)
 			})
 		case ebpf.Array:
@@ -297,7 +308,6 @@ func (l *loader) WatchMaps(
 				defer instrument.Clean()
 				// TODO: output type of instrument in UI?
 				opts.Watcher.NewHashMap(name, labelKeys)
-				fmt.Println("Starting hash map")
 				return l.startHashMap(ctx, bpfMap.mapSpec, opts.CollMaps[name], instrument, name, opts.Watcher)
 			})
 		default:
@@ -356,7 +366,6 @@ func (l *loader) startRingBuf(
 
 		stringLabels := stringify(result)
 		incrementInstrument.Increment(ctx, stringLabels)
-		contextutils.LoggerFrom(ctx).Debug("Sending to watcher")
 		watcher.SendEntry(MapEntry{
 			Name: name,
 			Entry: KvPair{
@@ -413,7 +422,6 @@ func (l *loader) startHashMap(
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
 				thisKvPair := KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
-				contextutils.LoggerFrom(ctx).Debug("Sending to watcher")
 				watcher.SendEntry(MapEntry{
 					Name:  name,
 					Entry: thisKvPair,

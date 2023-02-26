@@ -12,7 +12,7 @@ const (
 	ebpfNamespace = "ebpf_bumblebee_io"
 )
 
-func NewPrometheusMetricsProvider(ctx context.Context, registry prometheus.Registerer) MetricsProvider {
+func NewPrometheusMetricsProvider(ctx context.Context, registry *prometheus.Registry) MetricsProvider {
 	if registry == nil {
 		registry = prometheus.NewRegistry()
 	}

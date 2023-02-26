@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/prometheus/client_golang/prometheus"
 	probes_bumblebee_io_v1alpha1 "github.com/solo-io/bumblebee/pkg/api/probes.bumblebee.io/v1alpha1"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
@@ -73,7 +74,7 @@ func Start(ctx context.Context) error {
 
 	// The stats provider is a factory for creating prometheus collectors used
 	// by the prog_loader
-	promProvider := stats.NewPrometheusMetricsProvider(ctx, metrics.Registry)
+	promProvider := stats.NewPrometheusMetricsProvider(ctx, (metrics.Registry.(*prometheus.Registry)))
 
 	progLoader := loader.NewLoader(
 		decoder.NewDecoderFactory(),
