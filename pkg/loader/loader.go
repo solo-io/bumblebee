@@ -190,13 +190,10 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error
 		return nil, err
 	}
 
+	// Build up a list of important clean up functions which will be called all at once,
+	// and onlky if the context is canceled.
 	var cleanups []func()
 	cleanups = append(cleanups, coll.Close, opts.Watcher.Close)
-	// go func() {
-	// 	<-ctx.Done()
-	// 	coll.Close()
-	// 	opts.Watcher.Close()
-	// }()
 
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
