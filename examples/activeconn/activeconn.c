@@ -79,10 +79,6 @@ record(struct pt_regs *ctx, int ret, int op)
 	bpf_map_update_elem(&sockets_ext, &key, &val, 0);
 	bpf_map_delete_elem(&sockets, &tid);
 
-  myval = 1;
-	bpf_map_update_elem(&sockets_ext, &myval, &myval, 0);
-	sleep(5);
-	bpf_map_delete_elem(&sockets_ext, &myval)
 	return 0;
 }
 
