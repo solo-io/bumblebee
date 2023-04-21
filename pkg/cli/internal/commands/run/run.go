@@ -32,6 +32,7 @@ type runOptions struct {
 	notty    bool
 	pinMaps  string
 	pinProgs string
+	promPort uint32
 }
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
@@ -45,6 +46,7 @@ func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 	flags.StringVar(&opts.pinMaps, "pin-maps", "", "Directory to pin maps to, left unpinned if empty")
 	flags.StringVar(&opts.pinProgs, "pin-progs", "", "Directory to pin progs to, left unpinned if empty")
+	flags.Uint32Var(&opts.promPort, "prom-port", 9091, "Specify the Prometheus listener port")
 }
 
 func Command(opts *options.GeneralOptions) *cobra.Command {
@@ -102,7 +104,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
 	}
 
-	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{})
+	promProvider, err := stats.NewPrometheusMetricsProvider(ctx, &stats.PrometheusOpts{Port: opts.promPort})
 	if err != nil {
 		return err
 	}
