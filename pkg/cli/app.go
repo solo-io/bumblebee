@@ -50,5 +50,6 @@ func Bee() *cobra.Command {
 		login.Command(opts),
 		version.Command(opts),
 	)
+
 	return cmd
 }

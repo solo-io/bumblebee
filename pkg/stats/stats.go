@@ -2,118 +2,89 @@ package stats
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"github.com/solo-io/go-utils/contextutils"
 )
 
 const (
-	ebpfNamespace = "ebpf_solo_io"
+	ebpfNamespace = "ebpf_bumblebee_io"
 )
 
-type PrometheusOpts struct {
-	Port        uint32
-	MetricsPath string
-	Registry *prometheus.Registry
-}
-
-func (p *PrometheusOpts) initDefaults() {
-	if p.Port == 0 {
-		p.Port = 9091
+func NewPrometheusMetricsProvider(ctx context.Context, registry *prometheus.Registry) MetricsProvider {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
 	}
-	if p.MetricsPath == "" {
-		p.MetricsPath = "/metrics"
-	}
-}
-
-func NewPrometheusMetricsProvider(ctx context.Context, opts *PrometheusOpts) (MetricsProvider, error) {
-	opts.initDefaults()
-
-	serveMux := http.NewServeMux()
-	handler := promhttp.Handler()
-	if opts.Registry != nil {
-		handler = promhttp.InstrumentMetricHandler(opts.Registry, promhttp.HandlerFor(opts.Registry, promhttp.HandlerOpts{}))
-	}
-	serveMux.Handle(opts.MetricsPath, handler)
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", opts.Port),
-		Handler: serveMux,
-	}
-	go func() {
-		err := server.ListenAndServe()
-		if err != nil {
-			contextutils.LoggerFrom(ctx).Errorf("could not listen for Prometheus metrics: %v", err)
-		}
-	}()
-
-	go func() {
-		<-ctx.Done()
-		server.Close()
-	}()
-
 	return &metricsProvider{
-		registry: opts.Registry,
-	}, nil
+		registry: registry,
+	}
 }
 
 type MetricsProvider interface {
-	NewSetCounter(name string, labels []string) SetInstrument
-	NewIncrementCounter(name string, labels []string) IncrementInstrument
-	NewGauge(name string, labels []string) SetInstrument
+	NewSetCounter(name string, additionalLabels map[string]string, labelKeys ...string) SetInstrument
+	NewIncrementCounter(name string, additionalLabels map[string]string, labelKeys ...string) IncrementInstrument
+	NewGauge(name string, additionalLabels map[string]string, labelKeys ...string) SetInstrument
+}
+
+type Cleaner interface {
+	Clean()
 }
 
 type IncrementInstrument interface {
+	Cleaner
 	Increment(ctx context.Context, labels map[string]string)
 }
 
 type SetInstrument interface {
+	Cleaner
 	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
-type metricsProvider struct{
-	registry *prometheus.Registry
+type metricsProvider struct {
+	registry prometheus.Registerer
 }
 
-func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrument {
+func (m *metricsProvider) NewSetCounter(name string, additionalLabels map[string]string, labelKeys ...string) SetInstrument {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: ebpfNamespace,
-		Name:      name,
-	}, labels)
+		Namespace:   ebpfNamespace,
+		Name:        name,
+		ConstLabels: additionalLabels,
+	}, labelKeys)
 
 	m.register(counter)
 	return &setCounter{
-		counter:    counter,
-		counterMap: map[uint64]int64{},
+		deregisterFunc: m.registry.Unregister,
+		counter:        counter,
+		counterMap:     map[uint64]int64{},
 	}
 }
 
-func (m *metricsProvider) NewIncrementCounter(name string, labels []string) IncrementInstrument {
+func (m *metricsProvider) NewIncrementCounter(name string, additionalLabels map[string]string, labelKeys ...string) IncrementInstrument {
 	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: ebpfNamespace,
-		Name:      name,
-	}, labels)
+		Namespace:   ebpfNamespace,
+		Name:        name,
+		ConstLabels: additionalLabels,
+	}, labelKeys)
 
 	m.register(counter)
 	return &incrementCounter{
-		counter: counter,
+		deregisterFunc: m.registry.Unregister,
+		counter:        counter,
 	}
 }
 
-func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
+func (m *metricsProvider) NewGauge(name string, additionalLabels map[string]string, labelKeys ...string) SetInstrument {
 	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: ebpfNamespace,
-		Name:      name,
-	}, labels)
+		Namespace:   ebpfNamespace,
+		Name:        name,
+		ConstLabels: additionalLabels,
+	}, labelKeys)
 
 	m.register(gaugeVec)
 	return &gauge{
-		gauge: gaugeVec,
+		deregisterFunc: m.registry.Unregister,
+		gauge:          gaugeVec,
 	}
 }
 
@@ -126,8 +97,13 @@ func (m *metricsProvider) register(collectors ...prometheus.Collector) {
 }
 
 type setCounter struct {
-	counter    *prometheus.CounterVec
-	counterMap map[uint64]int64
+	deregisterFunc func(prometheus.Collector) bool
+	counter        *prometheus.CounterVec
+	counterMap     map[uint64]int64
+}
+
+func (c *setCounter) Clean() {
+	c.deregisterFunc(c.counter)
 }
 
 func (c *setCounter) Set(
@@ -151,7 +127,12 @@ func (c *setCounter) Set(
 }
 
 type incrementCounter struct {
-	counter *prometheus.CounterVec
+	deregisterFunc func(prometheus.Collector) bool
+	counter        *prometheus.CounterVec
+}
+
+func (i *incrementCounter) Clean() {
+	i.deregisterFunc(i.counter)
 }
 
 func (i *incrementCounter) Increment(
@@ -162,7 +143,12 @@ func (i *incrementCounter) Increment(
 }
 
 type gauge struct {
-	gauge *prometheus.GaugeVec
+	deregisterFunc func(prometheus.Collector) bool
+	gauge          *prometheus.GaugeVec
+}
+
+func (g *gauge) Clean() {
+	g.deregisterFunc(g.gauge)
 }
 
 func (g *gauge) Set(

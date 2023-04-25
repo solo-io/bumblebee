@@ -3,8 +3,8 @@ package version
 import (
 	"fmt"
 
+	"github.com/solo-io/bumblebee/internal/version"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -21,7 +21,7 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		general: opts,
 	}
 	cmd := &cobra.Command{
-		Use: "version",
+		Use:   "version",
 		Short: "Display bee Version Information.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", version.Version)

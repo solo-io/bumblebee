@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"text/template"
 
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"os"
-	"text/template"
 )
 
 type InitOptions struct {

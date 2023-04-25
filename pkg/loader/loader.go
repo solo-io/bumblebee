@@ -34,10 +34,17 @@ type LoadOptions struct {
 	PinProgs  string
 }
 
+type WatchOpts struct {
+	WatchedMaps      map[string]WatchedMap
+	CollMaps         map[string]*ebpf.Map
+	Watcher          MapWatcher
+	AdditionalLabels map[string]string
+}
+
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
-	Load(ctx context.Context, opts *LoadOptions) error
-	WatchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll map[string]*ebpf.Map, watcher MapWatcher) error
+	Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error)
+	WatchMaps(ctx context.Context, opts *WatchOpts) error
 }
 
 type WatchedMap struct {
@@ -150,16 +157,13 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 	return &loadOptions, nil
 }
 
-func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
-	// TODO: add invariant checks on opts
-	contextutils.LoggerFrom(ctx).Info("enter Load()")
+func (l *loader) Load(ctx context.Context, opts *LoadOptions) (*WatchOpts, error) {
 	// on shutdown notify watcher we have no more entries to send
-	defer opts.Watcher.Close()
 
 	// bail out before loading stuff into kernel if context canceled
 	if ctx.Err() != nil {
-		contextutils.LoggerFrom(ctx).Info("load entrypoint context is done")
-		return ctx.Err()
+		contextutils.LoggerFrom(ctx).Warn("load entrypoint context is done")
+		return nil, ctx.Err()
 	}
 
 	if opts.PinMaps != "" {
@@ -183,16 +187,19 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer coll.Close()
+
+	// Build up a list of important clean up functions which will be called all at once,
+	// and onlky if the context is canceled.
+	var cleanups []func()
+	cleanups = append(cleanups, coll.Close, opts.Watcher.Close)
 
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
 		select {
 		case <-ctx.Done():
-			contextutils.LoggerFrom(ctx).Info("while loading progs context is done")
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			switch prog.Type {
 			case ebpf.Kprobe:
@@ -201,89 +208,104 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				if strings.HasPrefix(prog.SectionName, "kretprobe/") {
 					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 					}
 				} else {
 					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 					}
 				}
-				defer kp.Close()
+				// defer kp.Close()
+				cleanups = append(cleanups, func() { kp.Close() })
 			case ebpf.TracePoint:
 				var tp link.Link
 				var err error
 				if strings.HasPrefix(prog.SectionName, "tracepoint/") {
 					tokens := strings.Split(prog.AttachTo, "/")
 					if len(tokens) != 2 {
-						return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
+						return nil, fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
 					}
 					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
 					if err != nil {
-						return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
+						return nil, fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
 					}
 				}
-				defer tp.Close()
+				// defer tp.Close()
+				cleanups = append(cleanups, func() { tp.Close() })
 			default:
-				return errors.New("only kprobe programs supported")
+				return nil, errors.New("only kprobe programs supported")
 			}
 			if opts.PinProgs != "" {
 				if err := createDir(ctx, opts.PinProgs, 0700); err != nil {
-					return err
+					return nil, err
 				}
 
 				pinFile := filepath.Join(opts.PinProgs, prog.Name)
 				if err := coll.Programs[name].Pin(pinFile); err != nil {
-					return fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
+					return nil, fmt.Errorf("could not pin program '%s': %v", prog.Name, err)
 				}
-				fmt.Printf("Successfully pinned program '%v'\n", pinFile)
+				contextutils.LoggerFrom(ctx).Infof("Successfully pinned program '%v'\n", pinFile)
 			}
 		}
 	}
 
-	return l.WatchMaps(ctx, opts.ParsedELF.WatchedMaps, coll.Maps, opts.Watcher)
+	go func() {
+		<-ctx.Done()
+		for _, cleanup := range cleanups {
+			cleanup()
+		}
+	}()
+
+	return &WatchOpts{
+		WatchedMaps: opts.ParsedELF.WatchedMaps,
+		CollMaps:    coll.Maps,
+		Watcher:     opts.Watcher,
+	}, nil
 }
 
 func (l *loader) WatchMaps(
 	ctx context.Context,
-	watchedMaps map[string]WatchedMap,
-	maps map[string]*ebpf.Map,
-	watcher MapWatcher,
+	opts *WatchOpts,
 ) error {
-	contextutils.LoggerFrom(ctx).Info("enter watchMaps()")
+
 	eg, ctx := errgroup.WithContext(ctx)
-	for name, bpfMap := range watchedMaps {
+	for name, bpfMap := range opts.WatchedMaps {
 		name := name
 		bpfMap := bpfMap
+		labelKeys := bpfMap.Labels
 
 		switch bpfMap.mapType {
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
 			if isCounterMap(bpfMap.mapSpec) {
-				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
+				increment = l.metricsProvider.NewIncrementCounter(name, opts.AdditionalLabels, labelKeys...)
 			} else if isPrintMap(bpfMap.mapSpec) {
 				increment = &noop{}
 			}
 			eg.Go(func() error {
-				watcher.NewRingBuf(name, bpfMap.Labels)
-				return l.startRingBuf(ctx, bpfMap.valueStruct, maps[name], increment, name, watcher)
+				defer increment.Clean()
+				opts.Watcher.NewRingBuf(name, bpfMap.Labels)
+				return l.startRingBuf(ctx, bpfMap.valueStruct, opts.CollMaps[name], increment, name, opts.Watcher)
 			})
 		case ebpf.Array:
 			fallthrough
 		case ebpf.Hash:
-			labelKeys := bpfMap.Labels
+			// labelKeys := bpfMap.Labels
+			// labelKeys = append(labelKeys, mapNameKey)
 			var instrument stats.SetInstrument
 			if isCounterMap(bpfMap.mapSpec) {
-				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, labelKeys)
+				instrument = l.metricsProvider.NewSetCounter(bpfMap.Name, opts.AdditionalLabels, labelKeys...)
 			} else if isGaugeMap(bpfMap.mapSpec) {
-				instrument = l.metricsProvider.NewGauge(bpfMap.Name, labelKeys)
+				instrument = l.metricsProvider.NewGauge(bpfMap.Name, opts.AdditionalLabels, labelKeys...)
 			} else {
 				instrument = &noop{}
 			}
 			eg.Go(func() error {
+				defer instrument.Clean()
 				// TODO: output type of instrument in UI?
-				watcher.NewHashMap(name, labelKeys)
-				return l.startHashMap(ctx, bpfMap.mapSpec, maps[name], instrument, name, watcher)
+				opts.Watcher.NewHashMap(name, labelKeys)
+				return l.startHashMap(ctx, bpfMap.mapSpec, opts.CollMaps[name], instrument, name, opts.Watcher)
 			})
 		default:
 			// TODO: Support more map types
@@ -292,7 +314,6 @@ func (l *loader) WatchMaps(
 	}
 
 	err := eg.Wait()
-	contextutils.LoggerFrom(ctx).Info("after waitgroup")
 	return err
 }
 
@@ -319,21 +340,20 @@ func (l *loader) startRingBuf(
 	// the read loop.
 	go func() {
 		<-ctx.Done()
-		logger.Info("in ringbuf watcher, got done...")
+		logger.Infof("Closing ringbuf watcher (%s)...", name)
 		if err := rd.Close(); err != nil {
-			logger.Infof("error while closing ringbuf '%s' reader: %s", name, err)
+			logger.Warnf("error while closing ringbuf '%s' reader: %s", name, err)
 		}
-		logger.Info("after reader.Close()")
 	}()
 
 	for {
 		record, err := rd.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
-				logger.Info("ringbuf closed...")
+				logger.Debug("ringbuf closed...")
 				return nil
 			}
-			logger.Infof("error while reading from ringbuf '%s' reader: %s", name, err)
+			logger.Warnf("error while reading from ringbuf '%s' reader: %s", name, err)
 			continue
 		}
 		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
@@ -439,6 +459,10 @@ func getLabelsForBtfStruct(structKey *btf.Struct) []string {
 }
 
 type noop struct{}
+
+func (n *noop) Clean() {
+
+}
 
 func (n *noop) Increment(
 	ctx context.Context,

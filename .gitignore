@@ -25,3 +25,6 @@ bpf/
 .vscode/
 .vagrant/
 .idea
+
+.bin
+vendor_any

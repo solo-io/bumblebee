@@ -1,0 +1,46 @@
+syntax = "proto3";
+package probes.bumblebee.io;
+option go_package = "github.com/solo-io/bumblebee/pkg/api/probes.bumblebee.io/v1alpha1";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+import "extproto/ext.proto";
+option (extproto.hash_all) = true;
+option (extproto.equal_all) = true;
+option (extproto.clone_all) = true;
+
+message ProbeSpec {
+
+  // Image name of the probe to run.
+  string image = 1;
+
+  enum PullPolicy {
+    IfNotPresent = 0;
+    Always = 1;
+    Never = 2;
+  }
+
+  PullPolicy image_pull_policy = 2;
+
+  // List of node labels to run the probe on.
+  // If empty, the probe will run on all nodes.
+  map<string, string> node_selector = 3; 
+
+  // Additional labels to add to all programs loaded by this probe
+  map<string, string> additional_labels = 4; 
+
+  // FIXME: Implement
+  // prefix to add to all stats emitted by the probe.
+  // string stat_prefix = 5;
+  
+  // FIXME: Implement cosign verification
+  // oneof cosign {
+  //   // Path to file containing cosign key
+  //   string file_path = 6;
+
+  //   // Secret containing cosign key
+  //   string secret_name = 7;
+  // }
+}

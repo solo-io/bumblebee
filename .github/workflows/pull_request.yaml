@@ -16,10 +16,10 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           git fetch --prune --unshallow
-      - name: Set up Go 1.17
+      - name: Set up Go 1.19
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.2
+          go-version: 1.19
       - uses: actions/cache@v1
         with:
           path: ~/go/pkg/mod
@@ -45,10 +45,10 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           git fetch --prune --unshallow
-      - name: Set up Go 1.17
+      - name: Set up Go 1.19
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.2
+          go-version: 1.19
       - uses: actions/cache@v1
         with:
           path: ~/go/pkg/mod
@@ -57,7 +57,7 @@ jobs:
             ${{ runner.os }}-go-
       - name: build
         run: |
-          go build ./bee/main.go
+          go build ./cmd/bee/main.go
       - name: test
         run: |
           go test ./...

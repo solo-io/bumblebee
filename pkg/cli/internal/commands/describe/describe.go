@@ -37,10 +37,12 @@ func describe(cmd *cobra.Command, args []string, opts *describeOptions) error {
 	client := spec.NewEbpfOCICLient()
 	prog, err := spec.TryFromLocal(
 		cmd.Context(),
-		ref,
-		opts.general.OCIStorageDir,
-		client,
-		opts.general.AuthOptions.ToRegistryOptions(),
+		spec.PullOpts{
+			Ref:             ref,
+			LocalStorageDir: opts.general.OCIStorageDir,
+			Client:          client,
+			RegistryOptions: opts.general.AuthOptions.ToRegistryOptions(),
+		},
 	)
 	if err != nil {
 		return err

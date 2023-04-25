@@ -30,6 +30,9 @@ type EbpfPackage struct {
 	Authors string
 	// Platform this was built on
 	Platform *ocispec.Platform
+	// SHA256 hash of the image.
+	// Does not need to be set before Push.
+	SHA256 string
 	// Nested config object
 	EbpfConfig
 }
@@ -162,6 +165,7 @@ func (e *ebpfOCIClient) Pull(
 		Authors:          manifest.Annotations[ocispec.AnnotationAuthors],
 		EbpfConfig:       cfg,
 		Platform:         manifestDesc.Platform,
+		SHA256:           string(manifestDesc.Digest),
 	}, nil
 }
 

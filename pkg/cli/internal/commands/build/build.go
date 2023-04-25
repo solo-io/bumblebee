@@ -17,8 +17,8 @@ import (
 	"oras.land/oras-go/pkg/content"
 
 	"github.com/solo-io/bumblebee/builder"
+	"github.com/solo-io/bumblebee/internal/version"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/internal/version"
 	"github.com/solo-io/bumblebee/pkg/spec"
 )
 
@@ -26,9 +26,9 @@ type buildOptions struct {
 	BuildImage        string
 	Builder           string
 	OutputFile        string
-	Local      bool
-	BinaryOnly bool
-	CFlags     []string
+	Local             bool
+	BinaryOnly        bool
+	CFlags            []string
 	BuildScript       string
 	BuildScriptOutput bool
 

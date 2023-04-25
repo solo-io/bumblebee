@@ -18,9 +18,9 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		general: opts,
 	}
 	cmd := &cobra.Command{
-		Use:  "tag",
+		Use:   "tag",
 		Short: "Add an additional name to a local OCI image.",
-		Args: cobra.ExactArgs(2), // source, target ref
+		Args:  cobra.ExactArgs(2), // source, target ref
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return tag(cmd.Context(), tagOpts.general, args[0], args[1])
 		},

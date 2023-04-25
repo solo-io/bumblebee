@@ -7,46 +7,80 @@ import (
 	"oras.land/oras-go/pkg/oras"
 )
 
+type PullOpts struct {
+	Ref             string
+	LocalStorageDir string
+	Client          EbpfOCICLient
+	content.RegistryOptions
+}
+
+type PullFunc func(ctx context.Context, opts PullOpts) (*EbpfPackage, error)
+
 func TryFromLocal(
 	ctx context.Context,
-	ref, localStorageDir string,
-	client EbpfOCICLient,
-	auth content.RegistryOptions,
+	opts PullOpts,
+) (*EbpfPackage, error) {
+	return pullImage(ctx, opts, true, true)
+}
+
+func Pull(
+	ctx context.Context,
+	opts PullOpts,
+) (*EbpfPackage, error) {
+	return pullImage(ctx, opts, false, true)
+}
+
+func NeverPull(
+	ctx context.Context,
+	opts PullOpts,
+) (*EbpfPackage, error) {
+	return pullImage(ctx, opts, false, false)
+}
+
+func pullImage(
+	ctx context.Context,
+	opts PullOpts,
+	tryFromLocal, attemptToPull bool,
 ) (*EbpfPackage, error) {
 
-	if localStorageDir == "" {
-		localStorageDir = EbpfImageDir
+	if opts.LocalStorageDir == "" {
+		opts.LocalStorageDir = EbpfImageDir
 	}
 
-	localRegistry, err := content.NewOCI(localStorageDir)
+	localRegistry, err := content.NewOCI(opts.LocalStorageDir)
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := localRegistry.Resolve(ctx, ref); err == nil {
-		// If we find the image locally, return it
-		if prog, err := client.Pull(ctx, ref, localRegistry); err == nil {
-			return prog, nil
+	if tryFromLocal {
+		if _, _, err := localRegistry.Resolve(ctx, opts.Ref); err == nil {
+			// If we find the image locally, return it
+			if prog, err := opts.Client.Pull(ctx, opts.Ref, localRegistry); err == nil {
+				return prog, nil
+			}
 		}
 	}
 
-	remoteRegistry, err := content.NewRegistry(auth)
-	if err != nil {
-		return nil, err
-	}
+	if attemptToPull {
 
-	_, err = oras.Copy(
-		ctx,
-		remoteRegistry,
-		ref,
-		localRegistry,
-		"",
-		oras.WithAllowedMediaTypes(AllowedMediaTypes()),
-		oras.WithPullByBFS,
-	)
-	if err != nil {
-		return nil, err
+		remoteRegistry, err := content.NewRegistry(opts.RegistryOptions)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = oras.Copy(
+			ctx,
+			remoteRegistry,
+			opts.Ref,
+			localRegistry,
+			"",
+			oras.WithAllowedMediaTypes(AllowedMediaTypes()),
+			oras.WithPullByBFS,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// program should now be in the local cache after above copy
-	return client.Pull(ctx, ref, localRegistry)
+	return opts.Client.Pull(ctx, opts.Ref, localRegistry)
 }

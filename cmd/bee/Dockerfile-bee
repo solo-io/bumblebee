@@ -1,4 +1,4 @@
-FROM alpine:3.14
+FROM alpine:3.16.2
 
 # installs public root certs
 RUN apk upgrade --update-cache \

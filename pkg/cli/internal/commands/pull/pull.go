@@ -21,9 +21,9 @@ func Command(opts *options.GeneralOptions) *cobra.Command {
 		general: opts,
 	}
 	cmd := &cobra.Command{
-		Use:  "pull",
+		Use:   "pull",
 		Short: "Pull an OCI image from a registry.",
-		Args: cobra.ExactArgs(1), // Ref
+		Args:  cobra.ExactArgs(1), // Ref
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return pull(cmd.Context(), pullOpts.general, args[0])
 		},

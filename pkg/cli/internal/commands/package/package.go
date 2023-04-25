@@ -8,8 +8,8 @@ import (
 	"os/exec"
 
 	"github.com/pterm/pterm"
+	"github.com/solo-io/bumblebee/internal/version"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/internal/version"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"

@@ -20,10 +20,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
-      - name: Set up Go 1.17
+      - name: Set up Go 1.19
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.6
+          go-version: 1.19
       - name: Setup Cache
         uses: actions/cache@v1
         with:
@@ -65,7 +65,7 @@ jobs:
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
 
-  push-bee-image:
+  push-docker-images:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,10 +74,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Set up Go 1.17
+      - name: Set up Go 1.19
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.6
+          go-version: 1.19
       - name: Setup Cache
         uses: actions/cache@v1
         with:
@@ -90,8 +90,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.PUSH_TOKEN }}
-      - name: Push bee container
-        run: make docker-push-bee
+      - name: Push images
+        run: make docker-push-bee docker-push-operator
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
 
@@ -105,10 +105,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up Go 1.17
+      - name: Set up Go 1.19
         uses: actions/setup-go@v1
         with:
-          go-version: 1.17.6
+          go-version: 1.19
       - name: Setup Cache
         uses: actions/cache@v1
         with:
@@ -137,3 +137,44 @@ jobs:
         run: make release-examples -B
         env:
           TAGGED_VERSION: ${{ github.event.release.tag_name }}
+
+  release-helm-charts:
+    name: Release Helm Charts
+    needs: validate-release-version
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.4.0
+        with:
+          access_token: ${{ github.token }}
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Go 1.19
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.19
+      - name: Setup Private Repo Permissions
+        env:
+          TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          git config --global url."https://${TOKEN}@github.com/solo-io/".insteadOf "https://github.com/solo-io/"
+      - name: Install Protoc
+        uses: arduino/setup-protoc@922bd7afadc612c340f111d009371fccf38306ff
+        with:
+          version: '3.6.1'
+          repo-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      - uses: google-github-actions/setup-gcloud@a48b55b3b0eeaf77b6e1384aab737fbefe2085ac
+        with:
+          version: '290.0.1'
+          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          service_account_key: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          export_default_credentials: true
+        name: Gcloud Login
+      - name: Publish Helm
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          TAGGED_VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          make install-go-tools release-helm
