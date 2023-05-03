@@ -54,7 +54,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct event);
-} events SEC(".maps.print");
+} events SEC(".maps.counter");
 ```
 
 This will generate Prometheus metrics like this:
