@@ -44,7 +44,6 @@ type WatchedMap struct {
 	Name   string
 	Labels []string
 
-	btf     *btf.Map
 	mapType ebpf.MapType
 	mapSpec *ebpf.MapSpec
 
@@ -108,23 +107,21 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 		watchedMap := WatchedMap{
 			Name:    name,
-			btf:     mapSpec.BTF,
 			mapType: mapSpec.Type,
 			mapSpec: mapSpec,
 		}
 
 		// TODO: Delete Hack if possible
 		if watchedMap.mapType == ebpf.RingBuf || watchedMap.mapType == ebpf.PerfEventArray {
-			if _, ok := mapSpec.BTF.Value.(*btf.Struct); !ok {
+			if _, ok := mapSpec.Value.(*btf.Struct); !ok {
 				return nil, fmt.Errorf("the `value` member for map '%v' must be set to struct you will be submitting to the ringbuf/eventarray", name)
 			}
-			mapSpec.BTF = nil
 			mapSpec.ValueSize = 0
 		}
 
 		switch mapSpec.Type {
 		case ebpf.RingBuf:
-			structType := watchedMap.btf.Value.(*btf.Struct)
+			structType := mapSpec.Value.(*btf.Struct)
 			watchedMap.valueStruct = structType
 			labelKeys := getLabelsForBtfStruct(structType)
 
@@ -199,12 +196,12 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 				var kp link.Link
 				var err error
 				if strings.HasPrefix(prog.SectionName, "kretprobe/") {
-					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name])
+					kp, err = link.Kretprobe(prog.AttachTo, coll.Programs[name], nil)
 					if err != nil {
 						return fmt.Errorf("error attaching kretprobe '%v': %w", prog.Name, err)
 					}
 				} else {
-					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name])
+					kp, err = link.Kprobe(prog.AttachTo, coll.Programs[name], nil)
 					if err != nil {
 						return fmt.Errorf("error attaching kprobe '%v': %w", prog.Name, err)
 					}
@@ -218,7 +215,7 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 					if len(tokens) != 2 {
 						return fmt.Errorf("unexpected tracepoint section '%v'", prog.AttachTo)
 					}
-					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name])
+					tp, err = link.Tracepoint(tokens[0], tokens[1], coll.Programs[name], nil)
 					if err != nil {
 						return fmt.Errorf("error attaching to tracepoint '%v': %w", prog.Name, err)
 					}
@@ -378,12 +375,12 @@ func (l *loader) startHashMap(
 				if err := mapIter.Err(); err != nil {
 					return err
 				}
-				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Key, key)
+				decodedKey, err := d.DecodeBtfBinary(ctx, mapSpec.Key, key)
 				if err != nil {
 					return fmt.Errorf("error decoding key: %w", err)
 				}
 
-				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.BTF.Value, value)
+				decodedValue, err := d.DecodeBtfBinary(ctx, mapSpec.Value, value)
 				if err != nil {
 					return fmt.Errorf("error decoding value: %w", err)
 				}
@@ -422,9 +419,9 @@ func stringify(decodedBinary map[string]interface{}) map[string]string {
 }
 
 func getLabelsForHashMapKey(mapSpec *ebpf.MapSpec) ([]string, error) {
-	structKey, ok := mapSpec.BTF.Key.(*btf.Struct)
+	structKey, ok := mapSpec.Key.(*btf.Struct)
 	if !ok {
-		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.BTF.Value.String())
+		return nil, fmt.Errorf("hash map keys can only be a struct, found %s", mapSpec.Value.TypeName())
 	}
 
 	return getLabelsForBtfStruct(structKey), nil
