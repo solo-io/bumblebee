@@ -1,6 +1,6 @@
 module github.com/solo-io/bumblebee
 
-go 1.17
+go 1.18
 
 require (
 	github.com/cilium/ebpf v0.7.0
