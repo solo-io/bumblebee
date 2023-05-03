@@ -49,10 +49,10 @@ struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
 	__type(value, struct event_t);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 ```
 
-The other aspect of the above program worth noting is the section name: `SEC(".maps.print")`. Specifically the `.print` suffix. For those familiar with `BPF` programs this will look new. Please see the [output formats](#Output-Formats) section below for more info. The `RingBuffer` map type supports the `.print` and `.counter` keywords.
+The other aspect of the above program worth noting is its name: `print_events SEC(".maps")`. Specifically the `print_` prefix. Please see the [output formats](#Output-Formats) section below for more info. The `RingBuffer` map type supports the `print_` and `counter_` prefix.
 
 The final thing worth noting about the `RingBuffer` is it's event based nature. Each object is handled only once, and then never read from again. This differs from the `HashMap`, which will be discussed in greater detail below.
 
@@ -60,7 +60,7 @@ The final thing worth noting about the `RingBuffer` is it's event based nature. 
 
 Like `RingBuffer` above, `HashMap` is a generic map type to store data, with some key differences. The `HashMap` does not function as a queue, but rather as a traditional map, with both keys and values, which retains it's data until manually removed.
 
-In addition, `HashMap` supports section keywords to enable special [output formats](#Output-Formats). The valid keywords for this type of map are: `.print`, `.counter`, and `.gauge`.
+In addition, `HashMap` supports section keywords to enable special [output formats](#Output-Formats). The valid prefixes for this type of map are: `print_`, `counter_`, and `gauge_`.
 
 
 ### Programs
@@ -74,7 +74,7 @@ Part of what makes `bee` so special, as mentioned above, is that it allows us to
 
 These special conventions and keywords come in the form of additional kernel code additions, some in section names, and some to the code itself. Let's begin with the section names.
 
-Maps in `BPF` programs are defined using the `SEC(".maps")` keyword. When running using the `bee` runner, extra suffixes can be added to describe how this data should be handled. These can be roughly broken down into 2 behaviors, metrics and logging. Metrics turns the data into prometheus metrics which can be consumed by any standard prometheus deployments. And logging which emits structured json logs with the provided data, and can be consumed by any structured logging applications.
+Maps in `BPF` programs are defined using the `SEC(".maps")` keyword. When running using the `bee` runner, extra prefixes to its name can be added to describe how this data should be handled. These can be roughly broken down into 2 behaviors, metrics and logging. Metrics turns the data into prometheus metrics which can be consumed by any standard prometheus deployments. And logging which emits structured json logs with the provided data, and can be consumed by any structured logging applications.
 
 The second convention we have added is a set of `typedef`s which describe to our runner how the underlying type is meant to be processed after it leaves the kernel. These are stored in a file called `solo_types.h` and are made available automatically when building with `bee`. Some examples include:
 ```C
@@ -118,10 +118,10 @@ struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
 	__type(value, struct dimensions_t);
-} events_ring SEC(".maps.counter");
+} counter_events_ring SEC(".maps");
 ``` 
 We can see that the `struct dimensions_t` type is being passed into the `RingBuffer`.
-So as TCP connections are established, the source and destination IP of these connections will be sent as events into this `RingBuffer`. Also note the `.maps.counter` section name.
+So as TCP connections are established, the source and destination IP of these connections will be sent as events into this `RingBuffer`. Also note the `counter_` prefix to its name.
 This tells `bee` to "watch" this map and log the data (in addition to emitting counter metrics, which will explore more in a later section).
 
 When running the program, as new TCP connections happen (by e.g. making a `curl 1.1.1.1` request in a separate terminal) we can see the TUI log the data:
@@ -141,7 +141,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} events_hash SEC(".maps.counter");
+} counter_events_hash SEC(".maps");
 ```
 
 As above, we can see that the `struct dimensions_t` type is being used, this time as the `key` type for our `HashMap`.
@@ -167,14 +167,14 @@ An example of the both the `RingBuffer` counter and `HashMap` counter exist in t
 
 After starting the program, and curling httpbin a few times we can, we can get the metrics from `curl localhost:9091/metrics | grep events`
 ```
-# HELP ebpf_solo_io_events_hash 
-# TYPE ebpf_solo_io_events_hash counter
-ebpf_solo_io_events_hash{daddr="18.232.227.86",saddr="10.128.0.79"} 9
-ebpf_solo_io_events_hash{daddr="3.216.167.140",saddr="10.128.0.79"} 5
-# HELP ebpf_solo_io_events_ring 
-# TYPE ebpf_solo_io_events_ring counter
-ebpf_solo_io_events_ring{daddr="18.232.227.86",saddr="10.128.0.79"} 9
-ebpf_solo_io_events_ring{daddr="3.216.167.140",saddr="10.128.0.79"} 5
+# HELP ebpf_solo_io_counter_events_hash 
+# TYPE ebpf_solo_io_counter_events_hash counter
+ebpf_solo_io_counter_events_hash{daddr="18.232.227.86",saddr="10.128.0.79"} 9
+ebpf_solo_io_counter_events_hash{daddr="3.216.167.140",saddr="10.128.0.79"} 5
+# HELP ebpf_solo_io_counter_events_ring 
+# TYPE ebpf_solo_io_counter_events_ring counter
+ebpf_solo_io_counter_events_ring{daddr="18.232.227.86",saddr="10.128.0.79"} 9
+ebpf_solo_io_counter_events_ring{daddr="3.216.167.140",saddr="10.128.0.79"} 5
 ```
 
 As we can see the number of connections are being tracked both from our `HashMap` and `RingBuffer` implementation.
@@ -182,10 +182,10 @@ As we can see the number of connections are being tracked both from our `HashMap
 #### Gauge 
 
 Gauges are used to track numeric values that can change over time.
-BumbleBee supports automatically exporting gauge style metrics for both `RingBuffer` and `HashMap` type maps as long as your map is correctly defined with a section name with a `.gauge` suffix.
+BumbleBee supports automatically exporting gauge style metrics for both `RingBuffer` and `HashMap` type maps as long as your map is correctly defined with a name with a `gauge_` prefix.
 
 An example of a gauge is the number of active connections to a given host.
-The [/examples/activeconn/activeconn.c](/examples/activeconn/activeconn.c) file contains an implementation of active connection tracking by using a `HashMap` type map with a `.gauge` output type.
+The [/examples/activeconn/activeconn.c](/examples/activeconn/activeconn.c) file contains an implementation of active connection tracking by using a `HashMap` type map with a `gauge_` output type.
 
 Let's take a closer look at the `struct` which defines the map that will contain the connection counts.
 ```c
@@ -194,12 +194,12 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} sockets_ext SEC(".maps.gauge");
+} gauge_sockets_ext SEC(".maps");
 ```
 
 This defines a `HashMap` containing integer values for connection counts which are keyed by `struct dimensions_t` (which we explored in the [HashMap](#hashmap-1) section).
 In other words, this means that each source and destination address pair will point to an integer representing the current number of active connections.
 
-The exporting of metrics is automatically handled thanks to the section name of `.maps.gauge`.
+The exporting of metrics is automatically handled thanks to the name prefix of `gauge_`.
 This tells the `bee` runner to export gauge metrics of the current value for each entry in the `HashMap` map each time the value of the map is polled.
 Alternatively, if we were using a `RingBuffer` with gauge output, when each entry is processed by the `bee` runner, the gauge value will be updated accordingly.

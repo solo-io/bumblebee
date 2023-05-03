@@ -79,7 +79,7 @@ struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 
 
 SEC("kprobe/tcp_v4_connect")
@@ -89,7 +89,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 	struct event_t *event;
 
 	// Reserve a spot in the ringbuffer for our event
-	event = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	event = bpf_ringbuf_reserve(&print_events, sizeof(struct event_t), 0);
 	if (!event) {
 		return 0;
 	}
@@ -121,13 +121,13 @@ struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 ```
 
 This defines a BPF map of type ring-buffer. A ring-buffer map is commonly used to stream events from 
 kernel space to user space. The kernel eBPF probe writes to the ring buffer, and a user-mode program can asynchronously read events from the buffer.
 
-Note the section the map is in: `.maps.print` - this has special meaning in `bee` - it instructs it to display this map as a stream of events (think logs and not metrics).
+Note the map name has the prefix `print_` - this has special meaning in `bee` - it instructs it to display this map as a stream of events (think logs and not metrics).
 
 Note also that unlike libbpf ring buffer map, this one has a `__type` defined. This allows `bee` to automatically output the events written to the map. 
 
@@ -171,7 +171,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} connection_count SEC(".maps.counter");
+} counter_connection_count SEC(".maps");
 ```
 
 Note the `ipv4_addr` type. This type is defined in `solo_types.h`. While it is simply defined to be a `u32`, this type definition is a hint to `bee` to format this field as an IPv4 address.
@@ -192,7 +192,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 	daddr = BPF_CORE_READ(usin, sin_addr.s_addr);
 
 	// Reserve a spot in the ringbuffer for our event
-	event = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	event = bpf_ringbuf_reserve(&print_events, sizeof(struct event_t), 0);
 	if (!event) {
 		return 0;
 	}
@@ -204,7 +204,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 
 	// increment the counter for this address
 	hash_key.daddr = daddr;
-	counterp = bpf_map_lookup_elem(&connection_count, &hash_key);
+	counterp = bpf_map_lookup_elem(&counter_connection_count, &hash_key);
 	if (counterp) {
 		__sync_fetch_and_add(counterp, 1);
 	} else {
@@ -212,7 +212,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 		// fix this for prod, by adding another lookup/update calls here.
 		// we skipped these for brevity
 		counter = 1;
-		bpf_map_update_elem(&connection_count, &hash_key, &counter, BPF_NOEXIST);
+		bpf_map_update_elem(&counter_connection_count, &hash_key, &counter, BPF_NOEXIST);
 	}
 
 	return 0;
@@ -248,7 +248,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} connection_count SEC(".maps.counter");
+} counter_connection_count SEC(".maps");
 
 // This is the definition for the global map which both our
 // bpf program and user space program can access.
@@ -257,7 +257,7 @@ struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
@@ -273,7 +273,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 	daddr = BPF_CORE_READ(usin, sin_addr.s_addr);
 
 	// Reserve a spot in the ringbuffer for our event
-	event = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	event = bpf_ringbuf_reserve(&print_events, sizeof(struct event_t), 0);
 	if (!event) {
 		return 0;
 	}
@@ -285,7 +285,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 
 	// increment the counter for this address
 	hash_key.daddr = daddr;
-	counterp = bpf_map_lookup_elem(&connection_count, &hash_key);
+	counterp = bpf_map_lookup_elem(&counter_connection_count, &hash_key);
 	if (counterp) {
 		__sync_fetch_and_add(counterp, 1);
 	} else {
@@ -293,7 +293,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr) {
 		// fix this for prod, by adding another lookup/update calls here.
 		// we skipped these for brevity
 		counter = 1;
-		bpf_map_update_elem(&connection_count, &hash_key, &counter, BPF_NOEXIST);
+		bpf_map_update_elem(&counter_connection_count, &hash_key, &counter, BPF_NOEXIST);
 	}
 
 	return 0;
