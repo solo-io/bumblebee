@@ -40,14 +40,14 @@ bee run -f="exits,tcomm,bash" ghcr.io/solo-io/bumblebee/oomkill:$(bee version)
 
 Visualizing and alerting on oomkills is crucial, and Bumblebee can help you with that.
 
-Since we have the `.counter` prefix added to our `oomkills` map, exposing the oomkill events as a `counter` metric is enabled by default:
+Since we have the `counter_` prefix added to our `oomkills` map, exposing the oomkill events as a `counter` metric is enabled by default:
 
 ```c
 struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct data_t);
-} oomkills SEC(".maps.counter");
+} counter_oomkills SEC(".maps");
 ```
 
-To disable this functionality, you can change the suffix to `.print`.
+To disable this functionality, you can change the prefix to `print_`.

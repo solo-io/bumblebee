@@ -67,21 +67,21 @@ func NewLoader(
 }
 
 const (
-	counterMapType = "counter"
-	gaugeMapType   = "gauge"
-	printMapType   = "print"
+	counterMapPrefix = "counter_"
+	gaugeMapPrefix   = "gauge_"
+	printMapPrefix   = "print_"
 )
 
 func isPrintMap(spec *ebpf.MapSpec) bool {
-	return strings.Contains(spec.SectionName, printMapType)
+	return strings.HasPrefix(spec.Name, printMapPrefix)
 }
 
 func isGaugeMap(spec *ebpf.MapSpec) bool {
-	return strings.Contains(spec.SectionName, gaugeMapType)
+	return strings.HasPrefix(spec.Name, gaugeMapPrefix)
 }
 
 func isCounterMap(spec *ebpf.MapSpec) bool {
-	return strings.Contains(spec.SectionName, counterMapType)
+	return strings.HasPrefix(spec.Name, counterMapPrefix)
 }
 
 func isTrackedMap(spec *ebpf.MapSpec) bool {

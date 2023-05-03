@@ -41,7 +41,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct event);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 
 static int trace_connect(struct sock *sk)
 {
@@ -96,7 +96,7 @@ static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
 
         struct event *ring_val;
 
-        ring_val = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
+        ring_val = bpf_ringbuf_reserve(&print_events, sizeof(struct event), 0);
         if (!ring_val) {
                 return 0;
         }
