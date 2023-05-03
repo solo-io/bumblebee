@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"text/template"
 
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"os"
-	"text/template"
 )
 
 type InitOptions struct {
@@ -79,7 +79,7 @@ func initialize(opts *InitOptions) error {
 		}
 		mapTemplate = &templateData{
 			StructData:   openAtStruct,
-			FunctionBody: openAtBody,
+			RenderedBody: openAtBody,
 			RenderedMap:  openAtMap,
 		}
 	} else {
@@ -149,13 +149,21 @@ func handleNetworkProgram(opts *InitOptions) (*templateData, error) {
 	}
 
 	mapTemplate.MapData.OutputType = mapOutputTypeToTemplateData[outputType]
+	mapTemplate.FunctionBody.OutputType = mapOutputTypeToTemplateData[outputType]
 
-	mapTmpl := template.Must(template.New("map-tmpl").Parse(mapTemplate.MapData.MapTemplate))
+	mapTmpl := template.Must(template.New("map-tmpl").Parse(mapTemplate.MapData.Template))
 	mapBuf := &bytes.Buffer{}
 	if err := mapTmpl.Execute(mapBuf, mapTemplate.MapData); err != nil {
 		return nil, err
 	}
 	mapTemplate.RenderedMap = mapBuf.String()
+
+	bodyTmpl := template.Must(template.New("body-tmpl").Parse(mapTemplate.FunctionBody.Template))
+	bodyBuf := &bytes.Buffer{}
+	if err := bodyTmpl.Execute(bodyBuf, mapTemplate.FunctionBody); err != nil {
+		return nil, err
+	}
+	mapTemplate.RenderedBody = bodyBuf.String()
 
 	return mapTemplate, nil
 }
