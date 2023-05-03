@@ -44,7 +44,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct cap_event);
-} events SEC(".maps.print");
+} events SEC(".maps.counter");
 ```
 
 You should consider removing high cardinality fields from your map to avoid overloading your Prometheus instance, e.g. `mntnsid`.
