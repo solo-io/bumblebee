@@ -155,6 +155,11 @@ func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loa
 		logger.Info("calling Load()")
 		err := progLoader.Load(ctx, loaderOpts)
 		logger.Info("returned from Load()")
+		if err != nil {
+			logger.Error("error loading program")
+			a.renderLoadError(ctx, err)
+			go a.tviewApp.QueueUpdateDraw(func() {})
+		}
 		return err
 	})
 
@@ -272,6 +277,16 @@ func (a *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
 		cell := tview.NewTableCell(eVal).SetExpansion(1)
 		table.SetCell(r, c, cell)
 	}
+}
+
+func (a *App) renderLoadError(ctx context.Context, err error) {
+	contextutils.LoggerFrom(ctx).Info("Rendering error")
+	tv := tview.NewTextView()
+	tv.SetText(fmt.Sprintf("%s", err))
+	tv.SetBorder(true)
+	tv.SetTitle("Error Loading Program")
+	tv.SetTitleColor(tcell.ColorRed)
+	a.flex.AddItem(tv, 0, 1, false)
 }
 
 func (a *App) NewRingBuf(name string, keys []string) {
