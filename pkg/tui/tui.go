@@ -158,7 +158,14 @@ func (a *App) Run(ctx context.Context, mapWatcher mapwatcher.Watcher) error {
 
 	eg.Go(func() error {
 		logger.Info("calling WatchMaps()")
-		return mapWatcher.WatchMaps(ctx, a)
+		err := mapWatcher.WatchMaps(ctx, a)
+		logger.Info("returned from WatchMaps()")
+		if err != nil {
+			logger.Error("error loading program")
+			a.renderLoadError(ctx, err)
+			go a.tviewApp.QueueUpdateDraw(func() {})
+		}
+		return err
 	})
 
 	err := eg.Wait()
@@ -275,6 +282,16 @@ func (a *App) renderHash(ctx context.Context, incoming mapwatcher.MapEntry) {
 		cell := tview.NewTableCell(eVal).SetExpansion(1)
 		table.SetCell(r, c, cell)
 	}
+}
+
+func (a *App) renderLoadError(ctx context.Context, err error) {
+	contextutils.LoggerFrom(ctx).Info("Rendering error")
+	tv := tview.NewTextView()
+	tv.SetText(fmt.Sprintf("%s", err))
+	tv.SetBorder(true)
+	tv.SetTitle("Error Loading Program")
+	tv.SetTitleColor(tcell.ColorRed)
+	a.flex.AddItem(tv, 0, 1, false)
 }
 
 func (a *App) NewRingBuf(name string, keys []string) {
