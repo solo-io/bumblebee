@@ -31,7 +31,7 @@ type LoadOptions struct {
 
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
-	Load(ctx context.Context, opts *LoadOptions) (link.Link, map[string]*ebpf.Map, error)
+	Load(ctx context.Context, opts *LoadOptions) (map[string]*ebpf.Map, func(), error)
 }
 
 func Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF, error) {
@@ -96,7 +96,7 @@ func Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF, error) {
 	return &loadOptions, nil
 }
 
-func Load(ctx context.Context, opts *LoadOptions) (link.Link, map[string]*ebpf.Map, error) {
+func Load(ctx context.Context, opts *LoadOptions) (map[string]*ebpf.Map, func(), error) {
 	// TODO: add invariant checks on opts
 	contextutils.LoggerFrom(ctx).Info("enter Load()")
 
@@ -129,7 +129,6 @@ func Load(ctx context.Context, opts *LoadOptions) (link.Link, map[string]*ebpf.M
 	if err != nil {
 		return nil, nil, err
 	}
-	defer coll.Close()
 	var progLink link.Link
 
 	// For each program, add kprope/tracepoint
@@ -184,7 +183,12 @@ func Load(ctx context.Context, opts *LoadOptions) (link.Link, map[string]*ebpf.M
 		}
 	}
 
-	return progLink, coll.Maps, nil
+	closeLifecycle := func() {
+		coll.Close()
+		progLink.Close()
+	}
+
+	return coll.Maps, closeLifecycle, nil
 }
 
 func createDir(ctx context.Context, path string, perm os.FileMode) error {

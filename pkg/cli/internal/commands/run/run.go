@@ -134,7 +134,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	contextutils.LoggerFrom(ctx).Info("calling Load()")
-	progLink, loadedMaps, err := loader.Load(ctx, loaderOpts)
+	loadedMaps, closeLifecycle, err := loader.Load(ctx, loaderOpts)
 	contextutils.LoggerFrom(ctx).Info("returned from Load()")
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 
 	// Close our loaded program only if there's nothing set to explicitly extend our program's lifetime.
 	if opts.pinMaps == "" && opts.pinProgs == "" {
-		defer progLink.Close()
+		defer closeLifecycle()
 	}
 
 	if opts.notty {
