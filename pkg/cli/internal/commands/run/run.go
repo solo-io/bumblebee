@@ -12,16 +12,18 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/pkg/errors"
 	"github.com/pterm/pterm"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"go.uber.org/zap"
+
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
 	"github.com/solo-io/bumblebee/pkg/decoder"
 	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/loader/mapwatcher"
 	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/stats"
 	"github.com/solo-io/bumblebee/pkg/tui"
 	"github.com/solo-io/go-utils/contextutils"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"go.uber.org/zap"
 )
 
 type runOptions struct {
@@ -109,22 +111,18 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return err
 	}
 
-	progLoader := loader.NewLoader(
-		decoder.NewDecoderFactory(),
-		promProvider,
-	)
-	parsedELF, err := progLoader.Parse(ctx, progReader)
+
+	parsedELF, err := loader.Parse(ctx, progReader)
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
 
-	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
+	tuiApp, err := buildTuiApp(progLocation, opts.filter, parsedELF)
 	if err != nil {
 		return err
 	}
-	loaderOpts := loader.LoadOptions{
+	loaderOpts := &loader.LoadOptions{
 		ParsedELF: parsedELF,
-		Watcher:   tuiApp,
 		PinMaps:   opts.pinMaps,
 		PinProgs:  opts.pinProgs,
 	}
@@ -134,20 +132,38 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		contextutils.LoggerFrom(ctx).Info("before calling tui.Run() context is done")
 		return ctx.Err()
 	}
-	if opts.notty {
-		fmt.Println("Calling Load...")
-		loaderOpts.Watcher = loader.NewNoopWatcher()
-		err = progLoader.Load(ctx, &loaderOpts)
+
+	contextutils.LoggerFrom(ctx).Info("calling Load()")
+	progLink, loadedMaps, err := loader.Load(ctx, loaderOpts)
+	contextutils.LoggerFrom(ctx).Info("returned from Load()")
+	if err != nil {
 		return err
+	}
+
+	// Close our loaded program only if there's nothing set to explicitly extend our program's lifetime.
+	if opts.pinMaps == "" && opts.pinProgs == "" {
+		defer progLink.Close()
+	}
+
+	if opts.notty {
+		fmt.Println("Running in non-interactive mode. Hit Ctrl-C to exit.")
+		<-ctx.Done()
 	} else {
+		mapWatcher := mapwatcher.New(parsedELF.WatchedMaps, loadedMaps, decoder.NewDecoderFactory(), promProvider)
 		contextutils.LoggerFrom(ctx).Info("calling tui run()")
-		err = tuiApp.Run(ctx, progLoader, &loaderOpts)
+		err = tuiApp.Run(ctx, mapWatcher)
 		contextutils.LoggerFrom(ctx).Info("after tui run()")
 		return err
 	}
+
+	return nil
 }
 
-func buildTuiApp(loader *loader.Loader, progLocation string, filterString []string, parsedELF *loader.ParsedELF) (*tui.App, error) {
+func buildTuiApp(
+	progLocation string,
+	filterString []string,
+	parsedELF *loader.ParsedELF,
+) (*tui.App, error) {
 	// TODO: add filter to UI
 	filter, err := tui.BuildFilter(filterString, parsedELF.WatchedMaps)
 	if err != nil {

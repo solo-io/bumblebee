@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/loader/mapwatcher"
 )
 
-func (a *App) filterMatch(entry loader.MapEntry) bool {
+func (a *App) filterMatch(entry mapwatcher.MapEntry) bool {
 	if a.filter == nil {
 		// no filters defined, allow entry
 		return true
@@ -27,7 +27,7 @@ func (a *App) filterMatch(entry loader.MapEntry) bool {
 	return false
 }
 
-func BuildFilter(filterString []string, watchedMaps map[string]loader.WatchedMap) (map[string]Filter, error) {
+func BuildFilter(filterString []string, watchedMaps map[string]mapwatcher.WatchedMap) (map[string]Filter, error) {
 	if len(filterString) == 0 {
 		return nil, nil
 	}
