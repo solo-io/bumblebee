@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 
 	dockercliconfig "github.com/docker/cli/cli/config"
+	"github.com/spf13/cobra"
+
+	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/bpfmap"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/build"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/describe"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/initialize"
@@ -16,7 +19,6 @@ import (
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/tag"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/commands/version"
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/spf13/cobra"
 )
 
 func Bee() *cobra.Command {
@@ -48,6 +50,7 @@ func Bee() *cobra.Command {
 		tag.Command(opts),
 		describe.Command(opts),
 		login.Command(opts),
+		bpfmap.Command(opts),
 		version.Command(opts),
 	)
 	return cmd
