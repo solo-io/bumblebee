@@ -129,10 +129,11 @@ func Load(ctx context.Context, opts *LoadOptions) (map[string]*ebpf.Map, func(),
 	if err != nil {
 		return nil, nil, err
 	}
-	var progLink link.Link
+	var progLinks []link.Link
 
 	// For each program, add kprope/tracepoint
 	for name, prog := range spec.Programs {
+		var progLink link.Link
 		select {
 		case <-ctx.Done():
 			contextutils.LoggerFrom(ctx).Info("while loading progs context is done")
@@ -167,6 +168,7 @@ func Load(ctx context.Context, opts *LoadOptions) (map[string]*ebpf.Map, func(),
 			default:
 				return nil, nil, errors.New("only kprobe programs supported")
 			}
+			progLinks = append(progLinks, progLink)
 
 			if opts.PinProgs != "" {
 				if err := createDir(ctx, opts.PinProgs, 0700); err != nil {
@@ -185,7 +187,9 @@ func Load(ctx context.Context, opts *LoadOptions) (map[string]*ebpf.Map, func(),
 
 	closeLifecycle := func() {
 		coll.Close()
-		progLink.Close()
+		for _, link := range progLinks {
+			link.Close()
+		}
 	}
 
 	return coll.Maps, closeLifecycle, nil
