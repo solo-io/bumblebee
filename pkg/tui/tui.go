@@ -11,10 +11,12 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/rivo/tview"
-	"github.com/solo-io/bumblebee/pkg/loader"
-	"github.com/solo-io/go-utils/contextutils"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/solo-io/bumblebee/pkg/loader"
+	"github.com/solo-io/bumblebee/pkg/loader/mapwatcher"
+	"github.com/solo-io/go-utils/contextutils"
 )
 
 const titleText = `[aqua] __                                                   
@@ -39,7 +41,7 @@ type Filter struct {
 
 type MapValue struct {
 	Hash    uint64
-	Entries []loader.KvPair
+	Entries []mapwatcher.KvPair
 	Table   *tview.Table
 	Index   int
 	Type    ebpf.MapType
@@ -53,7 +55,7 @@ type AppOpts struct {
 }
 
 type App struct {
-	Entries chan loader.MapEntry
+	Entries chan mapwatcher.MapEntry
 
 	tviewApp     *tview.Application
 	flex         *tview.Flex
@@ -73,7 +75,10 @@ var mapOfMaps = make(map[string]MapValue)
 var mapMutex = sync.RWMutex{}
 var currentIndex int
 
-func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, progLocation string) (*tview.Application, *tview.Flex) {
+func buildTView(logger *zap.SugaredLogger, cancel context.CancelFunc, progLocation string) (
+	*tview.Application,
+	*tview.Flex,
+) {
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
@@ -127,14 +132,14 @@ func (a *App) Close() {
 	close(a.Entries)
 }
 
-func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loader.LoadOptions) error {
+func (a *App) Run(ctx context.Context, mapWatcher mapwatcher.Watcher) error {
 	logger := contextutils.LoggerFrom(ctx)
 
 	ctx, cancel := context.WithCancel(ctx)
 	app, flex := buildTView(logger, cancel, a.progLocation)
 	a.tviewApp = app
 	a.flex = flex
-	a.Entries = make(chan loader.MapEntry, 20)
+	a.Entries = make(chan mapwatcher.MapEntry, 20)
 
 	eg := errgroup.Group{}
 	eg.Go(func() error {
@@ -152,9 +157,9 @@ func (a *App) Run(ctx context.Context, progLoader loader.Loader, loaderOpts *loa
 	})
 
 	eg.Go(func() error {
-		logger.Info("calling Load()")
-		err := progLoader.Load(ctx, loaderOpts)
-		logger.Info("returned from Load()")
+		logger.Info("calling WatchMaps()")
+		err := mapWatcher.WatchMaps(ctx, a)
+		logger.Info("returned from WatchMaps()")
 		if err != nil {
 			logger.Error("error loading program")
 			a.renderLoadError(ctx, err)
@@ -185,7 +190,7 @@ func (a *App) watch(ctx context.Context) {
 	logger.Info("no more entries, returning from Watch()")
 }
 
-func (a *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
+func (a *App) renderRingBuf(ctx context.Context, incoming mapwatcher.MapEntry) {
 	current := mapOfMaps[incoming.Name]
 	current.Entries = append(current.Entries, incoming.Entry)
 
@@ -214,7 +219,7 @@ func (a *App) renderRingBuf(ctx context.Context, incoming loader.MapEntry) {
 	}
 }
 
-func (a *App) renderHash(ctx context.Context, incoming loader.MapEntry) {
+func (a *App) renderHash(ctx context.Context, incoming mapwatcher.MapEntry) {
 	logger := contextutils.LoggerFrom(ctx)
 	current := mapOfMaps[incoming.Name]
 	if len(current.Entries) == 0 {
@@ -297,7 +302,7 @@ func (a *App) NewHashMap(name string, keys []string) {
 	a.makeMapValue(name, keys, ebpf.Hash)
 }
 
-func (a *App) SendEntry(entry loader.MapEntry) {
+func (a *App) SendEntry(entry mapwatcher.MapEntry) {
 	if a.filterMatch(entry) {
 		a.Entries <- entry
 	}
@@ -310,7 +315,7 @@ func (a *App) makeMapValue(name string, keys []string, mapType ebpf.MapType) {
 	sort.Strings(keysCopy)
 
 	// create the array for containing the entries
-	entries := make([]loader.KvPair, 0, 10)
+	entries := make([]mapwatcher.KvPair, 0, 10)
 
 	table := tview.NewTable().SetFixed(1, 0)
 	table.SetBorder(true).SetTitle(name)
