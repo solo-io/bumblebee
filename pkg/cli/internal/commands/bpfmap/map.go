@@ -2,24 +2,18 @@
 package bpfmap
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/cilium/ebpf"
-	"github.com/pkg/errors"
-	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
 	"github.com/solo-io/bumblebee/pkg/cli/internal/options"
-	"github.com/solo-io/bumblebee/pkg/loader"
-	"github.com/solo-io/bumblebee/pkg/spec"
 	"github.com/solo-io/bumblebee/pkg/tui"
 	"github.com/solo-io/go-utils/contextutils"
 )
@@ -106,81 +100,23 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("error occurred during map iteration: %w", err)
 	}
 
+	tui.Table(dummyCol(4), dummyCol(5))
+
 	return nil
 }
 
-func buildTuiApp(
-	progLocation string,
-	filterString []string,
-	parsedELF *loader.ParsedELF,
-) (*tui.App, error) {
-	// TODO: add filter to UI
-	filter, err := tui.BuildFilter(filterString, parsedELF.WatchedMaps)
-	if err != nil {
-		return nil, fmt.Errorf("could not build filter %w", err)
-	}
-	appOpts := tui.AppOpts{
-		ProgLocation: progLocation,
-		ParsedELF:    parsedELF,
-		Filter:       filter,
-	}
-	app := tui.NewApp(&appOpts)
-	return &app, nil
+type dummyCol int
+
+func (d dummyCol) Header() string {
+	return "dummy"
 }
 
-func getProgram(
-	ctx context.Context,
-	opts *options.GeneralOptions,
-	progLocation string,
-) (io.ReaderAt, error) {
+func (d dummyCol) SetRow(row int) string {
+	return fmt.Sprintf("dummy%d", row)
+}
 
-	var (
-		progReader     io.ReaderAt
-		programSpinner *pterm.SpinnerPrinter
-	)
-	_, err := os.Stat(progLocation)
-	if err != nil {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from registry: %s", progLocation),
-		)
-
-		client := spec.NewEbpfOCICLient()
-		prog, err := spec.TryFromLocal(
-			ctx,
-			progLocation,
-			opts.OCIStorageDir,
-			client,
-			opts.AuthOptions.ToRegistryOptions(),
-		)
-		if err != nil {
-			programSpinner.UpdateText("Failed to load OCI image")
-			programSpinner.Fail()
-			if err, ok := err.(interface {
-				StackTrace() errors.StackTrace
-			}); ok {
-				for _, f := range err.StackTrace() {
-					fmt.Printf("%+s:%d\n", f, f)
-				}
-			}
-
-			return nil, err
-		}
-		progReader = bytes.NewReader(prog.ProgramFileBytes)
-	} else {
-		programSpinner, _ = pterm.DefaultSpinner.Start(
-			fmt.Sprintf("Fetching program from file: %s", progLocation),
-		)
-		// Attempt to use file
-		progReader, err = os.Open(progLocation)
-		if err != nil {
-			programSpinner.UpdateText("Failed to open BPF file")
-			programSpinner.Fail()
-			return nil, err
-		}
-	}
-	programSpinner.Success()
-
-	return progReader, nil
+func (d dummyCol) NumRows() int {
+	return int(d)
 }
 
 func buildContext(ctx context.Context, debug bool) (context.Context, error) {
