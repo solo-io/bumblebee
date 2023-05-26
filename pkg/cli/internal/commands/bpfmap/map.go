@@ -89,11 +89,11 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not load pinned map: %w", err)
 	}
 
-  iter := m.Iterate()
-  var key, value []byte
-  for iter.Next(&key, &value) {
-    fmt.Printf("key: %v, value: %v", key, value)
-  }
+	iter := m.Iterate()
+	var key, value []byte
+	for iter.Next(&key, &value) {
+		fmt.Printf("key: %v, value: %v", key, value)
+	}
 
 	err = iter.Err()
 	if err != nil {
@@ -111,8 +111,12 @@ func (d dummyCol) Header() string {
 	return "dummy"
 }
 
-func (d dummyCol) SetRow(row int) string {
+func (d dummyCol) GetRowValue(row int) string {
 	return fmt.Sprintf("dummy%d", row)
+}
+
+func (d dummyCol) SetRowValue(row int, value string) {
+	fmt.Printf("row value '%d' updated: %s\n", row, value)
 }
 
 func (d dummyCol) NumRows() int {

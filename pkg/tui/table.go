@@ -9,8 +9,10 @@ import (
 type Column interface {
 	// Header returns the header for this column.
 	Header() string
-	// SetRow sets the row for this column.
-	SetRow(row int) string
+	// GetRowValue returns the current value for the given row.
+	GetRowValue(row int) string
+	// SetRowValue sets the value for the given row.
+	SetRowValue(row int, value string)
 	// NumRows returns the number of rows for this column.
 	NumRows() int
 }
@@ -35,12 +37,13 @@ func Table(columns ...Column) {
 			var cellValue string
 
 			color := tcell.ColorWhite
-			if c == 0 || r == 0 {
+			if r == 0 {
 				color = tcell.ColorYellow
 				cellValue = col.Header()
+
 			} else {
 				// Minus 1 to account for header value.
-				cellValue = col.SetRow(r - 1)
+				cellValue = col.GetRowValue(r - 1)
 			}
 
 			table.SetCell(r, c,
@@ -50,12 +53,64 @@ func Table(columns ...Column) {
 		}
 	}
 
+	var textBak string
+	var selectedText string
+	var selectedCell *tview.TableCell
+	defaultSelectionFunc := func(row int, column int) {
+		// We cannot select the header row.
+		if row == 0 {
+			return
+		}
+
+		selectedText = ""
+		selectedCell = table.GetCell(row, column)
+		textBak = selectedCell.Text
+		selectedCell.SetText("")
+		selectedCell.SetTextColor(tcell.ColorRed)
+		table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			curText := selectedCell.Text
+
+			if event.Key() == tcell.KeyBackspace || event.Key() == tcell.KeyBackspace2 {
+				selectedText = curText[:len(curText)-1]
+			}
+
+			if event.Key() == tcell.KeyRune {
+				selectedText = curText + string(event.Rune())
+			}
+
+			 selectedCell.SetText(selectedText)
+
+			return event
+		})
+		table.SetSelectedFunc(func(row int, column int) {
+			// Reset input capture for typing.
+			table.SetInputCapture(nil)
+			columns[column].SetRowValue(row - 1, selectedText)
+			textBak = ""
+			selectedCell.SetText(selectedText)
+			selectedCell.SetTextColor(tcell.ColorGreen)
+		})
+	}
+
 	table.Select(0, 0).
 		SetFixed(1, 1).
 		SetSelectable(true, true).
-		SetSelectedFunc(func(row int, column int) {
-			// textBak := table.GetCell(row, column).Text
-			table.GetCell(row, column).SetText("")
+		SetSelectedFunc(defaultSelectionFunc).
+		SetSelectionChangedFunc(func(row int, column int) {
+			if selectedCell == nil {
+				return
+			}
+			selectedText = ""
+			// Reset input capture for typing.
+			table.SetInputCapture(nil)
+
+			if textBak != "" {
+				selectedCell.SetText(textBak)
+			}
+			table.SetSelectedFunc(defaultSelectionFunc)
+			selectedCell.SetTextColor(tcell.ColorBlue)
+
+			selectedCell = nil
 		})
 
 	// table.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
