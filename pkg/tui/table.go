@@ -113,17 +113,6 @@ func Table(columns ...Column) {
 			selectedCell = nil
 		})
 
-	// table.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-	// 	if key == tcell.KeyEscape {
-	// 		app.Stop()
-	// 	}
-	// 	if key == tcell.KeyEnter {
-	// 		table.SetSelectable(true, true)
-	// 	}
-	// }).SetSelectedFunc(func(row int, column int) {
-	// 	table.GetCell(row, column).SetTextColor(tcell.ColorRed)
-	// 	table.SetSelectable(false, false)
-	// })
 	if err := app.SetRoot(table, true).EnableMouse(true).Run(); err != nil {
 		panic(err)
 	}
