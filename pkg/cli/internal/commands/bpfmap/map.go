@@ -95,11 +95,11 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 		return fmt.Errorf("could not load pinned map: %w", err)
 	}
 
-	iter := m.Iterate()
-	var key, value []byte
-	for iter.Next(&key, &value) {
-
-	}
+  iter := m.Iterate()
+  var key, value []byte
+  for iter.Next(&key, &value) {
+    fmt.Printf("key: %v, value: %v", key, value)
+  }
 
 	err = iter.Err()
 	if err != nil {
