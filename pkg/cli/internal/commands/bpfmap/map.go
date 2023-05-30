@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -75,14 +76,6 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	contextutils.LoggerFrom(ctx).Info("starting bee show")
-	// if opts.notty {
-	//   pterm.DisableStyling()
-	// }
-
-	// // Allow the current process to lock memory for eBPF resources.
-	// if err := rlimit.RemoveMemlock(); err != nil {
-	//   return fmt.Errorf("could not raise memory limit (check for sudo or setcap): %v", err)
-	// }
 
 	m, err := ebpf.LoadPinnedMap(args[0], &ebpf.LoadPinOptions{})
 	if err != nil {
@@ -90,37 +83,62 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	}
 
 	iter := m.Iterate()
-	var key, value []byte
+	m.ValueSize()
+	var key, value interface{}
+	keyColumn := newMapColumn("Key")
+	valueColumn := newMapColumn("Value")
 	for iter.Next(&key, &value) {
-		fmt.Printf("key: %v, value: %v", key, value)
+		keyColumn.values = append(keyColumn.values, key)
+		valueColumn.values = append(valueColumn.values, value)
 	}
+
+
+	m.Type()
 
 	err = iter.Err()
 	if err != nil {
 		return fmt.Errorf("error occurred during map iteration: %w", err)
 	}
 
-	tui.Table(dummyCol(4), dummyCol(5))
+	tui.Table(keyColumn, valueColumn)
 
 	return nil
 }
 
-type dummyCol int
+type mapColumn struct {
+	header string
 
-func (d dummyCol) Header() string {
-	return "dummy"
+	values []interface{}
 }
 
-func (d dummyCol) GetRowValue(row int) string {
-	return fmt.Sprintf("dummy%d", row)
+func newMapColumn(header string) *mapColumn {
+	return &mapColumn{
+		header: header,
+	}
 }
 
-func (d dummyCol) SetRowValue(row int, value string) {
-	fmt.Printf("row value '%d' updated: %s\n", row, value)
+func (d mapColumn) Header() string {
+	return d.header
 }
 
-func (d dummyCol) NumRows() int {
-	return int(d)
+func (d mapColumn) GetRowValue(row int) string {
+	if d.NumRows() <= row {
+		return ""
+	}
+
+	return fmt.Sprintf("%v", d.values[row])
+}
+
+func (d mapColumn) SetRowValue(row int, value string) {
+	if d.NumRows() <= row {
+		return
+	}
+
+	d.values[row] = value
+}
+
+func (d mapColumn) NumRows() int {
+	return len(d.values)
 }
 
 func buildContext(ctx context.Context, debug bool) (context.Context, error) {
