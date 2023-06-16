@@ -13,13 +13,13 @@ bee run ghcr.io/solo-io/bumblebee/opensnoop:$(bee version)
 
 Now we can start paring this down with the filtering capability. Let's run `opensnoop` with a filter applied, such as:
 ```
-bee run -f="events,comm,node" ghcr.io/solo-io/bumblebee/opensnoop:$(bee version)
+bee run -f="print_events,comm,node" ghcr.io/solo-io/bumblebee/opensnoop:$(bee version)
 ```
-This command will run the `opensnoop` program (pulled from our GitHub container registry) and filter the entries in the `events` map to only entries that have a `comm` value of `node`. In other words, we will be viewing `open()` syscalls that have been initiated by the `node` command.
+This command will run the `opensnoop` program (pulled from our GitHub container registry) and filter the entries in the `print_events` map to only entries that have a `comm` value of `node`. In other words, we will be viewing `open()` syscalls that have been initiated by the `node` command.
 
 Note that the last field is a regex, so you can get more creative than simply adding the command name if you want.
 
 As another example, if you wanted to filter for `open()`s by the root user (userid `0`) you could do:
 ```
-bee run -f="events,uid,0" ghcr.io/solo-io/bumblebee/opensnoop:$(bee version)
+bee run -f="print_events,uid,0" ghcr.io/solo-io/bumblebee/opensnoop:$(bee version)
 ```

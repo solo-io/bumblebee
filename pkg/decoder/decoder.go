@@ -83,7 +83,7 @@ func (d *decoder) DecodeBtfBinary(
 		}
 		return map[string]interface{}{"": val}, nil
 	default:
-		return nil, fmt.Errorf("unsupported type, %s", typedBtf.String())
+		return nil, fmt.Errorf("unsupported type, %s", typedBtf.TypeName())
 	}
 }
 
@@ -130,7 +130,7 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 	case *btf.Array:
 		return d.handleArray(typedMember)
 	default:
-		return nil, fmt.Errorf("attempting to decode unsupported type, found: %s", typ.String())
+		return nil, fmt.Errorf("attempting to decode unsupported type, found: %s", typ.TypeName())
 	}
 }
 
@@ -192,7 +192,7 @@ func (d *decoder) handleUint(
 	// Default encoding seems to be unsigned
 	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
 	d.offset += typedMember.Size
-	switch typedMember.Bits {
+	switch typedMember.Size * 8 {
 	case 64:
 		var val uint64
 		if err := binary.Read(buf, Endianess, &val); err != nil {
@@ -226,7 +226,7 @@ func (d *decoder) handleInt(
 ) (interface{}, error) {
 	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typedMember.Size])
 	d.offset += typedMember.Size
-	switch typedMember.Bits {
+	switch typedMember.Size * 8 {
 	case 64:
 		var val int64
 		if err := binary.Read(buf, Endianess, &val); err != nil {

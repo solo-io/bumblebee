@@ -25,13 +25,13 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} events_hash SEC(".maps.counter");
+} counter_events_hash SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
 	__type(value, struct dimensions_t);
-} events_ring SEC(".maps.counter");
+} counter_events_ring SEC(".maps");
 
 static __always_inline int
 enter_tcp_connect(struct pt_regs *ctx, struct sock *sk)
@@ -74,7 +74,7 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 	hash_key.daddr = daddr;
 
 	// Set Hash map
-	valp = bpf_map_lookup_elem(&events_hash, &hash_key);
+	valp = bpf_map_lookup_elem(&counter_events_hash, &hash_key);
 	if (!valp) {
 		bpf_printk("no entry for {saddr: %u, daddr: %u}", hash_key.saddr, hash_key.daddr);
 		val = 1;
@@ -83,13 +83,13 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, hash_key.saddr, hash_key.daddr);
 		val = *valp + 1;
 	}
-	bpf_map_update_elem(&events_hash, &hash_key, &val, 0);
+	bpf_map_update_elem(&counter_events_hash, &hash_key, &val, 0);
 	bpf_map_delete_elem(&sockets, &tid);
 
 	// Set Ringbuffer
 	struct dimensions_t *ring_val;
 
-	ring_val = bpf_ringbuf_reserve(&events_ring, sizeof(struct dimensions_t), 0);
+	ring_val = bpf_ringbuf_reserve(&counter_events_ring, sizeof(struct dimensions_t), 0);
 	if (!ring_val) {
 		return 0;
 	}

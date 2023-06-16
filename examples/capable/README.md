@@ -28,14 +28,14 @@ struct cap_event {
 For example, to filter for all the capability checks where the `task` is `ping`, you can use: 
 
 ```console
-bee run -f="events,task,ping" ghcr.io/solo-io/bumblebee/capable:$(bee version)
+bee run -f="print_events,task,ping" ghcr.io/solo-io/bumblebee/capable:$(bee version)
 ```
 
 # Prometheus integration
 
 Let's say, you want to visualize the rate of such syscalls in your Prometheus stack, or want to alert on certain syscalls.
 
-You can modify your `events` map to generate a `counter` from your cap_capable() calls:
+You can modify your `print_events` map to generate a `counter` from your cap_capable() calls:
 
 > Note: you can rename `events` to `cap_events` to illustrate the goal of the exposed events better.
 
@@ -44,7 +44,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct cap_event);
-} events SEC(".maps.print");
+} counter_events SEC(".maps");
 ```
 
 You should consider removing high cardinality fields from your map to avoid overloading your Prometheus instance, e.g. `mntnsid`.

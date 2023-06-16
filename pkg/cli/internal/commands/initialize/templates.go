@@ -2,14 +2,15 @@ package initialize
 
 type templateData struct {
 	StructData   string
-	MapData      MapData
-	FunctionBody string
+	MapData      OutputTypeTemplate
+	FunctionBody OutputTypeTemplate
 	RenderedMap  string
+	RenderedBody string
 }
 
-type MapData struct {
-	OutputType  string
-	MapTemplate string
+type OutputTypeTemplate struct {
+	OutputType string
+	Template   string
 }
 
 const (
@@ -40,20 +41,24 @@ var mapTypeToTemplateData = map[string]*templateData{
 func ringbufTemplate() *templateData {
 	return &templateData{
 		StructData: ringbufStruct,
-		MapData: MapData{
-			MapTemplate: ringbufMapTmpl,
+		MapData: OutputTypeTemplate{
+			Template: ringbufMapTmpl,
 		},
-		FunctionBody: ringbufBody,
+		FunctionBody: OutputTypeTemplate{
+			Template: ringbufBody,
+		},
 	}
 }
 
 func hashMapTemplate() *templateData {
 	return &templateData{
 		StructData: hashKeyStruct,
-		MapData: MapData{
-			MapTemplate: hashMapTmpl,
+		MapData: OutputTypeTemplate{
+			Template: hashMapTmpl,
 		},
-		FunctionBody: hashMapBody,
+		FunctionBody: OutputTypeTemplate{
+			Template: hashMapBody,
+		},
 	}
 }
 
@@ -65,9 +70,9 @@ const (
 
 var supportedOutputTypes = []string{outputPrint, outputCounter, outputGauge}
 var mapOutputTypeToTemplateData = map[string]string{
-	outputPrint:   ".print",
-	outputCounter: ".counter",
-	outputGauge:   ".gauge",
+	outputPrint:   "print_",
+	outputCounter: "counter_",
+	outputGauge:   "gauge_",
 }
 
 const openAtStruct = `// This struct represents the data we will gather from the tracepoint to send to our ring buffer map
@@ -83,7 +88,7 @@ const openAtMap = `struct {
 	// Define the type of struct that will be submitted to the ringbuf
 	// This allows the bee runner to dynamically read and output the data from the ringbuf
 	__type(value, struct event);
-} events SEC(".maps.print");`
+} print_events SEC(".maps");`
 
 const openAtBody = `// Attach our bpf program to the tracepoint for the openat() syscall
 SEC("tracepoint/syscalls/sys_enter_openat")
@@ -101,7 +106,7 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 
 	// use another bpf helper to reserve memory for our event in the ring buffer
 	// our pointer will now point to the correct location we should write our event to
-	ring_val = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
+	ring_val = bpf_ringbuf_reserve(&print_events, sizeof(struct event), 0);
 	if (!ring_val) {
 		return 0;
 	}
@@ -119,7 +124,7 @@ const ringbufMapTmpl = `struct {
 	__uint(max_entries, 1 << 24);
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__type(value, struct event_t);
-} events SEC(".maps{{.OutputType}}");`
+} {{.OutputType}}events SEC(".maps");`
 
 const ringbufStruct = `struct event_t {
 	// 2. Add ringbuf struct data here.
@@ -132,7 +137,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 	struct event_t *event;
 
 	// Reserve a spot in the ringbuffer for our event
-	event = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	event = bpf_ringbuf_reserve(&{{.OutputType}}events, sizeof(struct event_t), 0);
 	if (!event) {
 		return 0;
 	}
@@ -151,7 +156,7 @@ const hashMapTmpl = `struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} values SEC(".maps{{.OutputType}}");`
+} {{.OutputType}}values SEC(".maps");`
 
 const hashKeyStruct = `struct dimensions_t {
 	// 2. Add dimensions to your value. This struct will be used as the key in the hash map of your data.
@@ -176,7 +181,7 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 	key.pid = pid;
 
 	// check if we have an existing value for this key
-	counterp = bpf_map_lookup_elem(&values, &key);
+	counterp = bpf_map_lookup_elem(&{{.OutputType}}values, &key);
 	if (!counterp) {
 		// debug log to help see how the program works
 		bpf_printk("no entry found for pid: %u}", key.pid);
@@ -211,5 +216,5 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // More info and map types can be found here: https://www.man7.org/linux/man-pages/man2/bpf.2.html
 {{ .RenderedMap }}
 
-{{ .FunctionBody }}
+{{ .RenderedBody }}
 `

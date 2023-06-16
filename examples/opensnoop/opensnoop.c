@@ -25,7 +25,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
 	__type(value, struct event);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 
 // static __always_inline bool valid_uid(uid_t uid) {
 // 	return uid != INVALID_UID;
@@ -111,7 +111,7 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 
 	struct event *ring_val;
 
-	ring_val = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
+	ring_val = bpf_ringbuf_reserve(&print_events, sizeof(struct event), 0);
 	if (!ring_val) {
 		return 0;
 	}

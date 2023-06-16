@@ -20,14 +20,14 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct data_t);
-} oomkills SEC(".maps.counter");
+} counter_oomkills SEC(".maps");
 
 SEC("kprobe/oom_kill_process")
 int BPF_KPROBE(oom_kill_process, struct oom_control *oc, const char *message)
 {
         struct data_t *e;
 
-        e = bpf_ringbuf_reserve(&oomkills, sizeof(struct data_t), 0);
+        e = bpf_ringbuf_reserve(&counter_oomkills, sizeof(struct data_t), 0);
         if (!e) {
                 return 0;
         }

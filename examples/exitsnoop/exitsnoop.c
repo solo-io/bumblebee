@@ -14,7 +14,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct event);
-} exits SEC(".maps.print");
+} print_exits SEC(".maps");
 
 SEC("tracepoint/sched/sched_process_exit")
 int sched_process_exit(void *ctx)
@@ -47,7 +47,7 @@ int sched_process_exit(void *ctx)
 
         struct event *ring_val;
 
-        ring_val = bpf_ringbuf_reserve(&exits, sizeof(struct event), 0);
+        ring_val = bpf_ringbuf_reserve(&print_exits, sizeof(struct event), 0);
         if (!ring_val) {
                 return 0;
         }

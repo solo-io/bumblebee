@@ -30,7 +30,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_RINGBUF);
         __uint(max_entries, 1 << 24);
         __type(value, struct cap_event);
-} events SEC(".maps.print");
+} print_events SEC(".maps");
 
 struct {
         __uint(type, BPF_MAP_TYPE_HASH);
@@ -63,7 +63,7 @@ int BPF_KPROBE(kprobe__cap_capable, const struct cred *cred, struct user_namespa
 
         struct cap_event *event;
 
-        event = bpf_ringbuf_reserve(&events, sizeof(struct cap_event), 0);
+        event = bpf_ringbuf_reserve(&print_events, sizeof(struct cap_event), 0);
         if (!event) {
                 return 0;
         }

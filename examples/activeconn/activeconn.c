@@ -23,7 +23,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, struct dimensions_t);
 	__type(value, u64);
-} sockets_ext SEC(".maps.gauge");
+} gauge_sockets_ext SEC(".maps");
 
 static __always_inline int
 enter_tcp_connect(struct pt_regs *ctx, struct sock *sk)
@@ -65,7 +65,7 @@ record(struct pt_regs *ctx, int ret, int op)
 	key.saddr = saddr;
 	key.daddr = daddr;
 
-	valp = bpf_map_lookup_elem(&sockets_ext, &key);
+	valp = bpf_map_lookup_elem(&gauge_sockets_ext, &key);
 	if (!valp) {
 		bpf_printk("no entry for {saddr: %u, daddr: %u}", key.saddr, key.daddr);
 		val = 1;
@@ -74,7 +74,7 @@ record(struct pt_regs *ctx, int ret, int op)
 		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, key.saddr, key.daddr);
 		val = *valp + op;
 	}
-	bpf_map_update_elem(&sockets_ext, &key, &val, 0);
+	bpf_map_update_elem(&gauge_sockets_ext, &key, &val, 0);
 	bpf_map_delete_elem(&sockets, &tid);
 	return 0;
 }
