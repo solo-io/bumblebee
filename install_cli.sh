@@ -26,10 +26,18 @@ else
   exit 1
 fi
 
+if [ "$(uname -m)" = "x86_64" ]; then
+  ARCH=amd64
+elif  [ "$(uname -m)" = "aarch64" ]; then
+  ARCH=arm64
+else
+  echo Only amd64 or aarch64 architectures are currently supported
+fi
+
 for bumblebee_version in $BUMBLEBEE_VERSIONS; do
 
 tmp=$(mktemp -d /tmp/ebpf.XXXXXX)
-filename="bee-${OS}-amd64"
+filename="bee-${OS}-${ARCH}"
 url="https://github.com/solo-io/bumblebee/releases/download/${bumblebee_version}/${filename}"
 
 if curl -f ${url} >/dev/null 2>&1; then
