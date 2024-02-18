@@ -29,11 +29,15 @@ type runOptions struct {
 
 	debug    bool
 	filter   []string
+	buckets  []string
 	notty    bool
 	pinMaps  string
 	pinProgs string
 	promPort uint32
 }
+
+const bucketsDescription string = "Buckets to use for histogram maps. Format is \"map_name,<buckets_limits>\"" +
+	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events,[1,2,3,4,5]\""
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
 	"You can define a filter per map, if more than one defined, the last defined filter will take precedence"
@@ -43,6 +47,7 @@ var stopper chan os.Signal
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
+	flags.StringSliceVarP(&opts.buckets, "buckets", "b", []string{}, bucketsDescription)
 	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 	flags.StringVar(&opts.pinMaps, "pin-maps", "", "Directory to pin maps to, left unpinned if empty")
 	flags.StringVar(&opts.pinProgs, "pin-progs", "", "Directory to pin progs to, left unpinned if empty")
@@ -72,6 +77,10 @@ $ bee run -f="events,comm,node" ghcr.io/solo-io/bumblebee/opensnoop:0.0.7
 
 To run with multiple filters, use the --filter (or -f) flag multiple times:
 $ bee run -f="events_hash,daddr,1.1.1.1" -f="events_ring,daddr,1.1.1.1" ghcr.io/solo-io/bumblebee/tcpconnect:0.0.7
+
+If your program has histogram output, you can supply the buckets using --buckets (or -b) flag:
+TODO(albertlockett) add a program w/ histogram buckets as example
+$ bee run -b="events,[1,2,3,4,5]" ghcr.io/solo-io/bumblebee/TODO:0.0.7
 `,
 		Args: cobra.ExactArgs(1), // Filename or image
 		RunE: func(cmd *cobra.Command, args []string) error {

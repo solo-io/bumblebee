@@ -66,9 +66,10 @@ func NewLoader(
 }
 
 const (
-	counterMapPrefix = "counter_"
-	gaugeMapPrefix   = "gauge_"
-	printMapPrefix   = "print_"
+	counterMapPrefix   = "counter_"
+	gaugeMapPrefix     = "gauge_"
+	histogramMapPrefix = "hist_"
+	printMapPrefix     = "print_"
 )
 
 func isPrintMap(spec *ebpf.MapSpec) bool {
@@ -83,8 +84,12 @@ func isCounterMap(spec *ebpf.MapSpec) bool {
 	return strings.HasPrefix(spec.Name, counterMapPrefix)
 }
 
+func isHistogramMap(spec *ebpf.MapSpec) bool {
+	return strings.HasPrefix(spec.Name, histogramMapPrefix)
+}
+
 func isTrackedMap(spec *ebpf.MapSpec) bool {
-	return isCounterMap(spec) || isGaugeMap(spec) || isPrintMap(spec)
+	return isCounterMap(spec) || isGaugeMap(spec) || isHistogramMap(spec) || isPrintMap(spec)
 }
 
 func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF, error) {
@@ -101,6 +106,7 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 	watchedMaps := make(map[string]WatchedMap)
 	for name, mapSpec := range spec.Maps {
+		log.Println("mapSpec: ", mapSpec)
 		if !isTrackedMap(mapSpec) {
 			continue
 		}
@@ -256,14 +262,36 @@ func (l *loader) WatchMaps(
 		switch bpfMap.mapType {
 		case ebpf.RingBuf:
 			var increment stats.IncrementInstrument
+			var setIncrement stats.SetInstrument
+			var setKeyName string
+
 			if isCounterMap(bpfMap.mapSpec) {
 				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
+			} else if isHistogramMap(bpfMap.mapSpec) {
+				setKeyName = "le"
+				histLabels := []string{}
+				for _, label := range bpfMap.Labels {
+					if label != setKeyName {
+						histLabels = append(histLabels, label)
+					}
+				}
+
+				setIncrement = l.metricsProvider.NewHistogram(
+					name,
+					histLabels,
+					// TODO: make this configurable
+					[]float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				)
 			} else if isPrintMap(bpfMap.mapSpec) {
 				increment = &noop{}
 			}
 			eg.Go(func() error {
 				watcher.NewRingBuf(name, bpfMap.Labels)
-				return l.startRingBuf(ctx, bpfMap.valueStruct, maps[name], increment, name, watcher)
+				if setIncrement != nil {
+					return l.startRingBufSet(ctx, bpfMap.valueStruct, maps[name], setIncrement, name, setKeyName, watcher)
+				} else {
+					return l.startRingBufIncrement(ctx, bpfMap.valueStruct, maps[name], increment, name, watcher)
+				}
 			})
 		case ebpf.Array:
 			fallthrough
@@ -293,7 +321,7 @@ func (l *loader) WatchMaps(
 	return err
 }
 
-func (l *loader) startRingBuf(
+func (l *loader) startRingBufIncrement(
 	ctx context.Context,
 	valueStruct *btf.Struct,
 	liveMap *ebpf.Map,
@@ -347,6 +375,74 @@ func (l *loader) startRingBuf(
 			},
 		})
 	}
+}
+
+func (l *loader) startRingBufSet(
+	ctx context.Context,
+	valueStruct *btf.Struct,
+	liveMap *ebpf.Map,
+	instrument stats.SetInstrument,
+	name string,
+	valueKey string,
+	watcher MapWatcher,
+) error {
+	// Initialize decoder
+	d := l.decoderFactory()
+	logger := contextutils.LoggerFrom(ctx)
+
+	// Open a ringbuf reader from userspace RINGBUF map described in the
+	// eBPF C program.
+	rd, err := ringbuf.NewReader(liveMap)
+	if err != nil {
+		return fmt.Errorf("opening ringbuf reader: %v", err)
+	}
+	defer rd.Close()
+
+	// Close the reader when the process receives a signal, which will exit
+	// the read loop.
+	go func() {
+		<-ctx.Done()
+		logger.Info("in ringbuf set watcher, got done...")
+		if err := rd.Close(); err != nil {
+			logger.Infof("error while closing ringbuf '%s' reader: %s", name, err)
+		}
+		logger.Info("after reader.Close()")
+	}()
+
+	for {
+		record, err := rd.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				logger.Info("ringbuf closed...")
+				return nil
+			}
+			logger.Infof("error while reading from ringbuf '%s' reader: %s", name, err)
+			continue
+		}
+		result, err := d.DecodeBtfBinary(ctx, valueStruct, record.RawSample)
+		if err != nil {
+			return err
+		}
+
+		intVal, ok := result[valueKey].(uint64)
+		if !ok {
+			return fmt.Errorf("value key '%s' is not a uint64", valueKey)
+		}
+
+		delete(result, valueKey)
+		stringLabels := stringify(result)
+
+		instrument.Set(ctx, int64(intVal), stringLabels)
+		watcher.SendEntry(MapEntry{
+			Name: name,
+			Entry: KvPair{
+				Key:   stringLabels,
+				Value: fmt.Sprint(intVal),
+			},
+		})
+
+	}
+
 }
 
 func (l *loader) startHashMap(
