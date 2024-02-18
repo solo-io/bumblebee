@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -27,16 +29,17 @@ import (
 type runOptions struct {
 	general *options.GeneralOptions
 
-	debug    bool
-	filter   []string
-	buckets  []string
-	notty    bool
-	pinMaps  string
-	pinProgs string
-	promPort uint32
+	debug        bool
+	filter       []string
+	histBuckets  []string
+	histValueKey []string
+	notty        bool
+	pinMaps      string
+	pinProgs     string
+	promPort     uint32
 }
 
-const bucketsDescription string = "Buckets to use for histogram maps. Format is \"map_name,<buckets_limits>\"" +
+const histBucketsDescription string = "Buckets to use for histogram maps. Format is \"map_name,<buckets_limits>\"" +
 	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events,[1,2,3,4,5]\""
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
@@ -47,7 +50,8 @@ var stopper chan os.Signal
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
-	flags.StringSliceVarP(&opts.buckets, "buckets", "b", []string{}, bucketsDescription)
+	flags.StringSliceVarP(&opts.histBuckets, "hist-buckets", "b", []string{}, histBucketsDescription)
+	flags.StringSliceVarP(&opts.histValueKey, "hist-value-key", "k", []string{}, "Key to use for histogram maps. Format is \"map_name,key_name\"")
 	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 	flags.StringVar(&opts.pinMaps, "pin-maps", "", "Directory to pin maps to, left unpinned if empty")
 	flags.StringVar(&opts.pinProgs, "pin-progs", "", "Directory to pin progs to, left unpinned if empty")
@@ -126,6 +130,13 @@ func run(cmd *cobra.Command, args []string, opts *runOptions) error {
 	if err != nil {
 		return fmt.Errorf("could not parse BPF program: %w", err)
 	}
+
+	watchMapOptions, err := parseWatchMapOptions(opts)
+	if err != nil {
+		contextutils.LoggerFrom(ctx).Errorf("could not parse watch map options: %v", err)
+		return err
+	}
+	parsedELF.WatchedMapOptions = watchMapOptions
 
 	tuiApp, err := buildTuiApp(&progLoader, progLocation, opts.filter, parsedELF)
 	if err != nil {
@@ -252,4 +263,58 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 	ctx = contextutils.WithExistingLogger(ctx, sugaredLogger)
 
 	return ctx, nil
+}
+
+func parseWatchMapOptions(runOpts *runOptions) (map[string]loader.WatchedMapOptions, error) {
+	watchMapOptions := make(map[string]loader.WatchedMapOptions)
+
+	for _, bucket := range runOpts.histBuckets {
+		mapName, bucketLimits, err := parseBucket(bucket)
+		if err != nil {
+			return nil, err
+		}
+		watchMapOptions[mapName] = loader.WatchedMapOptions{
+			HistBuckets: bucketLimits,
+		}
+	}
+
+	for _, key := range runOpts.histValueKey {
+		split := strings.Index(key, ",")
+		if split == -1 {
+			return nil, fmt.Errorf("could not parse hist-value-key: %s", key)
+		}
+		mapName := key[:split]
+		valueKey := key[split+1:]
+		if _, ok := watchMapOptions[mapName]; !ok {
+			watchMapOptions[mapName] = loader.WatchedMapOptions{}
+		}
+		w := watchMapOptions[mapName]
+		w.HistValueKey = valueKey
+	}
+
+	return watchMapOptions, nil
+}
+
+func parseBucket(bucket string) (string, []float64, error) {
+	split := strings.Index(bucket, ",")
+	if split == -1 {
+		return "", nil, fmt.Errorf("could not parse bucket: %s", bucket)
+	}
+
+	mapName := bucket[:split]
+	bucketLimits := bucket[split+1:]
+	bucketLimits = strings.TrimPrefix(bucketLimits, "[")
+	bucketLimits = strings.TrimSuffix(bucketLimits, "]")
+	buckets := []float64{}
+
+	for _, limit := range strings.Split(bucketLimits, ",") {
+		bucket, err := strconv.ParseFloat(limit, 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("could not parse bucket: %s from buckets", limit, bucket)
+		}
+		buckets = append(buckets, bucket)
+	}
+
+	return mapName, buckets, nil
+
 }

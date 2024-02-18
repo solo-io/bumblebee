@@ -23,8 +23,9 @@ import (
 )
 
 type ParsedELF struct {
-	Spec        *ebpf.CollectionSpec
-	WatchedMaps map[string]WatchedMap
+	Spec              *ebpf.CollectionSpec
+	WatchedMaps       map[string]WatchedMap
+	WatchedMapOptions map[string]WatchedMapOptions
 }
 
 type LoadOptions struct {
@@ -37,7 +38,7 @@ type LoadOptions struct {
 type Loader interface {
 	Parse(ctx context.Context, reader io.ReaderAt) (*ParsedELF, error)
 	Load(ctx context.Context, opts *LoadOptions) error
-	WatchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, coll map[string]*ebpf.Map, watcher MapWatcher) error
+	WatchMaps(ctx context.Context, watchedMaps map[string]WatchedMap, watchedMapOptions map[string]WatchedMapOptions, coll map[string]*ebpf.Map, watcher MapWatcher) error
 }
 
 type WatchedMap struct {
@@ -48,6 +49,11 @@ type WatchedMap struct {
 	mapSpec *ebpf.MapSpec
 
 	valueStruct *btf.Struct
+}
+
+type WatchedMapOptions struct {
+	HistValueKey string
+	HistBuckets  []float64
 }
 
 type loader struct {
@@ -244,12 +250,13 @@ func (l *loader) Load(ctx context.Context, opts *LoadOptions) error {
 		}
 	}
 
-	return l.WatchMaps(ctx, opts.ParsedELF.WatchedMaps, coll.Maps, opts.Watcher)
+	return l.WatchMaps(ctx, opts.ParsedELF.WatchedMaps, opts.ParsedELF.WatchedMapOptions, coll.Maps, opts.Watcher)
 }
 
 func (l *loader) WatchMaps(
 	ctx context.Context,
 	watchedMaps map[string]WatchedMap,
+	watchedMapOptions map[string]WatchedMapOptions,
 	maps map[string]*ebpf.Map,
 	watcher MapWatcher,
 ) error {
@@ -269,6 +276,15 @@ func (l *loader) WatchMaps(
 				increment = l.metricsProvider.NewIncrementCounter(name, bpfMap.Labels)
 			} else if isHistogramMap(bpfMap.mapSpec) {
 				setKeyName = "le"
+				buckets := []float64{0, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}
+				if opts, ok := watchedMapOptions[name]; ok {
+					if opts.HistBuckets != nil {
+						buckets = opts.HistBuckets
+					}
+					if opts.HistValueKey != "" {
+						setKeyName = opts.HistValueKey
+					}
+				}
 				histLabels := []string{}
 				for _, label := range bpfMap.Labels {
 					if label != setKeyName {
@@ -276,12 +292,7 @@ func (l *loader) WatchMaps(
 					}
 				}
 
-				setIncrement = l.metricsProvider.NewHistogram(
-					name,
-					histLabels,
-					// TODO: make this configurable
-					[]float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-				)
+				setIncrement = l.metricsProvider.NewHistogram(name, histLabels, buckets)
 			} else if isPrintMap(bpfMap.mapSpec) {
 				increment = &noop{}
 			}
