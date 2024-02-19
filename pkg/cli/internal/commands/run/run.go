@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -40,7 +41,7 @@ type runOptions struct {
 }
 
 const histBucketsDescription string = "Buckets to use for histogram maps. Format is \"map_name,<buckets_limits>\"" +
-	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events,[1,2,3,4,5]\""
+	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events:[1,2,3,4,5]\""
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
 	"You can define a filter per map, if more than one defined, the last defined filter will take precedence"
@@ -50,8 +51,8 @@ var stopper chan os.Signal
 func addToFlags(flags *pflag.FlagSet, opts *runOptions) {
 	flags.BoolVarP(&opts.debug, "debug", "d", false, "Create a log file 'debug.log' that provides debug logs of loader and TUI execution")
 	flags.StringSliceVarP(&opts.filter, "filter", "f", []string{}, filterDescription)
-	flags.StringSliceVarP(&opts.histBuckets, "hist-buckets", "b", []string{}, histBucketsDescription)
-	flags.StringSliceVarP(&opts.histValueKey, "hist-value-key", "k", []string{}, "Key to use for histogram maps. Format is \"map_name,key_name\"")
+	flags.StringArrayVarP(&opts.histBuckets, "hist-buckets", "b", []string{}, histBucketsDescription)
+	flags.StringArrayVarP(&opts.histValueKey, "hist-value-key", "k", []string{}, "Key to use for histogram maps. Format is \"map_name,key_name\"")
 	flags.BoolVar(&opts.notty, "no-tty", false, "Set to true for running without a tty allocated, so no interaction will be expected or rich output will done")
 	flags.StringVar(&opts.pinMaps, "pin-maps", "", "Directory to pin maps to, left unpinned if empty")
 	flags.StringVar(&opts.pinProgs, "pin-progs", "", "Directory to pin progs to, left unpinned if empty")
@@ -268,7 +269,9 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 func parseWatchMapOptions(runOpts *runOptions) (map[string]loader.WatchedMapOptions, error) {
 	watchMapOptions := make(map[string]loader.WatchedMapOptions)
 
+	log.Printf("histBuckets: %v", runOpts.histBuckets)
 	for _, bucket := range runOpts.histBuckets {
+		log.Printf("bucket: %s", bucket)
 		mapName, bucketLimits, err := parseBucket(bucket)
 		if err != nil {
 			return nil, err
@@ -308,11 +311,11 @@ func parseBucket(bucket string) (string, []float64, error) {
 	buckets := []float64{}
 
 	for _, limit := range strings.Split(bucketLimits, ",") {
-		bucket, err := strconv.ParseFloat(limit, 64)
+		bval, err := strconv.ParseFloat(limit, 64)
 		if err != nil {
-			return "", nil, fmt.Errorf("could not parse bucket: %s from buckets", limit, bucket)
+			return "", nil, fmt.Errorf("could not parse bucket: %s from buckets %s", limit, bucket)
 		}
-		buckets = append(buckets, bucket)
+		buckets = append(buckets, bval)
 	}
 
 	return mapName, buckets, nil
