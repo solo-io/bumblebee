@@ -4,8 +4,9 @@
 #include "bpf/bpf_tracing.h"
 #include "solo_types.h"
 
-char __license[] SEC("license") = "Dual MIT/GPL";
+// Example for tracing NFS file read duration using histogram metrics
 
+char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct event {
         char fname[255];
