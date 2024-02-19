@@ -112,7 +112,6 @@ func (l *loader) Parse(ctx context.Context, progReader io.ReaderAt) (*ParsedELF,
 
 	watchedMaps := make(map[string]WatchedMap)
 	for name, mapSpec := range spec.Maps {
-		log.Println("mapSpec: ", mapSpec)
 		if !isTrackedMap(mapSpec) {
 			continue
 		}

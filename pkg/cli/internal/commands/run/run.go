@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -269,9 +268,7 @@ func buildContext(ctx context.Context, debug bool) (context.Context, error) {
 func parseWatchMapOptions(runOpts *runOptions) (map[string]loader.WatchedMapOptions, error) {
 	watchMapOptions := make(map[string]loader.WatchedMapOptions)
 
-	log.Printf("histBuckets: %v", runOpts.histBuckets)
 	for _, bucket := range runOpts.histBuckets {
-		log.Printf("bucket: %s", bucket)
 		mapName, bucketLimits, err := parseBucket(bucket)
 		if err != nil {
 			return nil, err
