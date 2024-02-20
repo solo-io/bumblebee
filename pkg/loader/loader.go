@@ -439,10 +439,7 @@ func (l *loader) startRingBufSet(
 			return fmt.Errorf("value key '%s' is not a uint64", valueKey)
 		}
 
-		delete(result, valueKey)
 		stringLabels := stringify(result)
-
-		instrument.Set(ctx, int64(intVal), stringLabels)
 		watcher.SendEntry(MapEntry{
 			Name: name,
 			Entry: KvPair{
@@ -451,6 +448,8 @@ func (l *loader) startRingBufSet(
 			},
 		})
 
+		delete(result, valueKey)
+		instrument.Set(ctx, int64(intVal), stringify(result))
 	}
 
 }
