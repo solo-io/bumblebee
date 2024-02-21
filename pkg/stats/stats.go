@@ -126,7 +126,7 @@ func (m *metricsProvider) NewHistogram(name string, labels []string, buckets []f
 	}, labels)
 
 	m.register(histogram)
-	return &hisotgram{
+	return &histogram{
 		histogram: histogram,
 	}
 
