@@ -192,7 +192,7 @@ type histogram struct {
 	histogram *prometheus.HistogramVec
 }
 
-func (h *hisotgram) Set(
+func (h *histogram) Set(
 	ctx context.Context,
 	intVal int64,
 	decodedKey map[string]string,
