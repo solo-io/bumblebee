@@ -188,7 +188,7 @@ func (g *gauge) Set(
 	g.gauge.With(prometheus.Labels(decodedKey)).Set(float64(intVal))
 }
 
-type hisotgram struct {
+type histogram struct {
 	histogram *prometheus.HistogramVec
 }
 
