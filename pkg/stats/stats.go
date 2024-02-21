@@ -119,15 +119,15 @@ func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
 }
 
 func (m *metricsProvider) NewHistogram(name string, labels []string, buckets []float64) SetInstrument {
-	histogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	h := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: ebpfNamespace,
 		Name:      name,
 		Buckets:   buckets,
 	}, labels)
 
-	m.register(histogram)
+	m.register(h)
 	return &histogram{
-		histogram: histogram,
+		histogram: h,
 	}
 
 }
