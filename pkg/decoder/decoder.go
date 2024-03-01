@@ -92,6 +92,9 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 	case *btf.Int:
 		switch typedMember.Encoding {
 		case btf.Signed:
+			if typedMember.Name == "char" {
+				return d.handleChar(typedMember)
+			}
 			return d.handleInt(typedMember)
 		case btf.Bool:
 			// TODO
@@ -100,6 +103,9 @@ func (d *decoder) processSingleType(typ btf.Type) (interface{}, error) {
 			// TODO
 			return "", nil
 		default:
+			if typedMember.Name == "unsigned char" {
+				return d.handleChar(typedMember)
+			}
 			// Default encoding seems to be unsigned
 			return d.handleUint(typedMember)
 		}
@@ -219,6 +225,18 @@ func (d *decoder) handleUint(
 		return val, nil
 	}
 	return nil, errors.New("this should never happen")
+}
+
+func (d *decoder) handleChar(
+	typedMember *btf.Int,
+) (interface{}, error) {
+	buf := bytes.NewBuffer(d.raw[d.offset : d.offset+1])
+	d.offset += 1
+	var val byte
+	if err := binary.Read(buf, Endianess, &val); err != nil {
+		return nil, err
+	}
+	return string([]byte{val}), nil
 }
 
 func (d *decoder) handleInt(
