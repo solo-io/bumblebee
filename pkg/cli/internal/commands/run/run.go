@@ -40,7 +40,7 @@ type runOptions struct {
 }
 
 const histBucketsDescription string = "Buckets to use for histogram maps. Format is \"map_name,<buckets_limits>\"" +
-	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events:[1,2,3,4,5]\""
+	"where <buckets_limits> is a comma separated list of bucket limits. For example: \"events,[1,2,3,4,5]\""
 
 const filterDescription string = "Filter to apply to output from maps. Format is \"map_name,key_name,regex\" " +
 	"You can define a filter per map, if more than one defined, the last defined filter will take precedence"
