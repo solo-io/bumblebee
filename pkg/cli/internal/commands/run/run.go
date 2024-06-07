@@ -290,6 +290,7 @@ func parseWatchMapOptions(runOpts *runOptions) (map[string]loader.WatchedMapOpti
 		}
 		w := watchMapOptions[mapName]
 		w.HistValueKey = valueKey
+		watchMapOptions[mapName] = w
 	}
 
 	return watchMapOptions, nil
