@@ -20,7 +20,7 @@ const (
 type PrometheusOpts struct {
 	Port        uint32
 	MetricsPath string
-	Registry *prometheus.Registry
+	Registry    *prometheus.Registry
 }
 
 func (p *PrometheusOpts) initDefaults() {
@@ -66,6 +66,7 @@ type MetricsProvider interface {
 	NewSetCounter(name string, labels []string) SetInstrument
 	NewIncrementCounter(name string, labels []string) IncrementInstrument
 	NewGauge(name string, labels []string) SetInstrument
+	NewHistogram(name string, labels []string, buckets []float64) SetInstrument
 }
 
 type IncrementInstrument interface {
@@ -76,7 +77,7 @@ type SetInstrument interface {
 	Set(ctx context.Context, val int64, labels map[string]string)
 }
 
-type metricsProvider struct{
+type metricsProvider struct {
 	registry *prometheus.Registry
 }
 
@@ -115,6 +116,20 @@ func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
 	return &gauge{
 		gauge: gaugeVec,
 	}
+}
+
+func (m *metricsProvider) NewHistogram(name string, labels []string, buckets []float64) SetInstrument {
+	h := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: ebpfNamespace,
+		Name:      name,
+		Buckets:   buckets,
+	}, labels)
+
+	m.register(h)
+	return &histogram{
+		histogram: h,
+	}
+
 }
 
 func (m *metricsProvider) register(collectors ...prometheus.Collector) {
@@ -171,4 +186,16 @@ func (g *gauge) Set(
 	decodedKey map[string]string,
 ) {
 	g.gauge.With(prometheus.Labels(decodedKey)).Set(float64(intVal))
+}
+
+type histogram struct {
+	histogram *prometheus.HistogramVec
+}
+
+func (h *histogram) Set(
+	ctx context.Context,
+	intVal int64,
+	decodedKey map[string]string,
+) {
+	h.histogram.With(prometheus.Labels(decodedKey)).Observe(float64(intVal))
 }
