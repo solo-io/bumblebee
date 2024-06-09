@@ -156,6 +156,14 @@ func (d *decoder) handleArray(
 	}
 	length := int(typedMember.Nelems)
 	slice := make([]byte, length)
+
+	// avoid creating a new buffer for each slice if we can just use the raw data
+	if typInt.Size == 1 {
+		copy(slice, d.raw[d.offset:d.offset+uint32(length)])
+		d.offset += uint32(length)
+		return string(slice), nil
+	}
+
 	for i := 0; i < length; i++ {
 		buf := bytes.NewBuffer(d.raw[d.offset : d.offset+typInt.Size])
 		d.offset += typInt.Size
