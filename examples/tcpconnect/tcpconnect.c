@@ -80,6 +80,7 @@ exit_tcp_connect(struct pt_regs *ctx, int ret)
 		val = 1;
 	}
 	else {
+	  bpf_map_delete_elem(&sockets, &tid);
 		bpf_printk("found existing value '%llu' for {saddr: %u, daddr: %u}", *valp, hash_key.saddr, hash_key.daddr);
 		val = *valp + 1;
 	}

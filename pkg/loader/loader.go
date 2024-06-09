@@ -469,6 +469,7 @@ func (l *loader) startHashMap(
 		select {
 		case <-ticker.C:
 			mapIter := liveMap.Iterate()
+			labels := make([]map[string]string, 0)
 			for {
 				// Use generic key,value so we can decode ourselves
 				var (
@@ -500,12 +501,15 @@ func (l *loader) startHashMap(
 				}
 				stringLabels := stringify(decodedKey)
 				instrument.Set(ctx, int64(intVal), stringLabels)
+				labels = append(labels, stringLabels)
 				thisKvPair := KvPair{Key: stringLabels, Value: fmt.Sprint(intVal)}
 				watcher.SendEntry(MapEntry{
 					Name:  name,
 					Entry: thisKvPair,
 				})
 			}
+			// remove any old labels that weren't in this last iteration of the HashMap
+			instrument.Clean(labels)
 
 		case <-ctx.Done():
 			// fmt.Println("got done in hashmap loop, returning")
@@ -554,6 +558,8 @@ func (n *noop) Set(
 	labels map[string]string,
 ) {
 }
+
+func (n *noop) Clean(_ []map[string]string) {}
 
 func createDir(ctx context.Context, path string, perm os.FileMode) error {
 	file, err := os.Stat(path)
