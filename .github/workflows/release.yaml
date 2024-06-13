@@ -59,7 +59,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.PUSH_TOKEN }}
+          password: ${{ secrets.PUSH_TOKEN_NEW }}
       - name: Push Docker Container
         run: make docker-push
         env:
@@ -89,7 +89,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.PUSH_TOKEN }}
+          password: ${{ secrets.PUSH_TOKEN_NEW }}
       - name: Push bee container
         run: make docker-push-bee
         env:
@@ -121,7 +121,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.PUSH_TOKEN }}
+          password: ${{ secrets.PUSH_TOKEN_NEW }}
 
       - name: Build builder container
         run: make docker-build
