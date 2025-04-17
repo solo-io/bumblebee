@@ -3,6 +3,7 @@
 #include "bpf/bpf_helpers.h"
 #include "bpf/bpf_core_read.h"
 #include "bpf/bpf_tracing.h"
+#include "unistd.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -49,6 +50,7 @@ record(struct pt_regs *ctx, int ret, int op)
 	__u32 daddr;
 	u64 val;
 	u64 *valp;
+  __u32 myval;
 	struct dimensions_t key = {};
 
 	bpf_printk("exit: getting sk for tid: '%u', ret is: '%d'", tid, ret);
@@ -76,6 +78,7 @@ record(struct pt_regs *ctx, int ret, int op)
 	}
 	bpf_map_update_elem(&gauge_sockets_ext, &key, &val, 0);
 	bpf_map_delete_elem(&sockets, &tid);
+
 	return 0;
 }
 

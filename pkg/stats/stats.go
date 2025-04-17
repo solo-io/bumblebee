@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -71,10 +72,12 @@ type MetricsProvider interface {
 
 type IncrementInstrument interface {
 	Increment(ctx context.Context, labels map[string]string)
+	Clean(newLabels []map[string]string)
 }
 
 type SetInstrument interface {
 	Set(ctx context.Context, val int64, labels map[string]string)
+	Clean(newLabels []map[string]string)
 }
 
 type metricsProvider struct {
@@ -89,8 +92,9 @@ func (m *metricsProvider) NewSetCounter(name string, labels []string) SetInstrum
 
 	m.register(counter)
 	return &setCounter{
-		counter:    counter,
-		counterMap: map[uint64]int64{},
+		counter:       counter,
+		counterMap:    map[uint64]int64{},
+		currentLabels: map[string]map[string]string{},
 	}
 }
 
@@ -102,7 +106,8 @@ func (m *metricsProvider) NewIncrementCounter(name string, labels []string) Incr
 
 	m.register(counter)
 	return &incrementCounter{
-		counter: counter,
+		counter:       counter,
+		currentLabels: map[string]map[string]string{},
 	}
 }
 
@@ -114,7 +119,8 @@ func (m *metricsProvider) NewGauge(name string, labels []string) SetInstrument {
 
 	m.register(gaugeVec)
 	return &gauge{
-		gauge: gaugeVec,
+		gauge:         gaugeVec,
+		currentLabels: map[string]map[string]string{},
 	}
 }
 
@@ -141,8 +147,35 @@ func (m *metricsProvider) register(collectors ...prometheus.Collector) {
 }
 
 type setCounter struct {
-	counter    *prometheus.CounterVec
-	counterMap map[uint64]int64
+	counter       *prometheus.CounterVec
+	counterMap    map[uint64]int64
+	currentLabels map[string]map[string]string
+}
+
+func makeLabelString(label map[string]string) string {
+	pairs := make([]string, 0, len(label))
+	for k, v := range label {
+		pairs = append(pairs, fmt.Sprintf("%s|%s", k, v))
+	}
+	return strings.Join(pairs, ",")
+}
+
+func (c *setCounter) trackLabel(decodedKey map[string]string) {
+	c.currentLabels[makeLabelString(decodedKey)] = decodedKey
+}
+
+func (c *setCounter) Clean(newLabels []map[string]string) {
+	labelsToKeep := make(map[string]bool)
+	for _, newLabel := range newLabels {
+		labelsToKeep[makeLabelString(newLabel)] = true
+	}
+
+	for oldLabelKey, oldLabel := range c.currentLabels {
+		if _, ok := labelsToKeep[oldLabelKey]; !ok {
+			delete(c.currentLabels, oldLabelKey)
+			c.counter.Delete(oldLabel)
+		}
+	}
 }
 
 func (c *setCounter) Set(
@@ -150,7 +183,6 @@ func (c *setCounter) Set(
 	intVal int64,
 	decodedKey map[string]string,
 ) {
-
 	keyHash, err := hashstructure.Hash(decodedKey, hashstructure.FormatV2, nil)
 	if err != nil {
 		log.Fatal("This should never happen")
@@ -163,10 +195,12 @@ func (c *setCounter) Set(
 	}
 	c.counterMap[keyHash] = intVal
 	c.counter.With(prometheus.Labels(decodedKey)).Add(float64(diff))
+	c.trackLabel(decodedKey)
 }
 
 type incrementCounter struct {
-	counter *prometheus.CounterVec
+	counter       *prometheus.CounterVec
+	currentLabels map[string]map[string]string
 }
 
 func (i *incrementCounter) Increment(
@@ -174,10 +208,30 @@ func (i *incrementCounter) Increment(
 	decodedKey map[string]string,
 ) {
 	i.counter.With(prometheus.Labels(decodedKey)).Inc()
+	i.trackLabel(decodedKey)
+}
+
+func (i *incrementCounter) trackLabel(decodedKey map[string]string) {
+	i.currentLabels[makeLabelString(decodedKey)] = decodedKey
+}
+
+func (i *incrementCounter) Clean(newLabels []map[string]string) {
+	labelsToKeep := make(map[string]bool)
+	for _, newLabel := range newLabels {
+		labelsToKeep[makeLabelString(newLabel)] = true
+	}
+
+	for oldLabelKey, oldLabel := range i.currentLabels {
+		if _, ok := labelsToKeep[oldLabelKey]; !ok {
+			delete(i.currentLabels, oldLabelKey)
+			i.counter.Delete(oldLabel)
+		}
+	}
 }
 
 type gauge struct {
-	gauge *prometheus.GaugeVec
+	gauge         *prometheus.GaugeVec
+	currentLabels map[string]map[string]string
 }
 
 func (g *gauge) Set(
@@ -186,6 +240,25 @@ func (g *gauge) Set(
 	decodedKey map[string]string,
 ) {
 	g.gauge.With(prometheus.Labels(decodedKey)).Set(float64(intVal))
+	g.trackLabel(decodedKey)
+}
+
+func (g *gauge) trackLabel(decodedKey map[string]string) {
+	g.currentLabels[makeLabelString(decodedKey)] = decodedKey
+}
+
+func (g *gauge) Clean(newLabels []map[string]string) {
+	labelsToKeep := make(map[string]bool)
+	for _, newLabel := range newLabels {
+		labelsToKeep[makeLabelString(newLabel)] = true
+	}
+
+	for oldLabelKey, oldLabel := range g.currentLabels {
+		if _, ok := labelsToKeep[oldLabelKey]; !ok {
+			delete(g.currentLabels, oldLabelKey)
+			g.gauge.Delete(oldLabel)
+		}
+	}
 }
 
 type histogram struct {
