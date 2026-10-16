@@ -9,7 +9,7 @@ jobs:
     name: Add Bumblebee to Gloo Mesh.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/add-to-project@215051e586660a19c6c19f088743beaf1f9635f6 # main
+      - uses: actions/add-to-project@215051e586660a19c6c19f088743beaf1f9635f6 # main (2026-10-16)
         with:
           project-url: https://github.com/orgs/solo-io/projects/23
           github-token: ${{ secrets.ORG_CROSS_REPO }}
